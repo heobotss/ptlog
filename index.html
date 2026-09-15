@@ -1,0 +1,1467 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PT 수업일지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  /* 앱은 다크 네이비 단일 테마로 고정 — 헬스장 조명에서도 잘 보이는 톤 */
+  :root{
+    --bg:#0C1424; --card:#131E33; --card2:#182642; --line:#243352;
+    --ink:#EAF0FA; --sub:#8FA0BC; --blue:#4D8DFF; --blue-soft:rgba(77,141,255,.14);
+    --warn:#FFB454; --warn-soft:rgba(255,180,84,.12); --good:#3DD68C; --good-soft:rgba(61,214,140,.12);
+    --bad:#FF6B6B; --bad-soft:rgba(255,107,107,.12); --kakao:#FEE500;
+  }
+  *{box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent}
+  html,body{background:var(--bg)}
+  body{
+    color:var(--ink); font-family:'IBM Plex Sans KR',-apple-system,'Malgun Gothic',sans-serif;
+    font-size:15px; line-height:1.55;
+  }
+  #app{max-width:480px; margin:0 auto; min-height:100vh; padding:16px 14px 92px}
+  .num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums}
+  h1{font-size:20px; font-weight:700; letter-spacing:-.01em}
+  .top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px}
+  .back{color:var(--sub); font-size:14px; background:none; border:none; font-family:inherit; padding:6px 8px 6px 0; cursor:pointer}
+  .muted{color:var(--sub); font-size:12.5px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:13px 15px; margin-bottom:10px}
+  .card.tap{cursor:pointer}
+  .card.tap:active{background:var(--card2)}
+  .row{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:100px; background:var(--blue-soft); color:var(--blue); white-space:nowrap}
+  .pill.warn{background:var(--warn-soft); color:var(--warn)}
+  .pill.good{background:var(--good-soft); color:var(--good)}
+  .btn{display:block; width:100%; text-align:center; background:var(--blue); color:#fff; font-weight:700;
+    border:none; border-radius:12px; padding:14px; font-size:15px; margin:6px 0; font-family:inherit; cursor:pointer}
+  .btn:active{opacity:.85}
+  .btn.ghost{background:var(--blue-soft); color:var(--blue); font-weight:600}
+  .btn.subtle{background:var(--card2); color:var(--sub); font-weight:500; font-size:13.5px; padding:11px}
+  .btn.kakao{background:var(--kakao); color:#191600}
+  .btn.danger{background:none; border:1px solid var(--line); color:var(--bad); font-weight:500; font-size:13px; padding:10px}
+  .btn.chkbtn{background:var(--card2); color:var(--sub); border:1px dashed var(--line)}
+  .btn.chkbtn.on{background:var(--good-soft); color:var(--good); border:1px solid var(--good)}
+  input[type=text],input[type=number],input[type=time],textarea,select{
+    width:100%; background:var(--card2); border:1px solid var(--line); border-radius:10px;
+    color:var(--ink); font-family:inherit; font-size:15px; padding:11px 12px; outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--blue)}
+  input::placeholder,textarea::placeholder{color:#5B6B88}
+  label.fld{display:block; margin-bottom:12px}
+  label.fld .muted{display:block; margin-bottom:5px}
+  .divider{height:1px; background:var(--line); margin:11px 0}
+  .prog{height:6px; border-radius:100px; background:var(--card2); overflow:hidden; margin-top:8px}
+  .prog i{display:block; height:100%; background:var(--blue); border-radius:100px}
+  .nav{position:fixed; bottom:0; left:0; right:0; background:rgba(12,20,36,.96); border-top:1px solid var(--line); backdrop-filter:blur(8px)}
+  .nav .in{max-width:480px; margin:0 auto; display:flex}
+  .nav button{flex:1; background:none; border:none; color:var(--sub); font-family:inherit; font-size:11.5px; padding:10px 0 max(12px, env(safe-area-inset-bottom)); cursor:pointer}
+  .nav button.on{color:var(--blue); font-weight:600}
+  .nav .ico{display:block; font-size:19px; margin-bottom:2px}
+  .setrow{display:grid; grid-template-columns:30px 1fr 1fr 34px; gap:7px; align-items:center; margin-bottom:7px}
+  .setrow.one{grid-template-columns:30px 1fr 34px}
+  .setrow .idx{color:var(--sub); font-size:12px; text-align:center}
+  .setrow input,.setrow select{text-align:center; padding:9px 6px; font-size:14.5px}
+  .setrow .del{background:none; border:none; color:var(--sub); font-size:16px; cursor:pointer; padding:4px}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+  .ichip{font-size:12px; padding:6px 11px; border-radius:100px; border:1px solid var(--line); color:var(--sub); background:none; font-family:inherit; cursor:pointer}
+  .ichip.on-bad{border-color:var(--bad); color:var(--bad); background:var(--bad-soft)}
+  .ichip.on-imp{border-color:var(--blue); color:var(--blue); background:var(--blue-soft)}
+  .ichip.on-bal{border-color:var(--good); color:var(--good); background:var(--good-soft)}
+  .iss-bad{color:var(--bad)} .iss-imp{color:var(--blue)} .iss-bal{color:var(--good)} .iss-etc{color:var(--warn)}
+  .prev{background:var(--card2); border-radius:10px; padding:9px 12px; font-size:13px; margin:9px 0}
+  .prev b{font-weight:600}
+  .exhead{display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:8px}
+  .exhead .peek{font-size:12px; color:var(--sub); font-family:'IBM Plex Mono',monospace; white-space:nowrap}
+  .exhead .peek.done{color:var(--good); font-family:inherit}
+  .tl{border-left:2px solid var(--line); padding-left:12px; margin-top:8px}
+  .tl .ev{margin-bottom:9px; font-size:13px}
+  .tl .ev .d{font-size:11px; color:var(--sub); font-family:'IBM Plex Mono',monospace}
+  .empty{text-align:center; color:var(--sub); padding:38px 16px; font-size:14px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .stat{background:var(--card2); border-radius:10px; padding:10px 12px}
+  .stat .v{font-size:17px; font-weight:700}
+  .exlist{max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:6px; margin:8px 0}
+  .exlist .opt{display:flex; justify-content:space-between; padding:9px 10px; border-radius:8px; cursor:pointer; font-size:14px}
+  .exlist .opt:active{background:var(--card2)}
+  .exlist .opt .t{color:var(--sub); font-size:11.5px}
+  .toast{position:fixed; bottom:78px; left:50%; transform:translateX(-50%); background:var(--card2); border:1px solid var(--line);
+    color:var(--ink); font-size:13.5px; padding:10px 18px; border-radius:100px; z-index:99; box-shadow:0 8px 24px rgba(0,0,0,.4); max-width:88vw; text-align:center}
+  textarea{resize:vertical; min-height:64px}
+  .draft{font-size:11px; color:var(--warn)}
+  .cond{margin-bottom:12px}
+  /* 달력 */
+  .cal{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:12px}
+  .cal .cwd{text-align:center; font-size:11px; color:var(--sub); padding:2px 0}
+  .cal .c{aspect-ratio:0.9; border-radius:9px; background:var(--card); border:1px solid var(--line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:13px; cursor:pointer; gap:1px}
+  .cal .c .cnt{font-size:9.5px; color:var(--blue); font-weight:600; line-height:1}
+  .cal .c.sel{border-color:var(--blue); background:var(--blue-soft)}
+  .cal .c.td{box-shadow:inset 0 0 0 1px var(--good)}
+  .cal .c.blank{background:none; border:none; cursor:default}
+  /* 하단 시트 모달 — 아티팩트 환경이 브라우저 기본 팝업(prompt/confirm)을 차단하므로 자체 구현 */
+  .overlay{position:fixed; inset:0; background:rgba(4,8,16,.6); z-index:100; display:flex; align-items:flex-end; justify-content:center}
+  .sheet{background:var(--card); border:1px solid var(--line); border-radius:18px 18px 0 0; padding:18px 16px max(20px, env(safe-area-inset-bottom));
+    width:100%; max-width:480px; max-height:78vh; overflow-y:auto; box-shadow:0 -12px 40px rgba(0,0,0,.5)}
+</style>
+
+<div id="app"></div>
+<div class="nav"><div class="in">
+  <button id="nav-home" onclick="go({name:'home'})"><span class="ico">👥</span>회원</button>
+  <button id="nav-sch" onclick="go({name:'schedule'})"><span class="ico">🗓</span>시간표</button>
+  <button id="nav-prog" onclick="go({name:'programs'})"><span class="ico">📋</span>프로그램</button>
+  <button id="nav-lib" onclick="go({name:'library'})"><span class="ico">🏋️</span>운동</button>
+  <button id="nav-set" onclick="go({name:'settings'})"><span class="ico">⚙️</span>설정</button>
+</div></div>
+
+<script>
+/* ───────────────────── 데이터 ───────────────────── */
+const LS='ptlog.v1';
+/* 기록 방식: w=무게×횟수, t=시간(초), lv=레벨×횟수, band=밴드×횟수, chk=체크만 */
+const MODES={w:'무게×횟수', t:'시간(초)', lv:'레벨×횟수', band:'밴드×횟수', chk:'체크만'};
+const BANDS=['노랑','빨강','초록','파랑','검정'];
+/* 특이사항 3색: 빨강=부정(통증·자세), 파랑=개선, 초록=좌우 불균형 */
+const ISSUE_SETS=[
+  {cls:'bad', items:['허리 통증','무릎 통증','어깨 통증','자세 무너짐','가동범위 제한','과긴장']},
+  {cls:'imp', items:['통증 줄어듦','가동범위 개선','자세 좋아짐']},
+  {cls:'bal', items:['왼쪽 약함','오른쪽 약함','좌우 쏠림']},
+];
+function issueCls(name){
+  for(const g of ISSUE_SETS) if(g.items.includes(name)) return g.cls;
+  return 'etc';
+}
+function issueSpan(name){ return `<span class="iss-${issueCls(name)}">${esc(name)}</span>`; }
+
+const BASE_EXERCISES=[
+ ['백스쿼트','하체'],['고블릿 스쿼트','하체'],['핵 스쿼트','하체'],['레그 프레스','하체'],['런지','하체'],['스플릿 스쿼트','하체'],
+ ['레그 익스텐션','하체'],['레그 컬','하체'],['시티드 레그 컬','하체'],['이너 타이','하체'],['아웃 타이','하체'],
+ ['힙 쓰러스트','하체'],['카프 레이즈','하체'],
+ ['데드리프트','전신'],['루마니안 데드리프트','하체'],['케틀벨 데드리프트','하체'],['케틀벨 스윙','전신'],
+ ['벤치프레스','가슴'],['덤벨 벤치프레스','가슴'],['인클라인 덤벨 프레스','가슴'],['푸시업','가슴'],['체스트 플라이','가슴'],['리버스 펙덱 플라이','가슴'],
+ ['숄더 프레스','어깨'],['사이드 레터럴 레이즈','어깨'],['페이스 풀','어깨'],
+ ['랫풀다운','등'],['시티드 로우','등'],['하이 로우','등'],['바벨 로우','등'],['덤벨 로우','등'],['풀업','등'],['어시스트 친업','등'],['백 익스텐션','등'],
+ ['바벨 컬','팔'],['덤벨 컬','팔'],['트라이셉스 익스텐션','팔'],['케이블 푸시다운','팔'],
+ ['크런치','코어'],['레그 레이즈','코어'],['행잉 니업','코어'],['데드버그','코어'],['버드독','코어'],['플랭크 클라이머','코어'],
+ ['행잉','코어','t'],['플랭크','코어','t'],['사이드 플랭크','코어','t'],
+ ['스텝퍼','유산소','lv'],
+ ['밴드 사이드 워크','재활','band'],['밴드 스쿼트','재활','band'],
+ ['클램쉘','재활'],['월 슬라이드','재활'],['발목 가동성 드릴','재활'],['힙 힌지 드릴','재활'],
+ ['WGS 스트레칭','웜업','chk'],['폼롤러 릴리즈','웜업','chk'],['스미스 랙업','전신'],['클럽벨 캐스트','전신'],
+];
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtD(s){ return s ? s.slice(5).replace('-','/') : ''; }
+
+function seed(){
+  const ex = BASE_EXERCISES.map(([name,tag,mode])=>({id:uid(),name,tag,mode:mode||'w',custom:false}));
+  const byName=n=>ex.find(e=>e.name===n).id;
+  const pA=['WGS 스트레칭','백스쿼트','루마니안 데드리프트','레그 프레스','레그 컬','플랭크'].map(byName);
+  const pB=['WGS 스트레칭','벤치프레스','인클라인 덤벨 프레스','숄더 프레스','트라이셉스 익스텐션','크런치'].map(byName);
+  const pC=['WGS 스트레칭','랫풀다운','시티드 로우','힙 쓰러스트','덤벨 컬','행잉'].map(byName);
+  const days=[]; const pats=[pA,pB,pC];
+  for(let i=0;i<30;i++) days.push({items:[...pats[i%3]]});
+  const prog={id:uid(), name:'근력 A (기본)', goal:'근력', total:30, days, builtin:true, draft:true};
+
+  const m={id:uid(), name:'김민수 (예시)', note:'32세 · 예시 회원, 삭제해도 됩니다', programId:prog.id, sessionsDone:30, demo:true,
+    dayAdds:{}, rereg:1, sex:'남'};
+  const logs=[
+    {id:uid(), memberId:m.id, dayIdx:1, lap:1, date:'2026-05-14', cond:'컨디션 보통 · 수면 부족',
+     entries:[
+      {exId:byName('WGS 스트레칭'), sets:[], chk:true, issues:[], memo:''},
+      {exId:byName('백스쿼트'), sets:[{w:0,r:20},{w:20,r:12},{w:30,r:8}], issues:['허리 통증'], memo:'마지막 세트 허리 불편감'},
+      {exId:byName('루마니안 데드리프트'), sets:[{w:30,r:12},{w:40,r:8}], issues:['왼쪽 약함'], memo:''},
+      {exId:byName('레그 프레스'), sets:[{w:80,r:15},{w:110,r:10}], issues:[], memo:''},
+      {exId:byName('플랭크'), sets:[{sec:57}], issues:[], memo:''},
+     ]},
+    {id:uid(), memberId:m.id, dayIdx:2, lap:1, date:'2026-05-17', cond:'',
+     entries:[
+      {exId:byName('벤치프레스'), sets:[{w:20,r:15},{w:35,r:8}], issues:['통증 줄어듦'], memo:''},
+      {exId:byName('숄더 프레스'), sets:[{w:8,r:12},{w:12,r:9}], issues:['가동범위 제한'], memo:'왼쪽 어깨 끝범위 제한'},
+     ]},
+    {id:uid(), memberId:m.id, dayIdx:4, lap:1, date:'2026-05-21', cond:'',
+     entries:[
+      {exId:byName('백스쿼트'), sets:[{w:20,r:12},{w:35,r:8}], issues:['통증 줄어듦'], memo:'허리 통증 없이 수행'},
+      {exId:byName('플랭크'), sets:[{sec:73}], issues:[], memo:''},
+     ]},
+  ];
+  logs.forEach(l=>l.progId=prog.id);
+  const bookings=[{id:uid(), date:today(), t:'10:00', memberId:m.id}];
+  return {version:7, exercises:ex, programs:[prog], members:[m], logs, bookings};
+}
+function migrate(d){
+  if(!d.version || d.version<2){
+    const modeByName={'플랭크':'t','사이드 플랭크':'t','밴드 사이드 워크':'band'};
+    (d.exercises||[]).forEach(e=>{ if(!e.mode) e.mode=modeByName[e.name]||'w'; });
+    const add=[['행잉','코어','t'],['스텝퍼','유산소','lv'],['WGS 스트레칭','웜업','chk'],['폼롤러 릴리즈','웜업','chk'],
+      ['밴드 스쿼트','재활','band'],['시티드 레그 컬','하체'],['이너 타이','하체'],['아웃 타이','하체'],['핵 스쿼트','하체'],
+      ['하이 로우','등'],['어시스트 친업','등'],['백 익스텐션','등'],['리버스 펙덱 플라이','가슴'],['행잉 니업','코어'],
+      ['플랭크 클라이머','코어'],['케틀벨 데드리프트','하체'],['스미스 랙업','전신'],['클럽벨 캐스트','전신']];
+    add.forEach(([name,tag,mode])=>{ if(!(d.exercises||[]).some(e=>e.name===name))
+      d.exercises.push({id:uid(),name,tag,mode:mode||'w',custom:false}); });
+    (d.logs||[]).forEach(l=>{ if(l.cond===undefined) l.cond=''; });
+    d.version=2;
+  }
+  if(d.version<3){
+    /* 예시 회원에게 리포트 시연용 기록 1건 추가 */
+    const dm=(d.members||[]).find(m=>m.demo);
+    if(dm){
+      const ex=n=>{ const e=(d.exercises||[]).find(e=>e.name===n); return e?e.id:null; };
+      const bs=ex('백스쿼트'), pl=ex('플랭크');
+      const already=(d.logs||[]).some(l=>l.memberId===dm.id&&l.dayIdx===4&&l.lap===1);
+      if(bs&&pl&&!already) d.logs.push({id:uid(), memberId:dm.id, dayIdx:4, lap:1, date:'2026-05-21', cond:'',
+        entries:[{exId:bs, sets:[{w:20,r:12},{w:35,r:8}], issues:['통증 줄어듦'], memo:'허리 통증 없이 수행'},
+                 {exId:pl, sets:[{sec:73}], issues:[], memo:''}]});
+    }
+    d.version=3;
+  }
+  if(d.version<4){
+    /* 회원별 회차 추가 운동 — 수업 중 추가한 운동이 다음 바퀴 같은 회차에도 유지됨 */
+    (d.members||[]).forEach(m=>{ if(!m.dayAdds) m.dayAdds={}; });
+    d.version=4;
+  }
+  if(d.version<5){
+    (d.members||[]).forEach(m=>{
+      if(!m.schedule) m.schedule=[];
+      if(m.rereg===undefined){
+        const p=(d.programs||[]).find(p=>p.id===m.programId);
+        m.rereg = p? Math.floor((m.sessionsDone||0)/p.total) : 0;
+      }
+    });
+    /* 기록에 프로그램 표시 — 프로그램 변경 후 지난 바퀴 비교가 섞이지 않게 */
+    (d.logs||[]).forEach(l=>{ if(!l.progId){ const m=(d.members||[]).find(x=>x.id===l.memberId); l.progId=m?m.programId:null; } });
+    d.version=5;
+  }
+  if(d.version<6){
+    /* 예약제 달력 — 날짜별 수업 예약 저장소 */
+    if(!d.bookings) d.bookings=[];
+    d.version=6;
+  }
+  if(d.version<7){
+    (d.members||[]).forEach(m=>{ if(m.sex===undefined) m.sex=''; });
+    d.version=7;
+  }
+  return d;
+}
+/* ───────── 서버 연결 (Supabase) — 폰·PC 어디서든 같은 데이터 ───────── */
+const SB_URL='https://kpubgeejyiupdvbbdxwt.supabase.co';
+const SB_KEY='sb_publishable_09UkwFHF2-tqRQexECgFUw_eyrPlCvD';
+const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+/* 메일의 재설정 링크로 들어오면 — 로그인 처리와 경합하지 않도록 플래그로 고정 */
+let recoveryMode = /type=recovery/.test(location.hash||'') || /type=recovery/.test(location.search||'');
+if(sb) sb.auth.onAuthStateChange((event, session)=>{
+  if(event==='PASSWORD_RECOVERY' && session){ user=session.user; recoveryMode=true; renderNewPw(); }
+});
+let user=null;       /* 로그인한 트레이너 */
+let booted=false;    /* 데이터 로드 완료 */
+let isAdmin=false;   /* 대표(관리자) 여부 — admins 테이블로 판정 */
+let db=null, draft=null;
+let sync={dirty:false, timer:null, serverAt:null, offline:false};
+
+function lsKey(){ return user? 'ptlog.v2.'+user.id : LS; }
+function load(){ try{ const s=localStorage.getItem(lsKey()); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function loadLegacy(){ try{ const s=localStorage.getItem(LS); return s?JSON.parse(s):null; }catch(e){ return null; } }
+/* 저장 = 이 기기(즉시) + 서버(1.5초 뒤 자동 전송) */
+function save(){
+  try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
+  if(user&&sb){ sync.dirty=true; clearTimeout(sync.timer); sync.timer=setTimeout(pushNow, 1500); }
+}
+function dsave(){ db.draft=draft; save(); }
+
+async function pushNow(){
+  if(!user||!sb||!sync.dirty||!db) return;
+  const at=new Date().toISOString();
+  try{
+    let {error}=await sb.from('trainer_data').upsert({user_id:user.id, email:user.email||null, data:db, updated_at:at});
+    /* 서버에 email 칸이 아직 없어도 저장은 되게 (SQL 적용 전 안전장치) */
+    if(error && /email/i.test(error.message||'')){
+      ({error}=await sb.from('trainer_data').upsert({user_id:user.id, data:db, updated_at:at}));
+    }
+    if(error) throw error;
+    sync.dirty=false; sync.offline=false; sync.serverAt=at; updateSyncBadge();
+  }catch(e){
+    sync.offline=true; updateSyncBadge();
+    setTimeout(()=>{ if(sync.dirty) pushNow(); }, 8000); /* 연결 복구 시 자동 재전송 */
+  }
+}
+async function pullNow(){
+  if(!user||!sb||sync.dirty) return; /* 이 기기에 미전송 변경이 있으면 덮어쓰지 않음 */
+  try{
+    const {data,error}=await sb.from('trainer_data').select('data,updated_at').eq('user_id',user.id).maybeSingle();
+    if(error) throw error;
+    if(data && data.updated_at!==sync.serverAt){ /* 다른 기기에서 저장한 최신본 반영 */
+      db=migrate(data.data); draft=db.draft||null; sync.serverAt=data.updated_at;
+      try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
+      if(booted) render();
+    }
+    sync.offline=false; updateSyncBadge();
+  }catch(e){ sync.offline=true; updateSyncBadge(); }
+}
+function updateSyncBadge(){
+  const el=document.getElementById('sync-dot'); if(!el) return;
+  el.textContent = !user? '' : sync.offline? '⚠ 오프라인 — 연결되면 자동 전송됩니다' : (sync.dirty? '서버 저장 중…' : '✓ 서버에 저장됨 · 폰·PC 연동');
+  el.style.color = sync.offline? 'var(--warn)' : 'var(--sub)';
+}
+
+/* ── 로그인 화면 ── */
+function renderLogin(msg){
+  const nav=document.querySelector('.nav'); if(nav) nav.style.display='none';
+  document.getElementById('app').innerHTML=`
+   <div style="max-width:360px; margin:56px auto 0">
+    <h1 style="text-align:center; font-size:26px">🏋️ 수업일지</h1>
+    <p class="muted" style="text-align:center; margin:6px 0 24px">vivre 트레이너 로그인</p>
+    <label class="fld"><span class="muted">이메일</span><input type="text" id="lg-email" inputmode="email" autocomplete="username" placeholder="name@example.com"></label>
+    <label class="fld"><span class="muted">비밀번호 (6자 이상)</span><input type="password" id="lg-pw" autocomplete="current-password" placeholder="비밀번호"></label>
+    ${msg?`<div class="warn" style="margin-bottom:10px">${msg}</div>`:''}
+    <button class="btn" onclick="doLogin()">로그인</button>
+    <button class="btn ghost" onclick="doSignup()">처음입니다 — 가입하기</button>
+    <button class="btn subtle" onclick="doReset()">비밀번호를 잊었어요</button>
+    <div class="muted" style="text-align:center; margin-top:14px; font-size:12.5px">같은 계정으로 폰·PC 어디서 로그인해도<br>기록이 그대로 보입니다</div>
+   </div>`;
+}
+/* ── 비밀번호 재설정: 메일 발송 → 링크 클릭 → 새 비밀번호 입력 ── */
+async function doReset(){
+  const email=document.getElementById('lg-email').value.trim();
+  if(!email){ toast('위 이메일 칸에 가입한 이메일을 먼저 입력하세요'); return; }
+  const {error}=await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin});
+  if(error){ renderLogin(loginErr(error)); return; }
+  renderLogin('재설정 메일을 보냈습니다.<br>메일함(스팸함 포함)에서 링크를 누르면<br>새 비밀번호 설정 화면이 열립니다.');
+}
+function renderNewPw(){
+  const nav=document.querySelector('.nav'); if(nav) nav.style.display='none';
+  document.getElementById('app').innerHTML=`
+   <div style="max-width:360px; margin:56px auto 0">
+    <h1 style="text-align:center; font-size:22px">새 비밀번호 설정</h1>
+    <p class="muted" style="text-align:center; margin:6px 0 24px">${esc(user&&user.email||'')}</p>
+    <label class="fld"><span class="muted">새 비밀번호 (6자 이상)</span><input type="password" id="np-1" autocomplete="new-password"></label>
+    <label class="fld"><span class="muted">한 번 더</span><input type="password" id="np-2" autocomplete="new-password"></label>
+    <button class="btn" onclick="setNewPw()">변경하고 시작하기</button>
+   </div>`;
+}
+async function setNewPw(){
+  const p1=document.getElementById('np-1').value, p2=document.getElementById('np-2').value;
+  if(p1.length<6){ toast('비밀번호는 6자 이상이어야 합니다'); return; }
+  if(p1!==p2){ toast('두 입력이 서로 다릅니다'); return; }
+  const {error}=await sb.auth.updateUser({password:p1});
+  if(error){ toast(loginErr(error)); return; }
+  recoveryMode=false;
+  try{ history.replaceState(null,'',location.pathname); }catch(e){}
+  toast('비밀번호가 변경됐습니다'); await bootData();
+}
+/* 로그인 상태에서 비밀번호 바꾸기 (설정 탭) */
+function openChangePw(){
+  modal(`<b>비밀번호 변경</b>
+    <label class="fld" style="margin-top:12px"><span class="muted">새 비밀번호 (6자 이상)</span><input type="password" id="cp-1" autocomplete="new-password"></label>
+    <label class="fld"><span class="muted">한 번 더</span><input type="password" id="cp-2" autocomplete="new-password"></label>
+    <button class="btn" onclick="applyChangePw()">변경</button>`);
+}
+async function applyChangePw(){
+  const p1=document.getElementById('cp-1').value, p2=document.getElementById('cp-2').value;
+  if(p1.length<6){ toast('비밀번호는 6자 이상이어야 합니다'); return; }
+  if(p1!==p2){ toast('두 입력이 서로 다릅니다'); return; }
+  const {error}=await sb.auth.updateUser({password:p1});
+  if(error){ toast(loginErr(error)); return; }
+  closeModal(); toast('비밀번호가 변경됐습니다 — 꼭 메모하세요');
+}
+function loginErr(e){
+  const m=(e&&e.message)||'';
+  if(m.includes('Invalid login')) return '이메일 또는 비밀번호가 맞지 않습니다';
+  if(m.includes('already registered')) return '이미 가입된 이메일입니다 — 로그인을 누르세요';
+  if(m.includes('at least 6')||m.includes('should be at least')) return '비밀번호는 6자 이상이어야 합니다';
+  if(m.includes('valid email')||m.includes('invalid format')) return '이메일 형식을 확인하세요';
+  if(m.includes('Failed to fetch')) return '인터넷 연결을 확인하세요';
+  return '오류: '+m;
+}
+async function doLogin(){
+  const email=document.getElementById('lg-email').value.trim(), pw=document.getElementById('lg-pw').value;
+  if(!email||!pw){ toast('이메일과 비밀번호를 입력하세요'); return; }
+  const {data,error}=await sb.auth.signInWithPassword({email, password:pw});
+  if(error){ renderLogin(loginErr(error)); return; }
+  user=data.user; await bootData();
+}
+async function doSignup(){
+  const email=document.getElementById('lg-email').value.trim(), pw=document.getElementById('lg-pw').value;
+  if(!email||!pw){ toast('이메일과 비밀번호를 입력하세요'); return; }
+  const {data,error}=await sb.auth.signUp({email, password:pw});
+  if(error){ renderLogin(loginErr(error)); return; }
+  if(!data.session){ renderLogin('확인 메일이 발송됐습니다 — 메일함에서 링크를 누른 뒤 로그인하세요'); return; }
+  user=data.user; await bootData();
+}
+function doLogout(){
+  ask('로그아웃할까요?\n기록은 서버에 저장돼 있어 다시 로그인하면 그대로입니다', '로그아웃', async ()=>{
+    if(sync.dirty) await pushNow();
+    await sb.auth.signOut();
+    user=null; db=null; draft=null; pdraft=null; booted=false; isAdmin=false;
+    sync={dirty:false,timer:null,serverAt:null,offline:false};
+    renderLogin(); });
+}
+
+/* ── 부팅: 세션 확인 → 서버 데이터 로드 ── */
+async function boot(){
+  document.getElementById('app').innerHTML='<div class="empty">불러오는 중…</div>';
+  if(!sb){ /* 스크립트 로드 실패 — 이 기기 단독 모드로라도 동작 */
+    db=loadLegacy(); db=db?migrate(db):seed(); draft=db.draft||null; booted=true; render(); return;
+  }
+  try{ const {data:{session}}=await sb.auth.getSession(); user=session?session.user:null; }catch(e){ user=null; }
+  if(user && recoveryMode){ renderNewPw(); return; } /* 재설정 링크로 온 경우: 홈 대신 새 비밀번호 화면 */
+  if(!user){ renderLogin(); return; }
+  await bootData();
+}
+async function bootData(){
+  const nav=document.querySelector('.nav'); if(nav) nav.style.display='';
+  document.getElementById('app').innerHTML='<div class="empty">기록 불러오는 중…</div>';
+  try{
+    const {data,error}=await sb.from('trainer_data').select('data,updated_at').eq('user_id',user.id).maybeSingle();
+    if(error) throw error;
+    if(data){ db=migrate(data.data); sync.serverAt=data.updated_at; sync.dirty=false; }
+    else{
+      /* 계정에 데이터 없음 — 이 기기에 쓰던 기록이 있으면 자동 이관 */
+      const legacy=load()||loadLegacy();
+      if(legacy && ((legacy.logs||[]).length || (legacy.members||[]).some(m=>!m.demo))){
+        db=migrate(legacy); sync.dirty=true; await pushNow();
+        toast('이 기기의 기존 기록을 계정으로 올렸습니다');
+      } else { db=seed(); sync.dirty=true; await pushNow(); }
+    }
+  }catch(e){
+    const cached=load()||loadLegacy();
+    db=cached?migrate(cached):seed(); sync.offline=true;
+    toast('서버 연결 실패 — 이 기기 저장으로 동작, 연결되면 자동 전송됩니다');
+  }
+  draft=db.draft||null; pdraft=null; booted=true;
+  try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
+  view={name:'home'}; render();
+  /* 관리자 여부 확인 (백그라운드) */
+  isAdmin=false;
+  sb.from('admins').select('user_id').eq('user_id',user.id).maybeSingle()
+    .then(r=>{ if(r&&r.data){ isAdmin=true; if(view.name==='home'||view.name==='settings') render(); } });
+}
+
+/* ───────────────────── 계산 ───────────────────── */
+function exOf(id){ return db.exercises.find(e=>e.id===id); }
+function exName(id){ const e=exOf(id); return e?e.name:'(삭제된 운동)'; }
+function exMode(id){ const e=exOf(id); return e?(e.mode||'w'):'w'; }
+
+function validSets(sets, mode){
+  const a=(sets||[]).filter(Boolean);
+  if(mode==='t') return a.filter(s=>(parseFloat(s.sec)||0)>0);
+  if(mode==='lv') return a.filter(s=>(parseFloat(s.n)||0)>0);
+  if(mode==='band') return a.filter(s=>(parseFloat(s.r)||0)>0);
+  return a.filter(s=>(parseFloat(s.r)||0)>0);
+}
+function num(v){ return parseFloat(v)||0; }
+function entryHasRecord(en, mode){ return mode==='chk' ? !!en.chk : validSets(en.sets, mode).length>0; }
+
+function bestW(sets){ const v=validSets(sets,'w').filter(s=>num(s.w)>0); if(!v.length)return null;
+  return v.slice().sort((a,b)=> num(b.w)-num(a.w) || num(b.r)-num(a.r))[0]; }
+function bestR(sets){ const v=validSets(sets,'w'); if(!v.length)return null;
+  return v.slice().sort((a,b)=> num(b.r)-num(a.r) || num(b.w)-num(a.w))[0]; }
+function e1rm(sets){ const v=validSets(sets,'w').filter(s=>num(s.w)>0); if(!v.length)return null;
+  const low=v.filter(s=>num(s.r)<=10); const pool=low.length?low:v;
+  const val=Math.max(...pool.map(s=>num(s.w)*(1+num(s.r)/30)));
+  return {v:Math.round(val*10)/10, ref:!low.length}; }
+function bestT(sets){ const v=validSets(sets,'t'); if(!v.length)return null; return Math.max(...v.map(s=>num(s.sec))); }
+function bestLv(sets){ const v=validSets(sets,'lv'); if(!v.length)return null;
+  return v.slice().sort((a,b)=> num(b.lv)-num(a.lv) || num(b.n)-num(a.n))[0]; }
+function lastBand(sets){ const v=validSets(sets,'band'); return v.length? v[v.length-1] : null; }
+function volume(sets){ return validSets(sets,'w').reduce((a,s)=>a+(num(s.w)>0?num(s.w)*num(s.r):0),0); }
+function setStr(s){ return (num(s.w)>0? num(s.w)+'kg':'맨몸')+'×'+num(s.r); }
+
+/* 접힌 목록용 한 줄 요약 — 종이 일지의 위첨자 역할 */
+function compactStr(en, mode){
+  if(mode==='chk') return en.chk!==undefined? '체크 항목':'';
+  const sets=en.sets;
+  if(mode==='t'){ const t=bestT(sets); return t? t+'초':''; }
+  if(mode==='lv'){ const b=bestLv(sets); return b? 'Lv'+num(b.lv)+'×'+num(b.n):''; }
+  if(mode==='band'){ const b=lastBand(sets); return b? b.band+'×'+num(b.r):''; }
+  const bw=bestW(sets)||bestR(sets); return bw? setStr(bw):'';
+}
+/* 상세 블록용 문자열 */
+function detailStr(en, mode){
+  if(mode==='chk') return en.chk? '✓ 완료':'';
+  const sets=en.sets;
+  if(mode==='t'){ const t=bestT(sets); return t? `최고 <b class="num">${t}초</b>`:''; }
+  if(mode==='lv'){ const b=bestLv(sets); return b? `<b class="num">Lv${num(b.lv)} × ${num(b.n)}</b>`:''; }
+  if(mode==='band'){ const b=lastBand(sets); return b? `<b class="num">${b.band} 밴드 × ${num(b.r)}</b>`:''; }
+  const bw=bestW(sets), br=bestR(sets), rm=e1rm(sets);
+  let out=[];
+  if(bw) out.push(`최대 중량 <b class="num">${setStr(bw)}</b>`);
+  if(br&&(!bw||br!==bw)) out.push(`최다 반복 <b class="num">${setStr(br)}</b>`);
+  if(rm) out.push(`e1RM <b class="num">${rm.v}kg</b>${rm.ref?'<span class="muted">(참고치)</span>':''}`);
+  return out.join(' · ');
+}
+
+function memberProgress(m){
+  const p=db.programs.find(p=>p.id===m.programId);
+  if(!p) return null;
+  const total=p.total, done=m.sessionsDone||0;
+  const nextDay=done%total+1, lap=Math.floor(done/total)+1;
+  return {p, total, done, nextDay, lap, remaining: total-(done%total), rebadge: (done%total)>=total-3};
+}
+function prevRecord(memberId, exId, dayIdx, lap, progId){
+  const mode=exMode(exId);
+  const has=e=> e.exId===exId && (mode==='chk'? e.chk : validSets(e.sets,mode).length);
+  const logs=db.logs.filter(l=>l.memberId===memberId);
+  /* 같은 회차 비교는 같은 프로그램 안에서만 — 프로그램을 바꾸면 회차 의미가 달라지므로 */
+  const same=logs.filter(l=>l.dayIdx===dayIdx && l.lap<lap && (!progId||!l.progId||l.progId===progId)).sort((a,b)=>b.lap-a.lap);
+  for(const l of same){ const e=(l.entries||[]).find(has); if(e) return {e, label:l.lap+'바퀴 · '+fmtD(l.date), samePos:true}; }
+  const all=logs.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  for(const l of all){ const e=(l.entries||[]).find(has); if(e) return {e, label:'최근 기록 · '+fmtD(l.date), samePos:false}; }
+  return null;
+}
+
+/* ───────────────────── 라우팅 ───────────────────── */
+let view={name:'home'};
+function go(v){ view=v; render(); window.scrollTo(0,0); }
+function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),1900); }
+function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ── 부위별 정렬: 새 운동은 같은 부위 그룹의 맨 뒤에 붙는다 ── */
+const TAG_ORDER=['웜업','하체','가슴','등','어깨','팔','코어','전신','유산소','재활','기타'];
+function sortedEx(list){
+  const ord=t=>{ const i=TAG_ORDER.indexOf(t); return i<0?99:i; };
+  return list.slice().sort((a,b)=> ord(a.tag)-ord(b.tag));
+}
+
+/* ── 자체 모달 (브라우저 기본 confirm/prompt는 아티팩트에서 차단됨) ── */
+function modal(html){ closeModal();
+  const o=document.createElement('div'); o.id='modal'; o.className='overlay';
+  o.innerHTML=`<div class="sheet">${html}</div>`;
+  o.addEventListener('click', e=>{ if(e.target===o) closeModal(); });
+  document.body.appendChild(o); }
+function closeModal(){ const o=document.getElementById('modal'); if(o) o.remove(); }
+let _askCb=null;
+function ask(msg, yesLabel, cb){ _askCb=cb;
+  modal(`<div style="font-size:14.5px; margin-bottom:16px; white-space:pre-line">${msg}</div>
+    <div class="grid2"><button class="btn subtle" onclick="closeModal()">취소</button>
+    <button class="btn" onclick="closeModal(); _askCb&&_askCb()">${yesLabel}</button></div>`); }
+function showCopy(title, text){
+  modal(`<b>${title}</b><div class="muted" style="margin:4px 0 8px">아래 내용을 길게 눌러 전체 복사하세요</div>
+    <textarea style="min-height:150px" readonly>${esc(text)}</textarea>
+    <button class="btn ghost" style="margin-top:10px" onclick="closeModal()">닫기</button>`); }
+
+function render(){
+  if(!booted) return;
+  const el=document.getElementById('app');
+  [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
+    const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
+  const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
+    report:vReport, logs:vLogs, schedule:vSchedule, admin:vAdmin,
+    programs:vPrograms, progDetail:vProgDetail, progNew:vProgNew, library:vLibrary,
+    memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
+  el.innerHTML=fn();
+  updateSyncBadge();
+}
+
+/* ── 주간 브리핑 — 매주 월요일부터, 닫을 때까지 홈에 뜬다 ── */
+function dfmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function weekKey(){ const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7)); return dfmt(d); }
+function briefData(){
+  const tm=weekKey();
+  const mon=new Date(tm); const lastMon=new Date(mon); lastMon.setDate(mon.getDate()-7);
+  const prevMon=new Date(mon); prevMon.setDate(mon.getDate()-14);
+  const lm=dfmt(lastMon), pm=dfmt(prevMon);
+  const inR=(s,a,b)=> s>=a && s<b;
+  const lastCnt=db.logs.filter(l=>inR(l.date||'',lm,tm)).length;
+  const prevCnt=db.logs.filter(l=>inR(l.date||'',pm,lm)).length;
+  const noshows=db.bookings.filter(b=>inR(b.date||'',lm,tm)&&b.status==='noshow');
+  const nsNames=[...new Set(noshows.map(b=>{ const m=db.members.find(x=>x.id===b.memberId); return m?m.name:null; }).filter(Boolean))];
+  const rebadge=db.members.filter(m=>!m.demo).filter(m=>{ const p=memberProgress(m); return p&&p.rebadge; }).map(m=>m.name);
+  const cut=new Date(); cut.setDate(cut.getDate()-14); const cutoff=dfmt(cut);
+  const idle=db.members.filter(m=>!m.demo).map(m=>{
+    const ds=db.logs.filter(l=>l.memberId===m.id).map(l=>l.date||'').sort();
+    return {name:m.name, last:ds[ds.length-1]};
+  }).filter(x=>x.last && x.last<cutoff);
+  return {lastCnt, diff:lastCnt-prevCnt, noshowCnt:noshows.length, nsNames, rebadge, idle};
+}
+function briefHtml(){
+  if(!db || !db.logs.length) return '';
+  if(db.lastBriefWeek===weekKey()) return '';
+  const b=briefData();
+  const rows=[];
+  rows.push(`· 지난주 수업 <b class="num">${b.lastCnt}</b>회 <span class="muted num">(전주 ${b.diff>=0?'+':''}${b.diff})</span>`);
+  if(b.noshowCnt) rows.push(`· 지난주 노쇼 <b class="num" style="color:var(--bad)">${b.noshowCnt}</b>회 — ${b.nsNames.map(esc).join(', ')}`);
+  if(b.rebadge.length) rows.push(`· <span style="color:var(--warn)">재등록 타이밍</span>: ${b.rebadge.map(esc).join(', ')}`);
+  if(b.idle.length) rows.push(`· <span style="color:var(--bad)">2주 넘게 안 온 회원</span>: ${b.idle.map(x=>esc(x.name)+' <span class="muted num">('+fmtD(x.last)+'~)</span>').join(', ')} — 연락해 보세요`);
+  return `<div class="card" style="border-color:var(--blue)">
+    <div class="row"><b>📋 이번 주 브리핑</b>
+      <button class="ichip" onclick="db.lastBriefWeek=weekKey(); save(); render()">닫기</button></div>
+    <div style="font-size:13.5px; margin-top:6px; line-height:1.9">${rows.join('<br>')}</div></div>`;
+}
+
+/* ───────────────────── 화면: 회원 ───────────────────── */
+function vHome(){
+  const list=db.members.map(m=>{
+    const pr=memberProgress(m);
+    const sub = pr? `${esc(pr.p.name)} · <span class="num">${pr.done%pr.total}/${pr.total}</span>회${pr.lap>1?` · ${pr.lap}바퀴째`:''}` : '프로그램 미배정';
+    const badge = pr ? (pr.rebadge? `<span class="pill warn">재등록 타이밍</span>` : `<span class="pill">A-${pr.nextDay}</span>`) : '';
+    return `<div class="card tap" onclick="go({name:'member',id:'${m.id}'})">
+      <div class="row"><div><b>${esc(m.name)}</b>${m.sex?`<span class="muted"> (${m.sex})</span>`:''}${m.rereg?` <span class="pill good">재등록 ${m.rereg}</span>`:''}<div class="muted">${sub}</div></div>${badge}</div>
+      ${pr?`<div class="prog"><i style="width:${(pr.done%pr.total)/pr.total*100}%"></i></div>`:''}
+    </div>`; }).join('');
+  const dm = draft? db.members.find(x=>x.id===draft.memberId) : null;
+  const resume = dm? `<div class="card tap" style="border-color:var(--blue)" onclick="go({name:'session'})">
+    <div class="row"><div><b>▶ ${draft.editLogId?'기록 수정 중':'진행 중 수업'}</b><div class="muted">${esc(dm.name)} · A-${draft.dayIdx} — 눌러서 이어하기</div></div>
+    <span class="pill">자동 저장됨</span></div></div>` : '';
+  /* 오늘 수업 — 달력 시간표에 오늘 날짜로 예약된 수업 */
+  const wd=new Date().getDay();
+  const todayRows=db.bookings.filter(b=>b.date===today())
+    .map(b=>({t:b.t, m:db.members.find(x=>x.id===b.memberId)})).filter(r=>r.m)
+    .sort((a,b)=>a.t.localeCompare(b.t));
+  const todayHtml= todayRows.length? `<div class="card"><div class="muted" style="margin-bottom:6px">오늘 수업 · ${DAYS[wd]}요일 ${todayRows.length}건</div>
+    ${todayRows.map(r=>{ const p2=memberProgress(r.m);
+      return `<div class="row" style="padding:5px 0; cursor:pointer" onclick="go({name:'member',id:'${r.m.id}'})">
+      <span><b class="num">${r.t}</b> ${esc(r.m.name)}</span><span class="muted">${p2?'A-'+p2.nextDay:''}</span></div>`; }).join('')}</div>`:'';
+  /* 백업 리마인더 — 마지막 백업 이후 수업 10회 */
+  const due=db.logs.length-(db.lastBackupCount||0);
+  const backupBanner= due>=10? `<div class="card tap" style="border-color:var(--warn)" onclick="go({name:'settings'})">
+    <div class="row"><span style="color:var(--warn); font-size:13.5px">⚠ 백업 이후 수업 ${due}회 — 백업하세요</span><span class="muted">설정 ›</span></div></div>`:'';
+  return `<div class="top"><h1>회원</h1><span class="muted">${today().replace(/-/g,'.')}</span></div>
+    <div class="muted" id="sync-dot" style="margin:-12px 0 10px; font-size:11.5px"></div>
+    ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
+      <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
+      <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
+    ${briefHtml()}${resume}${backupBanner}${todayHtml}
+    ${list || '<div class="empty">아직 회원이 없습니다.<br>아래 버튼으로 첫 회원을 등록하세요.</div>'}
+    <button class="btn ghost" onclick="go({name:'memberNew'})">＋ 회원 등록</button>`;
+}
+/* ── 센터 대시보드 (관리자 전용) ── */
+function calcTrainer(row){
+  const d=row.data||{};
+  const demoIds=(d.members||[]).filter(m=>m.demo).map(m=>m.id);
+  const members=(d.members||[]).filter(m=>!m.demo);
+  const logs=(d.logs||[]).filter(l=>!demoIds.includes(l.memberId));
+  const ym=today().slice(0,7);
+  const monthCnt=logs.filter(l=>(l.date||'').slice(0,7)===ym).length;
+  const rebadge=[];
+  members.forEach(m=>{
+    const p=(d.programs||[]).find(p=>p.id===m.programId); if(!p) return;
+    const done=(m.sessionsDone||0)%p.total;
+    if(done>=p.total-3) rebadge.push(`${m.name} (${done}/${p.total})`);
+  });
+  const byMonth={};
+  logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k) byMonth[k]=(byMonth[k]||0)+1; });
+  const rereg=members.reduce((a,m)=>a+(m.rereg||0),0);
+  const noshow=(d.bookings||[]).filter(b=>(b.date||'').slice(0,7)===ym && b.status==='noshow').length;
+  return {noshow, name:(d.trainerName||'').trim(), email:row.email||'(이메일 미기록)',
+    updated:(row.updated_at||'').slice(0,10).replace(/-/g,'.'),
+    members:members.length, monthCnt, total:logs.length, rereg, rebadge, byMonth};
+}
+function vAdmin(){
+  setTimeout(loadAdmin, 0);
+  return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button><h1>🏢 센터 대시보드</h1>
+    <button class="back" onclick="loadAdmin(); toast('새로고침')">↺</button></div>
+    <div id="adm"><div class="empty">전체 현황 불러오는 중…</div></div>`;
+}
+async function loadAdmin(){
+  const box=document.getElementById('adm'); if(!box) return;
+  try{
+    const {data,error}=await sb.from('trainer_data').select('user_id,email,data,updated_at');
+    if(error) throw error;
+    const rows=(data||[]).map(calcTrainer).sort((a,b)=>b.monthCnt-a.monthCnt);
+    const totMembers=rows.reduce((a,r)=>a+r.members,0);
+    const totMonth=rows.reduce((a,r)=>a+r.monthCnt,0);
+    const totAll=rows.reduce((a,r)=>a+r.total,0);
+    const byMonth={};
+    rows.forEach(r=>{ for(const k in r.byMonth) byMonth[k]=(byMonth[k]||0)+r.byMonth[k]; });
+    const months=Object.keys(byMonth).sort().reverse().slice(0,6);
+    const monthHtml=months.map(k=>`<div class="row" style="padding:3px 0">
+      <span class="muted num">${k.replace('-','.')}</span><b class="num">${byMonth[k]}회</b></div>`).join('');
+    const totRereg=rows.reduce((a,r)=>a+r.rereg,0);
+    const trainerHtml=rows.map(r=>`<div class="card">
+      <div class="row"><b style="word-break:break-all">${esc(r.name||r.email)}</b><span class="muted num">${r.updated}</span></div>
+      ${r.name?`<div class="muted" style="font-size:11.5px; word-break:break-all">${esc(r.email)}</div>`:
+        `<div class="muted" style="font-size:11.5px">이름 미설정 — 설정 탭에서 「내 이름」을 입력하게 하세요</div>`}
+      <div class="muted" style="margin-top:4px">회원 <b class="num" style="color:var(--ink)">${r.members}</b>명 ·
+        이번 달 수업 <b class="num" style="color:var(--ink)">${r.monthCnt}</b>회 · 누적 <span class="num">${r.total}</span>회 ·
+        재등록 <b class="num" style="color:var(--good)">${r.rereg}</b>회${r.noshow?` · 노쇼 <b class="num" style="color:var(--bad)">${r.noshow}</b>회`:''}</div>
+      ${r.rebadge.length?`<div style="font-size:12.5px; margin-top:5px; color:var(--warn)">🔔 재등록 타이밍: ${r.rebadge.map(esc).join(', ')}</div>`:''}
+    </div>`).join('');
+    box.innerHTML=`
+      <div class="card"><b>센터 전체</b>
+        <div class="grid2" style="margin-top:8px">
+          <div class="stat"><div class="muted">이번 달 수업</div><div class="v num">${totMonth}회</div></div>
+          <div class="stat"><div class="muted">전체 회원</div><div class="v num">${totMembers}명</div></div>
+        </div>
+        <div class="muted" style="margin:8px 0 4px">월별 수업 (센터 합계 · 누적 ${totAll}회 · 재등록 누적 <b class="num" style="color:var(--good)">${totRereg}</b>회)</div>
+        ${monthHtml||'<div class="muted">아직 기록 없음</div>'}</div>
+      <div class="muted" style="margin:14px 0 6px">트레이너 ${rows.length}명 — 이번 달 수업 많은 순</div>
+      ${trainerHtml||'<div class="empty">아직 가입한 트레이너가 없습니다</div>'}
+      <div class="muted" style="margin-top:10px; font-size:12px">예시 회원·예시 기록은 집계에서 제외됩니다. 트레이너 개인 화면의 회원 상세는 각자의 계정에서만 보입니다.</div>`;
+  }catch(e){
+    box.innerHTML='<div class="empty">불러오지 못했습니다.<br>관리자 권한(admins 등록)이 설정됐는지 확인하세요.</div>';
+  }
+}
+
+/* ── 달력 시간표 (예약제) + 월별 수업 통계 ── */
+function vSchedule(){
+  const ym = view.ym || today().slice(0,7);
+  const [y,mo]=ym.split('-').map(Number);
+  if(!view.day && today().slice(0,7)===ym) view.day=today();
+  const selDay = (view.day&&view.day.slice(0,7)===ym)? view.day : null;
+  const firstDow=new Date(y,mo-1,1).getDay();
+  const dim=new Date(y,mo,0).getDate();
+  /* 날짜별 예약 수 */
+  const cntByDate={};
+  db.bookings.forEach(b=>{ if((b.date||'').slice(0,7)===ym) cntByDate[b.date]=(cntByDate[b.date]||0)+1; });
+  let cells=DAYS.map(d=>`<div class="cwd">${d}</div>`).join('');
+  for(let i=0;i<firstDow;i++) cells+='<div class="c blank"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=ym+'-'+String(d).padStart(2,'0');
+    const cnt=cntByDate[ds]||0;
+    cells+=`<div class="c ${ds===selDay?'sel':''} ${ds===today()?'td':''}" onclick="view.day='${ds}'; render()">
+      <span class="num">${d}</span>${cnt?`<span class="cnt num">${cnt}</span>`:'<span class="cnt">&nbsp;</span>'}</div>`;
+  }
+  /* 선택한 날의 시간대 (06~23시) */
+  let dayHtml='';
+  if(selDay){
+    const dayB=db.bookings.filter(b=>b.date===selDay).sort((a,b)=>a.t.localeCompare(b.t));
+    const rows=[];
+    for(let h=6;h<=23;h++){
+      const hh=String(h).padStart(2,'0');
+      const slot=dayB.filter(b=>b.t.slice(0,2)===hh);
+      rows.push(`<div class="row" style="padding:4px 0; border-bottom:1px solid var(--line)">
+        <span class="muted num" style="width:44px">${hh}:00</span>
+        <span style="flex:1; display:flex; flex-wrap:wrap; gap:5px">${slot.map(b=>{
+          const bm=db.members.find(x=>x.id===b.memberId);
+          const st=BK_STATUS[b.status];
+          return `<span class="ichip" onclick="openBookingModal('${b.id}')"
+            style="color:${b.status==='cancel'?'var(--sub)':'var(--ink)'}; ${st?`border-color:${st[1]};`:''} ${b.status==='cancel'?'text-decoration:line-through;':''}">
+            ${st?`<span style="color:${st[1]}">${st[0]}</span> `:''}${b.t.slice(3)==='30'?'<span class=num>'+b.t+'</span> ':''}${esc(bm?bm.name:'?')}</span>`; }).join('')}</span>
+        <button class="ichip" onclick="openBookModal('${selDay}','${hh}')">＋</button></div>`);
+    }
+    const wd2=new Date(y,mo-1,parseInt(selDay.slice(8))).getDay();
+    dayHtml=`<div class="card"><div class="row"><b>${fmtD(selDay)} (${DAYS[wd2]})</b>
+      <span class="muted num">${dayB.length}건</span></div>
+      <div style="margin-top:8px">${rows.join('')}</div></div>`;
+  }
+  /* 월별 통계: 예약 + 완료 수업 + 노쇼 */
+  const bkCnt=Object.values(cntByDate).reduce((a,b)=>a+b,0);
+  const logCnt=db.logs.filter(l=>(l.date||'').slice(0,7)===ym).length;
+  const nsCnt=db.bookings.filter(b=>(b.date||'').slice(0,7)===ym && b.status==='noshow').length;
+  const byMonth={};
+  db.logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k) byMonth[k]=(byMonth[k]||0)+1; });
+  const months=Object.keys(byMonth).sort().reverse().slice(0,6);
+  const statHtml=months.map(k=>`<div class="row" style="padding:3px 0"><span class="muted num">${k.replace('-','.')}</span><b class="num">${byMonth[k]}회</b></div>`).join('');
+  return `<div class="top">
+    <button class="back num" onclick="calShift(-1)">◀</button>
+    <h1 class="num">${y}년 ${mo}월</h1>
+    <button class="back num" style="padding:6px 0 6px 8px" onclick="calShift(1)">▶</button></div>
+    <div class="row" style="margin:-10px 0 10px"><span class="muted">이 달 예약 <b class="num">${bkCnt}</b>건 · 완료 <b class="num">${logCnt}</b>회${nsCnt?` · <span style="color:var(--bad)">노쇼 <b class="num">${nsCnt}</b>회</span>`:''}</span>
+      <span class="muted" style="cursor:pointer" onclick="view.ym=null; view.day=null; render()">오늘로</span></div>
+    <div class="cal">${cells}</div>
+    ${dayHtml||'<div class="empty">날짜를 누르면 그날 시간표가 열립니다</div>'}
+    <div class="card"><b>월별 완료 수업</b>
+      <div class="muted" style="margin-bottom:6px">「수업 완료」 저장 기준</div>
+      ${statHtml||'<div class="muted">아직 기록 없음</div>'}</div>`;
+}
+let _newSex='';
+function pickSex(s){
+  _newSex = (_newSex===s)? '' : s;
+  /* render()를 부르면 입력 중인 이름이 지워지므로 버튼 스타일만 직접 바꾼다 */
+  const bm=document.getElementById('sex-m'), bf=document.getElementById('sex-f');
+  if(bm) bm.className='btn '+(_newSex==='남'?'':'subtle');
+  if(bf) bf.className='btn '+(_newSex==='여'?'':'subtle');
+}
+function vMemberNew(){
+  _newSex='';
+  const opts=db.programs.map(p=>`<option value="${p.id}">${esc(p.name)} · ${p.total}회</option>`).join('');
+  return `<div class="top"><button class="back" onclick="go({name:'home'})">← 회원</button><h1>회원 등록</h1><span></span></div>
+    <label class="fld"><span class="muted">이름</span><input type="text" id="m-name" placeholder="회원 이름"></label>
+    <div class="fld"><span class="muted" style="display:block; margin-bottom:5px">성별</span>
+      <div class="grid2">
+        <button class="btn subtle" id="sex-m" onclick="pickSex('남')">남성</button>
+        <button class="btn subtle" id="sex-f" onclick="pickSex('여')">여성</button></div></div>
+    <label class="fld"><span class="muted">주의사항 (나이·목표·부상 이력)</span><input type="text" id="m-note" placeholder="예: 35세 · 허리 디스크 이력"></label>
+    <label class="fld"><span class="muted">프로그램 배정</span><select id="m-prog">${opts}</select></label>
+    <button class="btn" onclick="addMember()">등록</button>`;
+}
+function addMember(){
+  const name=document.getElementById('m-name').value.trim();
+  if(!name){ toast('이름을 입력하세요'); return; }
+  const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(),
+    programId:document.getElementById('m-prog').value, sessionsDone:0, dayAdds:{}};
+  db.members.push(m); save(); _newSex='';
+  go({name:'home'}); toast(`${name} 회원이 등록됐습니다`);
+}
+function openSexModal(memberId){
+  modal(`<b>성별 설정</b>
+    <div class="grid2" style="margin-top:12px">
+      <button class="btn subtle" onclick="setSex('${memberId}','남')">남성</button>
+      <button class="btn subtle" onclick="setSex('${memberId}','여')">여성</button></div>`);
+}
+function setSex(memberId,s){
+  const m=db.members.find(x=>x.id===memberId); m.sex=s;
+  save(); closeModal(); render();
+}
+function vMember(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const pr=memberProgress(m);
+  const recent=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,3);
+  const notes=[];
+  recent.forEach(l=>{
+    if(l.cond) notes.push(`🩺 ${fmtD(l.date)} 컨디션 — ${esc(l.cond)}`);
+    (l.entries||[]).forEach(e=>{ const iss=(e.issues||[]).map(issueSpan).join(', ');
+      if(iss||e.memo) notes.push(`${fmtD(l.date)} ${esc(exName(e.exId))} — ${[iss, esc(e.memo)].filter(Boolean).join(', ')}`); });
+  });
+  return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button>
+    <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openSexModal('${m.id}')"> ${m.sex?`(${m.sex})`:'(성별 입력)'}</span></h1>
+    <span>${m.rereg?`<span class="pill good">재등록 ${m.rereg}회</span>`:''}</span></div>
+    ${m.note?`<div class="muted" style="margin:-8px 0 12px">${esc(m.note)}</div>`:''}
+    ${pr?`<div class="card">
+      <div class="row"><b>${esc(pr.p.name)}</b>${pr.lap>1?`<span class="pill good">${pr.lap}바퀴째</span>`:''}</div>
+      <div class="muted">진행 <span class="num">${pr.done%pr.total}/${pr.total}</span>회 · 잔여 <span class="num">${pr.remaining}</span>회
+        ${pr.rebadge?' · <span style="color:var(--warn)">재등록 타이밍</span>':''}</div>
+      <div class="prog"><i style="width:${(pr.done%pr.total)/pr.total*100}%"></i></div>
+    </div>
+    ${draft&&draft.memberId===m.id
+      ?`<button class="btn" onclick="go({name:'session'})">▶ A-${draft.dayIdx} 수업 이어하기 (자동 저장됨)</button>
+        <button class="btn subtle" onclick="discardDraft()">진행 중 입력 버리기</button>`
+      :`<button class="btn" onclick="startSession('${m.id}')">A-${pr.nextDay} 수업 시작</button>`}`
+    :'<div class="empty">배정된 프로그램이 없습니다</div>'}
+    <button class="btn ghost" onclick="go({name:'search', id:'${m.id}'})">🔍 운동으로 기록 찾기</button>
+    <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
+    <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
+    <div class="grid2">
+      <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
+      <button class="btn subtle" onclick="openRereg('${m.id}')">🔁 재등록 처리</button></div>
+    ${notes.length?`<div class="card"><div class="muted" style="margin-bottom:6px">최근 컨디션·특이사항</div>
+      <div style="font-size:13px">${notes.slice(0,6).join('<br>')}</div></div>`:''}
+    <button class="btn danger" onclick="delMember('${m.id}')">회원 삭제</button>`;
+}
+function delMember(id){
+  const m=db.members.find(x=>x.id===id);
+  ask(`${m.name} 회원과 모든 기록을 삭제할까요?`, '삭제', ()=>{
+    db.members=db.members.filter(x=>x.id!==id);
+    db.logs=db.logs.filter(l=>l.memberId!==id);
+    save(); go({name:'home'}); });
+}
+
+/* ───────────────────── 화면: 수업 ───────────────────── */
+function newSet(mode, prevSet){
+  if(mode==='t') return {sec:''};
+  if(mode==='lv') return {lv:prevSet?prevSet.lv:'', n:''};
+  if(mode==='band') return {band:prevSet?prevSet.band:BANDS[0], r:''};
+  return {w:prevSet?prevSet.w:'', r:''};
+}
+function startSession(memberId){
+  const m=db.members.find(x=>x.id===memberId); const pr=memberProgress(m);
+  /* 임시 저장된 수업이 있으면 이어가기 */
+  if(draft && draft.memberId===memberId){ go({name:'session'}); toast('임시 저장된 수업을 이어갑니다'); return; }
+  if(draft){
+    const dm=db.members.find(x=>x.id===draft.memberId);
+    ask(`${dm?dm.name:'다른 회원'}의 A-${draft.dayIdx} 수업이 진행 중입니다.\n버리고 새 수업을 시작할까요?`, '버리고 시작',
+      ()=>{ draft=null; dsave(); startSession(memberId); });
+    return;
+  }
+  const day=pr.p.days[pr.nextDay-1]||{items:[]};
+  const adds=((m.dayAdds||{})[pr.nextDay]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
+  draft={memberId, dayIdx:pr.nextDay, lap:pr.lap, cond:'', progId:m.programId,
+    entries: [...day.items, ...adds].map(exId=>{
+      const mode=exMode(exId);
+      return {exId, mode, sets: mode==='chk'? []:[newSet(mode)], chk:false, issues:[], memo:'', open:false};
+    })};
+  dsave();
+  go({name:'session'});
+}
+function discardDraft(){
+  ask('진행 중이던 수업 입력을 버릴까요?', '버리기', ()=>{ draft=null; dsave(); render(); toast('버렸습니다'); });
+}
+function setInputRow(en,i,s,si){
+  const mode=en.mode;
+  if(mode==='t') return `<div class="setrow one"><span class="idx num">${si+1}</span>
+    <input type="number" inputmode="numeric" placeholder="초" value="${s.sec}" onchange="draft.entries[${i}].sets[${si}].sec=this.value; dsave()">
+    <button class="del" onclick="delSet(${i},${si})">✕</button></div>`;
+  if(mode==='lv') return `<div class="setrow"><span class="idx num">${si+1}</span>
+    <input type="number" inputmode="numeric" placeholder="레벨" value="${s.lv}" onchange="draft.entries[${i}].sets[${si}].lv=this.value; dsave()">
+    <input type="number" inputmode="numeric" placeholder="횟수/스텝" value="${s.n}" onchange="draft.entries[${i}].sets[${si}].n=this.value; dsave()">
+    <button class="del" onclick="delSet(${i},${si})">✕</button></div>`;
+  if(mode==='band') return `<div class="setrow"><span class="idx num">${si+1}</span>
+    <select onchange="draft.entries[${i}].sets[${si}].band=this.value; dsave()">${BANDS.map(b=>`<option ${b===s.band?'selected':''}>${b}</option>`).join('')}</select>
+    <input type="number" inputmode="numeric" placeholder="횟수" value="${s.r}" onchange="draft.entries[${i}].sets[${si}].r=this.value; dsave()">
+    <button class="del" onclick="delSet(${i},${si})">✕</button></div>`;
+  return `<div class="setrow"><span class="idx num">${si+1}</span>
+    <input type="number" inputmode="decimal" placeholder="kg · 맨몸=0" value="${s.w}" onchange="draft.entries[${i}].sets[${si}].w=this.value; dsave()">
+    <input type="number" inputmode="numeric" placeholder="횟수" value="${s.r}" onchange="draft.entries[${i}].sets[${si}].r=this.value; dsave()">
+    <button class="del" onclick="delSet(${i},${si})">✕</button></div>`;
+}
+function vSession(){
+  if(!draft) return vHome();
+  const m=db.members.find(x=>x.id===draft.memberId);
+  const doneCnt=draft.entries.filter(en=>entryHasRecord(en,en.mode)).length;
+  const cards=draft.entries.map((en,i)=>{
+    const mode=en.mode;
+    const prev=prevRecord(draft.memberId, en.exId, draft.dayIdx, draft.lap, draft.progId);
+    const done=entryHasRecord(en,mode);
+    /* 접힌 상태 오른쪽: 종이 일지의 위첨자처럼 지난 최고 기록을 작게 */
+    const peek = done? `<span class="peek done">✓ 기록됨</span>`
+      : prev? `<span class="peek">지난 ${mode==='chk'?'✓ '+prev.label.split(' · ')[1] : compactStr(prev.e,mode)}</span>`
+      : `<span class="peek">첫 기록</span>`;
+    let body='';
+    if(en.open){
+      let prevHtml='';
+      if(prev){
+        const iss=(prev.e.issues||[]).map(issueSpan).join(', ');
+        const memoTxt=prev.e.memo?esc(prev.e.memo):'';
+        prevHtml=`<div class="prev"><span class="muted">${prev.samePos?'지난 바퀴 같은 회차':'참고'} · ${prev.label}</span><br>
+          ${mode==='chk'? '✓ 완료': detailStr(prev.e,mode)}
+          ${iss||memoTxt?`<br>⚠ ${[iss,memoTxt].filter(Boolean).join(', ')}`:''}</div>`;
+      } else prevHtml=`<div class="prev muted">이전 기록 없음 — 오늘이 기준점이 됩니다</div>`;
+      const chips=ISSUE_SETS.map(g=>g.items.map(p=>
+        `<button class="ichip ${en.issues.includes(p)?'on-'+g.cls:''}" onclick="togIssue(${i},'${p}')">${p}</button>`).join('')).join('');
+      const inputArea = mode==='chk'
+        ? `<button class="btn chkbtn ${en.chk?'on':''}" onclick="draft.entries[${i}].chk=!draft.entries[${i}].chk; dsave(); render()">${en.chk?'✓ 완료':'완료 체크'}</button>`
+        : `<div class="muted" style="margin-bottom:6px">오늘 기록 <span style="opacity:.7">(${MODES[mode]})</span></div>
+           ${en.sets.map((s,si)=>setInputRow(en,i,s,si)).join('')}
+           <div class="grid2">
+             <button class="btn subtle" onclick="loadPrev(${i})">↺ 지난 기록 불러오기</button>
+             <button class="btn subtle" onclick="addSet(${i})">＋ 세트 추가</button></div>`;
+      const isAdd=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
+      body=`${prevHtml}${inputArea}
+        <div class="chips">${chips}</div>
+        <input type="text" style="margin-top:9px" placeholder="특이사항 메모 (선택)" value="${esc(en.memo)}" onchange="draft.entries[${i}].memo=this.value; dsave()">
+        ${isAdd?`<button class="btn subtle" style="margin-top:9px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
+    }
+    const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
+    return `<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
+      <div class="exhead" onclick="togOpen(${i})"><span><b>${esc(exName(en.exId))}</b>${isAddH?' <span class="pill">퍼스널</span>':''}</span>${peek}</div>${body}</div>`;
+  }).join('');
+  const editing=!!draft.editLogId;
+  return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
+    <h1>${editing?'기록 수정':esc(m.name)} · A-${draft.dayIdx}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
+    ${editing?`<div class="muted" style="margin:-8px 0 10px">${esc(m.name)} · ${fmtD(draft.editDate)} 수업을 수정하는 중</div>`
+      : draft.lap>1?`<div class="muted" style="margin:-8px 0 10px">${draft.lap}바퀴째 — 지난 바퀴 기록과 비교하며 진행</div>`:''}
+    <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
+    ${cards}
+    <button class="btn ghost" onclick="addExerciseToday()">＋ 퍼스널 운동 추가</button>
+    <button class="btn" onclick="finishSession()">${editing?'수정 저장':'수업 완료'}</button>
+    ${editing?'<button class="btn danger" onclick="deleteLog()">이 수업 기록 삭제</button>':''}`;
+}
+function addSet(i){ const en=draft.entries[i]; en.sets.push(newSet(en.mode, en.sets[en.sets.length-1])); dsave(); render(); }
+function delSet(i,si){ const en=draft.entries[i]; en.sets.splice(si,1); if(!en.sets.length)en.sets.push(newSet(en.mode)); dsave(); render(); }
+function togIssue(i,p){ const a=draft.entries[i].issues; const x=a.indexOf(p); x<0?a.push(p):a.splice(x,1); dsave(); render(); }
+function togOpen(i){ draft.entries[i].open=!draft.entries[i].open; dsave(); render(); }
+function loadPrev(i){
+  const en=draft.entries[i];
+  const prev=prevRecord(draft.memberId, en.exId, draft.dayIdx, draft.lap, draft.progId);
+  if(!prev){ toast('불러올 기록이 없습니다'); return; }
+  if(en.mode==='chk'){ en.chk=true; }
+  else en.sets=validSets(prev.e.sets,en.mode).map(s=>({...s}));
+  dsave(); render(); toast('지난 기록을 불러왔습니다 — 숫자만 고치세요');
+}
+function addExerciseToday(){
+  pickExercise(exId=>{
+    if(draft.entries.some(e=>e.exId===exId)){ toast('이미 목록에 있는 운동입니다'); return; }
+    const mode=exMode(exId);
+    draft.entries.push({exId, mode, sets:mode==='chk'?[]:[newSet(mode)], chk:false, issues:[], memo:'', open:true});
+    const m=db.members.find(x=>x.id===draft.memberId);
+    m.dayAdds=m.dayAdds||{}; const a=m.dayAdds[draft.dayIdx]=m.dayAdds[draft.dayIdx]||[];
+    if(!a.includes(exId)) a.push(exId);
+    dsave(); render(); toast('퍼스널 운동으로 추가 — 다음 바퀴 이 회차에도 나옵니다'); });
+}
+function removeFromDay(i){
+  const en=draft.entries[i];
+  ask(exName(en.exId)+' 운동을 이 회차에서 뺄까요?\n(다음 바퀴부터 나오지 않습니다)', '빼기', ()=>{
+    const m=db.members.find(x=>x.id===draft.memberId);
+    if(m.dayAdds&&m.dayAdds[draft.dayIdx]) m.dayAdds[draft.dayIdx]=m.dayAdds[draft.dayIdx].filter(id=>id!==en.exId);
+    draft.entries.splice(i,1); dsave(); render(); toast('뺐습니다'); });
+}
+function leaveSession(){ const id=draft.memberId; go({name:'member', id}); toast('입력 내용은 자동 저장돼 있습니다'); }
+function finishSession(){
+  const entries=draft.entries.map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
+    sets:en.mode==='chk'?[]:validSets(en.sets,en.mode).map(s=>{
+      const o={}; for(const k in s){ o[k]= (k==='band')? s[k] : num(s[k]); } return o; }),
+    issues:en.issues, memo:en.memo.trim()}))
+    .filter(en=>en.sets.length||en.chk||en.issues.length||en.memo);
+  if(!entries.length){ toast('기록된 내용이 없습니다'); return; }
+  const m=db.members.find(x=>x.id===draft.memberId);
+  /* 지난 기록 수정 모드 — 기존 로그를 덮어쓰고 끝 */
+  if(draft.editLogId){
+    const log=db.logs.find(l=>l.id===draft.editLogId);
+    if(log){ log.entries=entries; log.cond=draft.cond.trim(); }
+    const mid=draft.memberId; draft=null; db.draft=null; save();
+    go({name:'logs', id:mid}); toast('수정됐습니다'); return;
+  }
+  const log={id:uid(), memberId:draft.memberId, dayIdx:draft.dayIdx, lap:draft.lap, date:today(),
+    cond:draft.cond.trim(), progId:m.programId, entries};
+  db.logs.push(log);
+  m.sessionsDone=(m.sessionsDone||0)+1;
+  /* 오늘 이 회원의 예약이 있으면 자동으로 「완료」 표시 */
+  const bk=db.bookings.find(b=>b.memberId===m.id && b.date===today() && !b.status);
+  if(bk) bk.status='done';
+  draft=null; db.draft=null;
+  save(); const lid=log.id; go({name:'summary', logId:lid});
+}
+/* ── 지난 수업 기록 목록·수정 ── */
+function vLogs(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const logs=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const list=logs.map(l=>{
+    const p=db.programs.find(p=>p.id===l.progId);
+    return `<div class="card tap" onclick="startEditLog('${l.id}')">
+      <div class="row"><div><b class="num">${fmtD(l.date)}</b> <span class="muted">A-${l.dayIdx} · ${l.lap}바퀴${p?' · '+esc(p.name):''}</span>
+        <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div></div><span class="muted">수정 ›</span></div></div>`; }).join('');
+  return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 수업 기록</h1><span class="muted num">${logs.length}회</span></div>
+    ${list||'<div class="empty">아직 수업 기록이 없습니다</div>'}`;
+}
+function startEditLog(logId){
+  const log=db.logs.find(l=>l.id===logId); if(!log) return;
+  if(draft && !draft.editLogId){ toast('진행 중인 수업이 있어 수정할 수 없습니다 — 먼저 완료하거나 버리세요'); return; }
+  draft={memberId:log.memberId, dayIdx:log.dayIdx, lap:log.lap, progId:log.progId, cond:log.cond||'',
+    editLogId:logId, editDate:log.date,
+    entries:(log.entries||[]).map(e=>{ const mode=exMode(e.exId);
+      return {exId:e.exId, mode, sets: mode==='chk'? []:(e.sets&&e.sets.length? e.sets.map(s=>({...s})):[newSet(mode)]),
+        chk:!!e.chk, issues:[...(e.issues||[])], memo:e.memo||'', open:false}; })};
+  dsave(); go({name:'session'});
+}
+function deleteLog(){
+  const logId=draft&&draft.editLogId; if(!logId) return;
+  ask('이 수업 기록을 통째로 삭제할까요?\n(진행 회차도 1회 줄어듭니다)', '삭제', ()=>{
+    const log=db.logs.find(l=>l.id===logId);
+    const m=db.members.find(x=>x.id===log.memberId);
+    db.logs=db.logs.filter(l=>l.id!==logId);
+    if(m) m.sessionsDone=Math.max(0,(m.sessionsDone||0)-1);
+    const mid=log.memberId; draft=null; db.draft=null; save();
+    go({name:'logs', id:mid}); toast('삭제됐습니다'); });
+}
+
+/* ───────────────────── 화면: 수업 요약 ───────────────────── */
+function summaryData(log){
+  const m=db.members.find(x=>x.id===log.memberId);
+  const rows=log.entries.map(en=>{
+    const mode=exMode(en.exId);
+    const prev=prevRecord(log.memberId, en.exId, log.dayIdx, log.lap, log.progId);
+    let delta=null;
+    if(mode==='w'){ const rm=e1rm(en.sets); if(rm&&prev){ const prm=e1rm(prev.e.sets); if(prm) delta=Math.round((rm.v-prm.v)/prm.v*100); } }
+    if(mode==='t'){ const t=bestT(en.sets); if(t&&prev){ const pt=bestT(prev.e.sets); if(pt) delta=Math.round((t-pt)/pt*100); } }
+    return {name:exName(en.exId), mode, en, delta};
+  });
+  const vol=log.entries.reduce((a,en)=>a+volume(en.sets),0);
+  return {m, rows, vol};
+}
+function plainStr(en, mode){
+  if(mode==='chk') return en.chk?'✓':'';
+  if(mode==='t'){ const t=bestT(en.sets); return t? t+'초':''; }
+  if(mode==='lv'){ const b=bestLv(en.sets); return b? 'Lv'+num(b.lv)+'×'+num(b.n):''; }
+  if(mode==='band'){ const b=lastBand(en.sets); return b? b.band+' 밴드×'+num(b.r):''; }
+  const bw=bestW(en.sets)||bestR(en.sets); return bw? setStr(bw):'';
+}
+function vSummary(){
+  const log=db.logs.find(l=>l.id===view.logId); if(!log) return vHome();
+  const {m, rows, vol}=summaryData(log);
+  const pr=memberProgress(m);
+  const list=rows.map(r=>{
+    const iss=(r.en.issues||[]).map(issueSpan).join(', ');
+    const rm= r.mode==='w'? e1rm(r.en.sets):null;
+    return `<div style="font-size:13.5px; margin-bottom:6px">🏋️ ${esc(r.name)} <b class="num">${plainStr(r.en,r.mode)||'—'}</b>
+    ${rm?`<span class="muted num">e1RM ${rm.v}kg</span>`:''}
+    ${r.delta!==null?`<span class="pill ${r.delta>=0?'good':'warn'}">${r.delta>=0?'+':''}${r.delta}%</span>`:''}
+    ${iss||r.en.memo?`<br><span style="font-size:12px">⚠ ${[iss,esc(r.en.memo)].filter(Boolean).join(', ')}</span>`:''}</div>`; }).join('');
+  return `<div class="top"><h1>A-${log.dayIdx} 수업 완료</h1><span class="muted">${fmtD(log.date)}</span></div>
+    <div class="card"><b>${esc(m.name)}님, 오늘 운동 요약</b>
+      ${log.cond?`<div class="muted">🩺 ${esc(log.cond)}</div>`:''}
+      <div class="divider"></div>${list}
+      <div class="divider"></div>
+      <div class="grid2">
+        <div class="stat"><div class="muted">총 볼륨</div><div class="v num">${vol.toLocaleString()}kg</div></div>
+        <div class="stat"><div class="muted">진행</div><div class="v num">${pr?`${pr.done%pr.total||pr.total}/${pr.total}회`:'-'}</div></div>
+      </div></div>
+    <button class="btn kakao" onclick="shareSummary('${log.id}')">💬 카톡으로 보내기</button>
+    <button class="btn ghost" onclick="go({name:'member', id:'${m.id}'})">기록 저장하고 닫기</button>`;
+}
+function shareText(log){
+  const {m, rows, vol}=summaryData(log);
+  const lines=rows.filter(r=>plainStr(r.en,r.mode)).map(r=>`· ${r.name} ${plainStr(r.en,r.mode)}`+(r.delta!==null?` (지난번 대비 ${r.delta>=0?'+':''}${r.delta}%)`:''));
+  return `[${m.name.replace(' (예시)','')}님 오늘 운동 – ${fmtD(log.date)} · A-${log.dayIdx}]\n${lines.join('\n')}\n총 볼륨 ${vol.toLocaleString()}kg\n오늘도 고생하셨습니다 💪`;
+}
+async function shareSummary(logId){
+  const log=db.logs.find(l=>l.id===logId);
+  await shareTextRaw(shareText(log));
+}
+
+/* ───────────────────── 화면: 변화 리포트 (재등록 상담용) ───────────────────── */
+function reportData(m){
+  const logs=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!logs.length) return null;
+  const byEx={};
+  logs.forEach(l=>(l.entries||[]).forEach(e=>{ (byEx[e.exId]=byEx[e.exId]||[]).push({date:l.date, e}); }));
+  const gains=[], times=[];
+  for(const exId in byEx){
+    const mode=exMode(exId); const arr=byEx[exId];
+    if(mode==='w'){
+      const rms=arr.map(x=>e1rm(x.e.sets)).filter(Boolean);
+      if(rms.length>=2){ const f=rms[0].v, b=Math.max(...rms.map(x=>x.v));
+        if(f>0&&b>f) gains.push({name:exName(exId), f, b, pct:Math.round((b-f)/f*100), unit:'kg'}); }
+    }
+    if(mode==='t'){
+      const ts=arr.map(x=>bestT(x.e.sets)).filter(Boolean);
+      if(ts.length>=2){ const f=ts[0], b=Math.max(...ts);
+        if(b>f) times.push({name:exName(exId), f, b, pct:Math.round((b-f)/f*100), unit:'초'}); }
+    }
+  }
+  gains.sort((a,b)=>b.pct-a.pct); times.sort((a,b)=>b.pct-a.pct);
+  /* 파란 칩 — 어떤 운동에서 좋아졌는지 운동 이름과 함께 */
+  const imps=[];
+  logs.forEach(l=>(l.entries||[]).forEach(e=>(e.issues||[]).forEach(iss=>{
+    if(issueCls(iss)==='imp') imps.push({ex:exName(e.exId), iss, date:l.date}); })));
+  /* 빨간 칩 중 이후 수업에서 재발하지 않은 것 */
+  const resolved=[];
+  for(const exId in byEx){
+    const arr=byEx[exId]; const lastIdx={};
+    arr.forEach((x,idx)=>(x.e.issues||[]).forEach(iss=>{ if(issueCls(iss)==='bad') lastIdx[iss]=idx; }));
+    for(const iss in lastIdx){ const after=arr.length-1-lastIdx[iss];
+      if(after>=1) resolved.push({ex:exName(exId), iss, date:arr[lastIdx[iss]].date, after}); }
+  }
+  const vol=logs.reduce((a,l)=>a+(l.entries||[]).reduce((s,e)=>s+volume(e.sets),0),0);
+  return {logs, first:logs[0].date, last:logs[logs.length-1].date, cnt:logs.length,
+    gains:gains.slice(0,3), times, imps, resolved, vol};
+}
+function vReport(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const r=reportData(m);
+  if(!r) return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>변화 리포트</h1><span></span></div>
+    <div class="empty">아직 수업 기록이 없어 리포트를 만들 수 없습니다</div>`;
+  const sec=(title,inner)=> inner? `<div class="divider"></div><div class="muted" style="margin-bottom:6px">${title}</div>${inner}`:'';
+  const gainsHtml=r.gains.map(g=>`<div style="font-size:13.5px; margin-bottom:5px">🏋️ ${esc(g.name)}
+    <b class="num">${g.f}→${g.b}${g.unit}</b> <span class="pill good">+${g.pct}%</span></div>`).join('');
+  const timesHtml=r.times.map(g=>`<div style="font-size:13.5px; margin-bottom:5px">⏱ ${esc(g.name)}
+    <b class="num">${g.f}→${g.b}${g.unit}</b> <span class="pill good">+${g.pct}%</span></div>`).join('');
+  const impsHtml=r.imps.map(x=>`<div style="font-size:13px; margin-bottom:4px">${esc(x.ex)} — ${issueSpan(x.iss)} <span class="muted num">${fmtD(x.date)}</span></div>`).join('');
+  const resHtml=r.resolved.map(x=>`<div style="font-size:13px; margin-bottom:4px">${esc(x.ex)} — ${issueSpan(x.iss)},
+    <span class="muted">${fmtD(x.date)} 이후 <b class="num">${x.after}회</b> 수업 재발 없음</span></div>`).join('');
+  return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>변화 리포트</h1><span></span></div>
+    <div class="card"><b>${esc(m.name)}님의 변화 (${fmtD(r.first)} ~ ${fmtD(r.last)})</b>
+      <div class="muted">수업 <span class="num">${r.cnt}</span>회 · 누적 볼륨 <span class="num">${r.vol.toLocaleString()}kg</span></div>
+      ${sec('💪 근력 상승 TOP 3', gainsHtml)}
+      ${sec('⏱ 시간 기록 성장', timesHtml)}
+      ${sec('🔵 좋아진 것', impsHtml)}
+      ${sec('🩹 잡은 통증 — 이후 재발 없음', resHtml)}
+      ${!gainsHtml&&!timesHtml&&!impsHtml&&!resHtml?'<div class="divider"></div><div class="muted">같은 운동을 2회 이상 기록하면 변화가 계산됩니다</div>':''}
+    </div>
+    <button class="btn kakao" onclick="shareReport('${m.id}')">💬 카톡으로 보내기</button>`;
+}
+function shareReport(memberId){
+  const m=db.members.find(x=>x.id===memberId); const r=reportData(m); if(!r) return;
+  const name=m.name.replace(' (예시)','');
+  const L=[`[${name}님의 변화 리포트 — ${fmtD(r.first)}~${fmtD(r.last)} · 수업 ${r.cnt}회]`];
+  if(r.gains.length){ L.push('💪 근력 상승'); r.gains.forEach(g=>L.push(`· ${g.name} ${g.f}→${g.b}kg (+${g.pct}%)`)); }
+  if(r.times.length){ L.push('⏱ 시간 기록'); r.times.forEach(g=>L.push(`· ${g.name} ${g.f}→${g.b}초 (+${g.pct}%)`)); }
+  if(r.imps.length){ L.push('🔵 좋아진 것'); r.imps.forEach(x=>L.push(`· ${x.ex} — ${x.iss} (${fmtD(x.date)})`)); }
+  if(r.resolved.length){ L.push('🩹 잡은 통증'); r.resolved.forEach(x=>L.push(`· ${x.ex} — ${x.iss}, ${fmtD(x.date)} 이후 재발 없음`)); }
+  L.push(`누적 볼륨 ${r.vol.toLocaleString()}kg — 여기까지 함께 온 기록입니다 💪`);
+  shareTextRaw(L.join('\n'));
+}
+async function shareTextRaw(text){
+  try{ if(navigator.share){ await navigator.share({text}); return; } }catch(e){ if(e&&e.name==='AbortError')return; }
+  try{ await navigator.clipboard.writeText(text); toast('복사됐습니다 — 카톡에 붙여넣으세요'); }
+  catch(e){ showCopy('카톡에 붙여넣을 내용', text); }
+}
+
+/* ───────────────────── 화면: 운동 검색(이력) ───────────────────── */
+function vSearch(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const q=(view.q||'').trim();
+  let body='';
+  if(view.exId){
+    const mode=exMode(view.exId);
+    const has=e=> e.exId===view.exId && (mode==='chk'? e.chk : validSets(e.sets,mode).length);
+    const logs=db.logs.filter(l=>l.memberId===m.id).map(l=>{
+      const e=(l.entries||[]).find(has); return e?{l,e}:null; }).filter(Boolean)
+      .sort((a,b)=>(b.l.date||'').localeCompare(a.l.date||''));
+    if(!logs.length) body='<div class="empty">이 운동의 기록이 아직 없습니다</div>';
+    else{
+      let totalPill='';
+      if(mode==='w'){ const f=e1rm(logs[logs.length-1].e.sets), la=e1rm(logs[0].e.sets);
+        if(f&&la){ const t=Math.round((la.v-f.v)/f.v*100); totalPill=`<span class="pill ${t>=0?'good':'warn'}">첫 기록 대비 ${t>=0?'+':''}${t}%</span>`; } }
+      if(mode==='t'){ const f=bestT(logs[logs.length-1].e.sets), la=bestT(logs[0].e.sets);
+        if(f&&la){ const t=Math.round((la-f)/f*100); totalPill=`<span class="pill ${t>=0?'good':'warn'}">첫 기록 대비 ${t>=0?'+':''}${t}%</span>`; } }
+      const evs=logs.map(({l,e})=>{
+        const iss=(e.issues||[]).map(issueSpan).join(', ');
+        const rm= mode==='w'? e1rm(e.sets):null;
+        return `<div class="ev"><div class="d">${fmtD(l.date)} · ${l.lap}바퀴 A-${l.dayIdx}${l.cond?' · 🩺'+esc(l.cond):''}</div>
+          <b class="num">${plainStr(e,mode)||'✓'}</b> ${rm?`<span class="muted num">e1RM ${rm.v}kg</span>`:''}
+          ${iss||e.memo?`<br>⚠ ${[iss,esc(e.memo)].filter(Boolean).join(', ')}`:''}</div>`; }).join('');
+      body=`<div class="card"><div class="row"><b>${esc(exName(view.exId))}</b>${totalPill}</div>
+        <div class="tl" style="margin-top:12px">${evs}</div></div>`;
+    }
+  } else if(q) body=searchList(m,q);
+  else body='<div class="empty">운동 이름을 검색하면<br>이 회원의 전체 이력과 특이사항이 나옵니다</div>';
+  return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 기록</h1><span></span></div>
+    <input type="text" placeholder="🔍 운동 검색 (예: 스쿼트)" value="${esc(q)}" style="margin-bottom:12px"
+      oninput="view.q=this.value; view.exId=null; softRender()">
+    <div id="search-body">${body}</div>`;
+}
+function searchList(m,q){
+  const hits=sortedEx(db.exercises.filter(e=>e.name.includes(q)));
+  return hits.length? hits.map(e=>`<div class="card tap" onclick="go({name:'search', id:'${m.id}', exId:'${e.id}'})">
+    <div class="row"><span>${esc(e.name)}</span><span class="muted">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div></div>`).join('')
+    : '<div class="empty">검색 결과 없음</div>';
+}
+function softRender(){
+  const q=(view.q||'').trim(); const m=db.members.find(x=>x.id===view.id);
+  const box=document.getElementById('search-body'); if(!box) return;
+  box.innerHTML = q? searchList(m,q) : '<div class="empty">운동 이름을 검색하면<br>이 회원의 전체 이력과 특이사항이 나옵니다</div>';
+}
+
+/* ───────────────────── 화면: 프로그램 ───────────────────── */
+function vPrograms(){
+  const list=db.programs.map(p=>`<div class="card tap" onclick="go({name:'progDetail', id:'${p.id}'})">
+    <div class="row"><div><b>${esc(p.name)}</b> ${p.draft?'<span class="draft">검수 전 초안</span>':''}
+      <div class="muted">${esc(p.goal)} · ${p.total}회 · ${p.builtin?'기본 제공':'직접 제작'}</div></div><span class="muted">›</span></div></div>`).join('');
+  const pd=db.progDraft;
+  const resume= pd? `<div class="card tap" style="border-color:var(--blue)" onclick="go({name:'progNew'})">
+    <div class="row"><div><b>✏ 작성 중인 프로그램</b><div class="muted">${esc(pd.name||'(이름 미정)')} · 루틴 ${(pd.patterns||[]).filter(p=>p.length).length}개 — 눌러서 이어 만들기</div></div>
+    <span class="ichip" onclick="event.stopPropagation(); discardProgDraft()">버리기</span></div></div>`:'';
+  return `<div class="top"><h1>프로그램</h1><span></span></div>${resume}${list}
+    <button class="btn ghost" onclick="go({name:'progNew'})">＋ 새 프로그램 만들기</button>
+    <div class="muted" style="margin-top:10px">다이어트·기능재활 기본 프로그램은 검수 후 추가됩니다.</div>`;
+}
+function vProgDetail(){
+  const p=db.programs.find(x=>x.id===view.id); if(!p) return vPrograms();
+  const days=p.days.map((d,i)=>`<div class="card"><div class="muted num" style="margin-bottom:4px">A-${i+1}</div>
+    <div style="font-size:13.5px">${d.items.map(id=>esc(exName(id))).join(' · ')||'<span class="muted">비어 있음</span>'}</div></div>`).join('');
+  return `<div class="top"><button class="back" onclick="go({name:'programs'})">←</button><h1>${esc(p.name)}</h1><span class="muted num">${p.total}회</span></div>
+    ${p.draft?'<div class="muted" style="margin:-8px 0 12px; color:var(--warn)">⚠ 초안 상태 — 운동 구성은 검수 후 확정하세요</div>':''}
+    ${days}
+    ${p.builtin?'':`<button class="btn danger" onclick="delProgram('${p.id}')">프로그램 삭제</button>`}`;
+}
+function delProgram(id){
+  if(db.members.some(m=>m.programId===id)){ toast('이 프로그램을 쓰는 회원이 있어 삭제할 수 없습니다'); return; }
+  ask('프로그램을 삭제할까요?', '삭제', ()=>{ db.programs=db.programs.filter(p=>p.id!==id); save(); go({name:'programs'}); });
+}
+let pdraft=null;
+/* 프로그램 작성 중 상태도 자동 저장 — 뒤로 가거나 앱이 꺼져도 유지 */
+function psave(){ if(db){ db.progDraft=pdraft; save(); } }
+function delFromPattern(i,xi){ pdraft.patterns[i].splice(xi,1); psave(); render(); }
+function clearPattern(i){ ask('이 루틴의 운동을 전부 비울까요?','비우기',()=>{ pdraft.patterns[i]=[]; psave(); render(); }); }
+function discardProgDraft(){
+  ask('작성 중인 프로그램을 버릴까요?','버리기',()=>{ pdraft=null; db.progDraft=null; save(); render(); toast('버렸습니다'); });
+}
+function vProgNew(){
+  if(!pdraft) pdraft = db.progDraft || {name:'', goal:'근력', total:30, patterns:[[]], cur:0, q:''};
+  const pats=pdraft.patterns.map((pat,i)=>`<div class="card" ${i===pdraft.cur?'style="border-color:var(--blue)"':''}>
+    <div class="row" onclick="pdraft.cur=${i}; psave(); render()"><b>루틴 ${i+1}</b>
+      <span class="muted">${pat.length}개 운동${i===pdraft.cur?' · 선택 중':''}</span></div>
+    <div class="chips" style="margin-top:6px">${pat.map((id,xi)=>
+      `<span class="ichip" style="color:var(--ink)">${esc(exName(id))}<span onclick="delFromPattern(${i},${xi})" style="color:var(--sub)"> ✕</span></span>`).join('')
+      ||'<span class="muted" style="font-size:12.5px">아래에서 운동을 탭해 담으세요</span>'}</div>
+    ${pat.length?`<button class="btn subtle" style="margin-top:8px" onclick="clearPattern(${i})">전체 비우기</button>`:''}</div>`).join('');
+  const lib=progLibHtml();
+  return `<div class="top"><button class="back" onclick="go({name:'programs'})">←</button><h1>새 프로그램</h1>
+    <span class="muted" style="font-size:11.5px">자동 저장됨</span></div>
+    <label class="fld"><span class="muted">이름</span><input type="text" placeholder="예: 다이어트 B" value="${esc(pdraft.name)}" onchange="pdraft.name=this.value; psave()"></label>
+    <div class="grid2" style="margin-bottom:12px">
+      <label class="fld" style="margin:0"><span class="muted">목적</span><select onchange="pdraft.goal=this.value; psave()">
+        ${['근력','다이어트','기능재활','기타'].map(g=>`<option ${g===pdraft.goal?'selected':''}>${g}</option>`).join('')}</select></label>
+      <label class="fld" style="margin:0"><span class="muted">회차 수 (기본 30)</span><input type="number" value="${pdraft.total}" onchange="pdraft.total=parseInt(this.value)||30; psave()"></label>
+    </div>
+    <div class="muted" style="margin-bottom:8px">루틴을 2~4개 만들면 회차 수만큼 번갈아 자동 배치됩니다 (1→2→3→1…). 잘못 담은 운동은 ✕로 빼세요</div>
+    ${pats}
+    <button class="btn subtle" onclick="pdraft.patterns.push([]); pdraft.cur=pdraft.patterns.length-1; psave(); render()">＋ 루틴 추가</button>
+    <div class="muted" style="margin:12px 0 4px">운동 라이브러리 — 탭하면 선택 중인 루틴에 담깁니다</div>
+    <input type="text" placeholder="🔍 운동 검색 (예: 스쿼트)" value="${esc(pdraft.q||'')}" style="margin-bottom:8px"
+      oninput="pdraft.q=this.value; progLibRender()">
+    <div class="exlist" id="prog-lib">${lib}</div>
+    <button class="btn" onclick="createProgram()">프로그램 생성</button>`;
+}
+function progLibHtml(){
+  const q=((pdraft&&pdraft.q)||'').trim();
+  return sortedEx(db.exercises.filter(e=>!q||e.name.includes(q))).map(e=>
+    `<div class="opt" onclick="pdraft.patterns[pdraft.cur].push('${e.id}'); psave(); render()">
+    <span>${esc(e.name)}</span><span class="t">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div>`).join('')
+    || '<div class="empty">검색 결과 없음</div>';
+}
+function progLibRender(){ const box=document.getElementById('prog-lib'); if(box) box.innerHTML=progLibHtml(); }
+function createProgram(){
+  if(!pdraft.name.trim()){ toast('프로그램 이름을 입력하세요'); return; }
+  const pats=pdraft.patterns.filter(p=>p.length);
+  if(!pats.length){ toast('운동이 담긴 루틴이 하나는 필요합니다'); return; }
+  const days=[]; for(let i=0;i<pdraft.total;i++) days.push({items:[...pats[i%pats.length]]});
+  db.programs.push({id:uid(), name:pdraft.name.trim(), goal:pdraft.goal, total:pdraft.total, days, builtin:false});
+  pdraft=null; db.progDraft=null;
+  save(); go({name:'programs'}); toast('프로그램이 생성됐습니다');
+}
+
+/* ───────────────────── 화면: 운동 라이브러리 ───────────────────── */
+/* 검색 입력 중에는 목록만 갈아끼운다 — 전체 재렌더링은 한글 조합을 끊어 멈춘 것처럼 보임 */
+function libListHtml(){
+  const q=(view.q||'').trim();
+  return sortedEx(db.exercises.filter(e=>!q||e.name.includes(q))).map(e=>`<div class="card">
+    <div class="row"><span>${esc(e.name)} ${e.custom?'<span class="pill">내 운동</span>':''}</span>
+      <span class="muted">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div></div>`).join('')
+    || '<div class="empty">검색 결과 없음</div>';
+}
+function libRender(){ const box=document.getElementById('lib-list'); if(box) box.innerHTML=libListHtml(); }
+function vLibrary(){
+  const q=(view.q||'').trim();
+  return `<div class="top"><h1>운동 라이브러리</h1><span class="muted num">${db.exercises.length}개</span></div>
+    <input type="text" placeholder="🔍 검색" value="${esc(q)}" style="margin-bottom:10px" oninput="view.q=this.value; libRender()">
+    <div class="card"><div class="muted" style="margin-bottom:6px">내 운동 추가 — 현장에서 쓰는 이름·약어 그대로</div>
+      <input type="text" id="lib-name" placeholder="운동 이름 (예: KB DL, 스미스 랙업)">
+      <div class="grid2" style="margin-top:8px">
+        <select id="lib-tag">${['하체','가슴','등','어깨','팔','코어','전신','유산소','재활','웜업','기타'].map(t=>`<option>${t}</option>`).join('')}</select>
+        <select id="lib-mode">${Object.entries(MODES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>
+      <button class="btn ghost" style="margin-top:8px" onclick="addExercise()">추가</button></div>
+    <div id="lib-list">${libListHtml()}</div>`;
+}
+function addExercise(){
+  const name=document.getElementById('lib-name').value.trim();
+  if(!name){ toast('운동 이름을 입력하세요'); return; }
+  if(db.exercises.some(e=>e.name===name)){ toast('이미 있는 운동입니다'); return; }
+  db.exercises.push({id:uid(), name, tag:document.getElementById('lib-tag').value,
+    mode:document.getElementById('lib-mode').value, custom:true});
+  save(); render(); toast('추가됐습니다');
+}
+/* ── 예약제 달력 시간표 ── */
+const DAYS=['일','월','화','수','목','금','토'];
+let _bkDate=null, _bkH=null;
+function openBookModal(date, hh){
+  _bkDate=date; _bkH=hh;
+  if(!db.members.length){ toast('먼저 회원을 등록하세요'); return; }
+  modal(`<b>${fmtD(date)} · ${hh}시 수업 등록</b>
+    <select id="bk-min" style="margin:10px 0"><option value="00">${hh}:00</option><option value="30">${hh}:30</option></select>
+    <div class="exlist" style="max-height:40vh">${db.members.map(m=>
+      `<div class="opt" onclick="addBooking('${m.id}')"><span>${esc(m.name)}</span></div>`).join('')}</div>`);
+}
+function addBooking(memberId){
+  const min=(document.getElementById('bk-min')||{value:'00'}).value;
+  db.bookings.push({id:uid(), date:_bkDate, t:_bkH+':'+min, memberId});
+  save(); closeModal(); render();
+}
+function delBooking(id){
+  ask('이 수업 예약을 지울까요?', '지우기', ()=>{ db.bookings=db.bookings.filter(b=>b.id!==id); save(); closeModal(); render(); });
+}
+/* 예약 상태: 완료 / 노쇼 / 취소 — 예약 칩을 탭하면 고른다 */
+const BK_STATUS={done:['✓','var(--good)'], noshow:['🚫','var(--bad)'], cancel:['✕','var(--sub)']};
+function openBookingModal(id){
+  const b=db.bookings.find(x=>x.id===id); if(!b) return;
+  const m=db.members.find(x=>x.id===b.memberId);
+  modal(`<b>${fmtD(b.date)} ${b.t} · ${esc(m?m.name:'(삭제된 회원)')}</b>
+    <div class="muted" style="margin:4px 0 12px">수업이 어떻게 됐나요? ${b.status?`(지금: ${b.status==='done'?'완료':b.status==='noshow'?'노쇼':'취소'})`:''}</div>
+    <div class="grid2" style="margin-bottom:8px">
+      <button class="btn" style="background:var(--good-soft); color:var(--good)" onclick="setBookingStatus('${id}','done')">✓ 수업 완료</button>
+      <button class="btn" style="background:var(--bad-soft); color:var(--bad)" onclick="setBookingStatus('${id}','noshow')">🚫 노쇼</button></div>
+    <div class="grid2" style="margin-bottom:8px">
+      <button class="btn subtle" onclick="setBookingStatus('${id}','cancel')">✕ 취소 (사전 연락)</button>
+      <button class="btn subtle" onclick="setBookingStatus('${id}',null)">표시 지우기</button></div>
+    <div class="grid2">
+      <button class="btn subtle" onclick="closeModal(); go({name:'member',id:'${b.memberId}'})">회원 화면 열기</button>
+      <button class="btn subtle" style="color:var(--bad)" onclick="delBooking('${id}')">예약 삭제</button></div>`);
+}
+function setBookingStatus(id,st){
+  const b=db.bookings.find(x=>x.id===id); if(!b) return;
+  if(st===null) delete b.status; else b.status=st;
+  save(); closeModal(); render();
+}
+function calShift(delta){
+  const [y,mo]=(view.ym||today().slice(0,7)).split('-').map(Number);
+  const d=new Date(y, mo-1+delta, 1);
+  view.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  view.day=null; render();
+}
+/* ── 재등록 수동 처리 ── */
+function openRereg(memberId){
+  const m=db.members.find(x=>x.id===memberId);
+  modal(`<b>재등록 처리</b>
+    <div class="muted" style="margin:6px 0 14px">현재 ${esc(m.name)} — 재등록 <b class="num" style="color:var(--ink)">${m.rereg||0}회</b><br>
+    회원이 재등록했을 때 선생님이 직접 누릅니다.</div>
+    <div class="grid2">
+      <button class="btn subtle" onclick="chgRereg('${memberId}',-1)">－ 1회 줄이기</button>
+      <button class="btn" onclick="chgRereg('${memberId}',1)">재등록 ＋1</button></div>`);
+}
+function chgRereg(memberId,delta){
+  const m=db.members.find(x=>x.id===memberId);
+  m.rereg=Math.max(0,(m.rereg||0)+delta);
+  save(); closeModal(); render(); toast(`재등록 ${m.rereg}회로 기록됐습니다`);
+}
+/* ── 프로그램 변경·배정 ── */
+function openProgChange(memberId){
+  if(draft&&draft.memberId===memberId){ toast('진행 중 수업이 있어 변경할 수 없습니다 — 먼저 완료하거나 버리세요'); return; }
+  const m=db.members.find(x=>x.id===memberId);
+  const opts=db.programs.filter(p=>p.id!==m.programId);
+  modal(`<b>프로그램 ${m.programId?'변경':'배정'}</b>
+    <div class="muted" style="margin:4px 0 10px">운동별 기록·특이사항은 그대로 유지되고, 새 프로그램은 A-1부터 시작합니다.</div>
+    <div class="exlist" style="max-height:40vh">${opts.map(p=>
+      `<div class="opt" onclick="applyProgChange('${memberId}','${p.id}')"><span>${esc(p.name)}</span><span class="t">${esc(p.goal)} · ${p.total}회</span></div>`).join('')
+      ||'<div class="empty">다른 프로그램이 없습니다 — 프로그램 탭에서 먼저 만드세요</div>'}</div>`);
+}
+function applyProgChange(memberId, progId){
+  const m=db.members.find(x=>x.id===memberId); const p=db.programs.find(p=>p.id===progId);
+  closeModal();
+  ask(`${p.name} (${p.total}회)으로 ${m.programId?'변경':'배정'}할까요?`, m.programId?'변경':'배정', ()=>{
+    m.programId=progId; m.sessionsDone=0; m.dayAdds={};
+    save(); render(); toast('완료 — A-1부터 시작합니다'); });
+}
+
+let _pickCb=null;
+function pickExercise(cb){
+  _pickCb=cb;
+  modal(`<b>운동 선택</b>
+    <input type="text" placeholder="🔍 검색" style="margin:10px 0 8px" oninput="renderPickList(this.value)">
+    <div id="pick-list" class="exlist" style="max-height:46vh"></div>`);
+  renderPickList('');
+}
+function renderPickList(q){
+  const box=document.getElementById('pick-list'); if(!box) return;
+  q=(q||'').trim();
+  const hits=sortedEx(db.exercises.filter(e=>!q||e.name.includes(q)));
+  box.innerHTML = hits.map(e=>`<div class="opt" onclick="closeModal(); _pickCb&&_pickCb('${e.id}')">
+    <span>${esc(e.name)}</span><span class="t">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div>`).join('')
+    || '<div class="empty">없음 — 운동 탭에서 먼저 추가하세요</div>';
+}
+
+/* ───────────────────── 화면: 설정 ───────────────────── */
+function vSettings(){
+  const cnt=db.logs.length;
+  return `<div class="top"><h1>설정</h1><span></span></div>
+    ${user?`<div class="card"><b>계정</b>
+      <div class="muted" style="margin:4px 0 2px">${esc(user.email||'')}</div>
+      <div class="muted" id="sync-dot" style="font-size:12px; margin-bottom:10px"></div>
+      <label class="fld"><span class="muted">내 이름 — 센터 대시보드에 이 이름으로 표시됩니다</span>
+        <input type="text" placeholder="예: 허재윤" value="${esc(db.trainerName||'')}"
+          onchange="db.trainerName=this.value.trim(); save(); toast('이름이 저장됐습니다')"></label>
+      <div class="grid2">
+        <button class="btn subtle" onclick="openChangePw()">비밀번호 변경</button>
+        <button class="btn subtle" onclick="doLogout()">로그아웃</button></div></div>`:''}
+    <div class="card"><b>데이터 백업</b>
+      <div class="muted" style="margin:4px 0 10px">${user?'기록은 서버에 자동 저장됩니다 (기록 '+cnt+'건). 백업은 만일을 위한 보조 수단입니다.':'모든 기록은 이 폰 브라우저 안에만 저장됩니다 (기록 '+cnt+'건). 폰 교체·분실에 대비해 주기적으로 백업하세요.'}</div>
+      <button class="btn ghost" onclick="backup()">📋 전체 데이터 복사 (백업)</button>
+      <div class="muted" style="margin:10px 0 6px">복원 — 백업해둔 내용을 붙여넣고 복원을 누르세요</div>
+      <textarea id="restore-box" placeholder="여기에 백업 데이터 붙여넣기"></textarea>
+      <button class="btn subtle" style="margin-top:8px" onclick="restore()">복원</button></div>
+    <div class="card"><b>특이사항 색 규칙</b>
+      <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
+      <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v1.6 — 노쇼·취소 기록(시간표 예약 탭) · 주간 브리핑(매주 월요일) · 센터 대시보드</div></div>
+    ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
+}
+async function backup(){
+  db.lastBackupCount=db.logs.length; db.lastBackupDate=today(); save();
+  const s=JSON.stringify(db);
+  try{ await navigator.clipboard.writeText(s); toast('복사됐습니다 — 메모장·카톡 나에게 보내기 등에 붙여넣어 보관하세요'); }
+  catch(e){ showCopy('백업 데이터', s); }
+}
+function restore(){
+  let d;
+  try{
+    const s=document.getElementById('restore-box').value.trim(); if(!s){ toast('붙여넣은 내용이 없습니다'); return; }
+    d=JSON.parse(s);
+    if(!d.exercises||!d.members) throw 0;
+  }catch(e){ toast('복원 실패 — 백업 데이터 형식이 아닙니다'); return; }
+  ask('현재 데이터를 백업 내용으로 덮어쓸까요?', '복원', ()=>{
+    db=migrate(d); draft=db.draft||null; save(); go({name:'home'}); toast('복원됐습니다'); });
+}
+function clearDemo(){
+  ask('예시 회원과 예시 기록을 삭제할까요?', '삭제', ()=>{
+    const ids=db.members.filter(m=>m.demo).map(m=>m.id);
+    db.members=db.members.filter(m=>!m.demo);
+    db.logs=db.logs.filter(l=>!ids.includes(l.memberId));
+    save(); render(); toast('삭제됐습니다'); });
+}
+
+/* 다른 기기에서 저장한 내용 반영: 앱으로 돌아올 때 서버 확인, 연결 복구 시 미전송분 전송 */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && user && booted){ sync.dirty? pushNow() : pullNow(); }
+});
+window.addEventListener('online', ()=>{ if(sync.dirty) pushNow(); });
+boot();
+</script>

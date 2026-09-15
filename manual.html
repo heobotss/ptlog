@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>수업일지 사용설명서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  /* 앱과 같은 다크 네이비 단일 테마 */
+  :root{
+    --bg:#0C1424; --card:#131E33; --card2:#182642; --line:#243352;
+    --ink:#EAF0FA; --sub:#8FA0BC; --blue:#4D8DFF; --blue-soft:rgba(77,141,255,.14);
+    --warn:#FFB454; --warn-soft:rgba(255,180,84,.12); --good:#3DD68C; --good-soft:rgba(61,214,140,.12);
+    --bad:#FF6B6B; --bad-soft:rgba(255,107,107,.12); --kakao:#FEE500;
+  }
+  *{box-sizing:border-box; margin:0}
+  html,body{background:var(--bg)}
+  body{color:var(--ink); font-family:'IBM Plex Sans KR',-apple-system,'Malgun Gothic',sans-serif;
+    font-size:15.5px; line-height:1.7; padding:28px 16px 60px}
+  .wrap{max-width:560px; margin:0 auto}
+  .num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums}
+  h1{font-size:24px; font-weight:700; letter-spacing:-.01em; text-wrap:balance}
+  .lede{color:var(--sub); font-size:14.5px; margin:8px 0 4px}
+  h2{font-size:18px; font-weight:700; margin:36px 0 4px; display:flex; align-items:center; gap:8px}
+  h2 .no{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--blue); background:var(--blue-soft);
+    border-radius:8px; padding:2px 8px}
+  .sec-sub{color:var(--sub); font-size:13.5px; margin-bottom:12px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 17px; margin-bottom:10px}
+  .step{display:flex; gap:12px; padding:9px 0}
+  .step+.step{border-top:1px solid var(--line)}
+  .step .n{flex:none; width:24px; height:24px; border-radius:100px; background:var(--blue); color:#fff;
+    font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; margin-top:2px}
+  .step b{font-weight:600}
+  .step .d{color:var(--sub); font-size:13.5px}
+  .warn{background:var(--warn-soft); border:1px solid rgba(255,180,84,.35); border-radius:12px;
+    padding:12px 15px; font-size:14px; margin:10px 0}
+  .warn b{color:var(--warn)}
+  .good{background:var(--good-soft); border:1px solid rgba(61,214,140,.3); border-radius:12px;
+    padding:12px 15px; font-size:14px; margin:10px 0}
+  .good b{color:var(--good)}
+  .pill{display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:100px;
+    background:var(--blue-soft); color:var(--blue)}
+  .pill.g{background:var(--good-soft); color:var(--good)}
+  .pill.w{background:var(--warn-soft); color:var(--warn)}
+  .chip{display:inline-block; font-size:12.5px; padding:3px 10px; border-radius:100px; border:1px solid var(--line); color:var(--sub)}
+  .chip.r{border-color:var(--bad); color:var(--bad)}
+  .chip.b{border-color:var(--blue); color:var(--blue)}
+  .chip.g{border-color:var(--good); color:var(--good)}
+  .tabrow{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 2px}
+  .tab{background:var(--card2); border:1px solid var(--line); border-radius:10px; padding:8px 6px;
+    text-align:center; flex:1; min-width:86px; font-size:13px}
+  .tab .ico{display:block; font-size:17px}
+  .tab .t{color:var(--sub); font-size:11.5px}
+  .qa{margin-bottom:12px}
+  .qa .q{font-weight:600}
+  .qa .q::before{content:'Q. '; color:var(--blue)}
+  .qa .a{color:var(--sub); font-size:14px}
+  .qa .a::before{content:'A. '; color:var(--good); font-weight:600}
+  .btn-ex{display:inline-block; background:var(--blue); color:#fff; font-weight:600; font-size:13px;
+    border-radius:9px; padding:5px 12px}
+  .btn-ex.k{background:var(--kakao); color:#191600}
+  .btn-ex.gh{background:var(--blue-soft); color:var(--blue)}
+  .divider{height:1px; background:var(--line); margin:10px 0}
+  footer{margin-top:44px; color:var(--sub); font-size:13px; text-align:center}
+</style>
+
+<div class="wrap">
+  <div class="pill">비브레 트레이너 전용</div>
+  <h1 style="margin-top:8px">📱 수업일지 사용설명서</h1>
+  <p class="lede">종이 일지 대신 씁니다. 처음 설치 5분, 그다음부터는 수업하면서 숫자만 적으면 됩니다.</p>
+
+  <!-- 1. 설치 -->
+  <h2><span class="no">1</span>처음 설치 — 딱 한 번, 5분</h2>
+  <div class="card">
+    <div class="step"><span class="n">1</span><div><b>단체방에서 앱 링크 열기</b>
+      <div class="d">링크를 누르면 카톡 안에서 열립니다. 여기서 바로 쓰면 안 돼요! ⬇</div></div></div>
+    <div class="step"><span class="n">2</span><div><b>「다른 브라우저로 열기」</b>
+      <div class="d">카톡 화면 오른쪽 아래 메뉴(⋮ 또는 공유 버튼) → <b>다른 브라우저로 열기</b> → 크롬(아이폰은 사파리)으로 엽니다. 카톡 안에 저장된 기록은 날아갈 수 있어서 꼭 필요합니다.</div></div></div>
+    <div class="step"><span class="n">3</span><div><b>홈 화면에 추가</b>
+      <div class="d">크롬: 오른쪽 위 ⋮ → 「홈 화면에 추가」<br>사파리: 아래 공유 버튼 → 「홈 화면에 추가」<br>→ 폰 바탕화면에 앱 아이콘이 생깁니다. <b>앞으로는 이 아이콘으로만 여세요.</b></div></div></div>
+    <div class="step"><span class="n">4</span><div><b>가입하기</b>
+      <div class="d">앱을 열면 로그인 화면이 나옵니다. 이메일·비밀번호(6자 이상)를 넣고 <b>「처음입니다 — 가입하기」</b>를 누르면 즉시 시작됩니다. <b>비밀번호는 꼭 메모해 두세요.</b></div></div></div>
+    <div class="step"><span class="n">5</span><div><b>예시 회원 삭제</b>
+      <div class="d">설정 탭 → 「예시 회원(김민수) 삭제」. 연습용으로 먼저 눌러보고 지워도 됩니다.</div></div></div>
+  </div>
+  <div class="good"><b>✓ 기록은 계정에 저장됩니다</b> — 같은 이메일로 로그인하면 <b>폰이든 PC든 노트북이든 어디서나 같은 기록</b>이 보입니다. 수업 중 적은 건 몇 초 안에 자동으로 서버에 저장되고, 인터넷이 잠깐 끊겨도 연결되면 알아서 올라갑니다.</div>
+  <div class="warn"><b>⚠ 주의 둘</b> — ① 비밀번호를 잊으면 기록에 접근을 못 하니 꼭 메모하세요. ② PC에서 쓸 땐 같은 주소를 열고 같은 계정으로 로그인하면 됩니다.</div>
+
+  <!-- 2. 화면 소개 -->
+  <h2><span class="no">2</span>화면은 다섯 개뿐</h2>
+  <div class="tabrow">
+    <div class="tab"><span class="ico">👥</span>회원<span class="t">오늘 수업·회원 목록</span></div>
+    <div class="tab"><span class="ico">🗓</span>시간표<span class="t">달력에 수업 예약</span></div>
+    <div class="tab"><span class="ico">📋</span>프로그램<span class="t">30회 운동 틀</span></div>
+    <div class="tab"><span class="ico">🏋️</span>운동<span class="t">운동 사전</span></div>
+    <div class="tab"><span class="ico">⚙️</span>설정<span class="t">백업·복원</span></div>
+  </div>
+
+  <!-- 3. 시작 세팅 -->
+  <h2><span class="no">3</span>내 회원 넣기</h2>
+  <div class="card">
+    <div class="step"><span class="n">1</span><div><b>회원 탭 → ＋ 회원 등록</b>
+      <div class="d">이름 · 성별 · 주의사항(나이, 부상 이력) 입력. 등록하면 목록으로 돌아오니 연달아 등록하면 됩니다.</div></div></div>
+    <div class="step"><span class="n">2</span><div><b>프로그램 배정</b>
+      <div class="d">기본 「근력 A(30회)」가 들어 있습니다. 나만의 프로그램은 프로그램 탭 → 새로 만들기 — 루틴 2~4개 만들면 30회에 자동 배치됩니다.</div></div></div>
+    <div class="step"><span class="n">3</span><div><b>시간표 탭에서 수업 예약</b>
+      <div class="d">달력에서 날짜 탭 → 시간 옆 ＋ → 회원 선택. 홈 화면 맨 위에 「오늘 수업」이 시간순으로 뜹니다.</div></div></div>
+  </div>
+
+  <!-- 4. 수업하기 -->
+  <h2><span class="no">4</span>수업하기 — 매일 하는 것</h2>
+  <p class="sec-sub">회원 누르기 → <span class="btn-ex">A-5 수업 시작</span> 버튼 하나면 그날 운동 목록이 뜹니다.</p>
+  <div class="card">
+    <div class="step"><span class="n">1</span><div><b>운동 이름을 누르면 펼쳐진다</b>
+      <div class="d">펼치면 위에 <b>지난 기록</b>(최대 무게·최다 반복·e1RM·특이사항)이 먼저 보입니다. 접힌 상태에서도 오른쪽에 「지난 30kg×8」이 작게 떠서 목록만 보고도 수업이 됩니다.</div></div></div>
+    <div class="step"><span class="n">2</span><div><b>오늘 기록 입력 — 10초 룰</b>
+      <div class="d"><span class="btn-ex gh">↺ 지난 기록 불러오기</span>를 누르면 지난 세트가 그대로 깔립니다. <b>숫자만 고치세요.</b> 맨몸 운동은 무게에 0, 플랭크 같은 건 초, 스트레칭은 완료 체크만.</div></div></div>
+    <div class="step"><span class="n">3</span><div><b>특이사항은 색깔 버튼으로</b>
+      <div class="d"><span class="chip r">허리 통증</span> 빨강 = 아픈 것 · <span class="chip b">통증 줄어듦</span> 파랑 = 좋아진 것 · <span class="chip g">왼쪽 약함</span> 초록 = 좌우 불균형. 자세한 건 메모칸에.</div></div></div>
+    <div class="step"><span class="n">4</span><div><b>회원에게 필요한 운동은 그 자리에서 추가</b>
+      <div class="d"><span class="btn-ex gh">＋ 퍼스널 운동 추가</span> — 추가하면 다음 바퀴 같은 회차에도 계속 나옵니다. 필요 없어지면 「이 회차에서 빼기」.</div></div></div>
+    <div class="step"><span class="n">5</span><div><b>수업 완료 → 카톡 전송</b>
+      <div class="d"><span class="btn-ex">수업 완료</span> 누르면 요약 카드가 만들어지고, <span class="btn-ex k">💬 카톡으로 보내기</span>로 회원에게 전송. "지난번 대비 +8%"가 회원 폰에 남습니다.</div></div></div>
+  </div>
+  <div class="good"><b>✓ 입력이 날아갈 걱정 없음</b> — 수업 중 입력은 실시간 자동 저장됩니다. 실수로 다른 탭을 눌러도 홈의 「▶ 진행 중 수업」으로 이어집니다.</div>
+
+  <!-- 5. 알아두면 좋은 기능 -->
+  <h2><span class="no">5</span>알아두면 좋은 기능</h2>
+  <div class="card">
+    <div class="step"><span class="n">🔍</span><div><b>운동으로 기록 찾기</b>
+      <div class="d">회원 화면에서 "스쿼트" 검색 → 그 회원의 전체 이력과 통증 타임라인이 한 화면에.</div></div></div>
+    <div class="step"><span class="n">📈</span><div><b>변화 리포트 — 재등록 상담 필살기</b>
+      <div class="d">근력 상승 TOP3, 시간 기록 성장, 좋아진 것, 잡은 통증까지 한 장으로. 잔여 3회쯤 남았을 때 회원에게 보여주고 카톡으로 보내세요.</div></div></div>
+    <div class="step"><span class="n">🗂</span><div><b>지난 기록 수정</b>
+      <div class="d">숫자를 잘못 적었으면 회원 화면 → 지난 수업 기록 → 그 수업 눌러서 고치기. 잘못 저장한 수업은 통째 삭제도 됩니다.</div></div></div>
+    <div class="step"><span class="n">🔁</span><div><b>재등록 처리</b>
+      <div class="d">회원이 재등록하면 회원 화면 → 「재등록 처리」 → ＋1. 이름 옆에 <span class="pill g">재등록 2</span> 배지로 쌓입니다. 잔여 3회부터는 <span class="pill w">재등록 타이밍</span> 배지가 미리 뜹니다.</div></div></div>
+    <div class="step"><span class="n">📋</span><div><b>프로그램 변경</b>
+      <div class="d">30회 마치고 새 목표로 갈 때 회원 화면 → 프로그램 변경. 기존 기록은 운동별 이력에 전부 남습니다.</div></div></div>
+    <div class="step"><span class="n">🚫</span><div><b>노쇼·취소 표시</b>
+      <div class="d">시간표에서 예약을 탭 → 완료/노쇼/취소 선택. 수업 완료를 누르면 그날 예약은 자동으로 ✓ 처리됩니다. 노쇼가 쌓이는 회원이 눈에 보여요.</div></div></div>
+    <div class="step"><span class="n">📋</span><div><b>주간 브리핑</b>
+      <div class="d">매주 월요일 홈 맨 위에 자동으로 뜹니다 — 지난주 수업 수, 노쇼, 재등록 타이밍, 2주 넘게 안 온 회원까지. 이걸 보고 한 주를 시작하세요.</div></div></div>
+  </div>
+
+  <!-- 6. 저장과 백업 -->
+  <h2><span class="no">6</span>저장 — 이제 자동입니다</h2>
+  <div class="card">
+    <div class="step"><span class="n">1</span><div><b>따로 저장 버튼이 없습니다</b>
+      <div class="d">숫자 하나, 칩 하나 누를 때마다 몇 초 안에 서버로 자동 저장됩니다. 홈 화면 위쪽 「✓ 서버에 저장됨」 표시로 확인할 수 있어요.</div></div></div>
+    <div class="step"><span class="n">2</span><div><b>폰을 바꾸면?</b>
+      <div class="d">새 폰에서 앱 열고 같은 계정으로 로그인 — 끝. 기록이 그대로 있습니다.</div></div></div>
+    <div class="step"><span class="n">3</span><div><b>설정의 「백업 복사」는 보조 수단</b>
+      <div class="d">서버가 다 저장하지만, 불안하면 가끔 복사해서 카톡 나에게 보내기 해두면 이중 안전장치가 됩니다.</div></div></div>
+  </div>
+
+  <!-- 7. QA -->
+  <h2><span class="no">7</span>문제가 생겼어요</h2>
+  <div class="card">
+    <div class="qa"><div class="q">기록이 전부 사라졌어요!</div>
+      <div class="a">십중팔구 다른 계정(이메일)으로 로그인한 겁니다. 설정 탭에서 로그인된 이메일을 확인하고, 원래 계정으로 다시 로그인하세요.</div></div>
+    <div class="qa"><div class="q">비밀번호를 잊었어요.</div>
+      <div class="a">대표님께 말씀하세요 — 관리자 쪽에서 재설정을 도와드립니다. 그래서 처음에 메모가 중요합니다.</div></div>
+    <div class="qa"><div class="q">PC에서도 쓸 수 있나요?</div>
+      <div class="a">네. PC 브라우저에서 같은 주소를 열고 같은 계정으로 로그인하면 폰과 똑같은 기록이 보입니다. 폰에서 적은 게 PC에 바로 뜹니다.</div></div>
+    <div class="qa"><div class="q">숫자를 잘못 저장했어요.</div>
+      <div class="a">회원 화면 → 지난 수업 기록 → 그 수업 눌러서 수정.</div></div>
+    <div class="qa"><div class="q">수업 도중에 앱이 꺼졌어요.</div>
+      <div class="a">다시 열면 홈 맨 위 「▶ 진행 중 수업」에서 그대로 이어집니다.</div></div>
+    <div class="qa"><div class="q">폰을 바꿔요.</div>
+      <div class="a">옛 폰에서 백업 복사 → 새 폰에 앱 설치 → 설정에서 복원. 옛 폰이 없으면 카톡 나에게 보내기에 있는 마지막 백업으로.</div></div>
+    <div class="qa"><div class="q">쓰고 싶은 운동이 목록에 없어요.</div>
+      <div class="a">운동 탭 → 내 운동 추가. 현장에서 쓰는 이름·약어 그대로 넣으면 됩니다. 기록 방식(무게/시간/레벨/밴드/체크)도 거기서 정합니다.</div></div>
+  </div>
+
+  <footer>불편한 점·추가 요청은 대표님께 — 모아서 바로바로 업데이트됩니다.<br>
+  업데이트는 자동 반영: 새로고침만 하면 최신 버전입니다.</footer>
+</div>
