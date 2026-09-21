@@ -256,12 +256,59 @@ let booted=false;    /* 데이터 로드 완료 */
 let isAdmin=false;   /* 대표(관리자) 여부 — admins 테이블로 판정 */
 let db=null, draft=null;
 let sync={dirty:false, timer:null, serverAt:null, offline:false};
+/* 이용권 (2026-09-18) — 11/2 부터 30일 무료(11/2 전 가입자는 12/1까지) 뒤에는 이용권이 있어야 새 기록이 저장된다.
+   잠겨도 쌓인 기록은 그대로 본다. 판정은 서버(app_my_access)가 하고, 서버 저장 규칙도 같은 판정으로 막는다 */
+let access=null;      /* {ok, reason:'before'|'trial'|'pass'|'admin'|'ended', until} · null = 아직 모름(막지 않음) */
+let lastGood=null;    /* 서버와 맞춰진 마지막 기록 — 잠긴 상태에서 고친 내용을 되돌릴 때 쓴다 */
+const PASS_URL='https://heobotss.com/pay/?p=app-trainer-month';
+const FN_FREE='https://kpubgeejyiupdvbbdxwt.supabase.co/functions/v1/free-claim';
+function locked(){ return !!(access && access.ok===false); }
+async function checkAccess(tryClaim){
+  if(!user||!sb) return;
+  try{
+    const {data,error}=await sb.rpc('app_my_access');
+    if(error) throw error;
+    access=data;
+    if(locked() && tryClaim!==false){ /* 지금 열린 무료 열람권(예: 11/2~11/8 수업일지 30일)이 있으면 바로 붙인다 */
+      const {data:{session}}=await sb.auth.getSession();
+      const r=await fetch(FN_FREE,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+(session&&session.access_token)},body:JSON.stringify({auto:'app'})}).then(x=>x.json()).catch(()=>null);
+      if(r&&r.ok){ toast('무료 열람권이 적용됐습니다'); return checkAccess(false); }
+    }
+  }catch(e){ access=null; } /* 서버에 판정 함수가 아직 없거나 연결이 끊기면 막지 않는다 */
+  if(booted && (view.name==='home'||view.name==='settings')) render();
+}
+function ymdK(d){ const x=new Date(d); return (x.getMonth()+1)+'월 '+x.getDate()+'일'; }
+function lastDay(d){ return ymdK(new Date(new Date(d).getTime()-1)); }   /* 12/2 0시까지 = 12월 1일까지 */
+function accessBanner(){
+  if(!access) return '';
+  const now=Date.now(), until=access.until?Date.parse(access.until):0, left=until?Math.ceil((until-now)/864e5):0;
+  const box=(t,btn)=>`<div class="card" style="border-color:var(--warn)"><div style="font-size:14px;line-height:1.6">${t}</div>${btn?`<button class="btn" style="margin-top:10px" onclick="openPass()">${btn}</button>`:''}</div>`;
+  if(locked()) return box('<b>무료 기간이 끝나 새 기록은 저장되지 않습니다.</b><br>지금까지 쌓인 기록은 그대로 볼 수 있어요.','이용권 보기 · 30일 9,900원');
+  if(access.reason==='before' && now>=Date.parse('2026-10-19T00:00:00+09:00'))
+    return box(`<b>11월 2일부터 수업일지가 이용권 방식으로 바뀝니다.</b><br>지금 쓰시는 계정은 ${lastDay(access.until)}까지 그대로 무료이고, 그 뒤에는 30일 9,900원 이용권으로 이어서 기록합니다. 자동 결제는 없고, 쌓인 기록은 이용권이 없어도 계속 볼 수 있어요.`,'');
+  if((access.reason==='trial'||access.reason==='pass') && left<=7)
+    return box(`<b>${access.reason==='trial'?'무료 기간':'이용권'}이 ${lastDay(access.until)}에 끝납니다.</b><br>미리 결제하면 남은 기간 뒤에 30일이 이어 붙습니다.`,'이용권 보기');
+  return '';
+}
+function openPass(){
+  modal(`<b>트레이너 플랜 · 1개월 이용권</b>
+    <p class="muted" style="margin:10px 0 0;line-height:1.7">9,900원 · 30일 · 자동으로 다시 결제되지 않습니다.<br>결제 페이지에서 <b>${esc(user&&user.email||'')}</b> 계정으로 로그인하면 이 앱에 바로 적용됩니다.</p>
+    <a class="btn" style="margin-top:14px;display:block;text-align:center;text-decoration:none" href="${PASS_URL}" target="_blank" rel="noopener">결제 페이지 열기</a>
+    <button class="btn ghost" onclick="closeModal(); checkAccess(false).then(()=>toast(locked()?'아직 이용권이 확인되지 않습니다':'이용권이 확인됐습니다'))">결제했어요 — 다시 확인</button>`);
+}
+let lockNoticeAt=0;
+function blockEdit(){ /* 잠긴 상태에서 고친 내용은 되돌리고 안내 */
+  if(lastGood){ try{ db=migrate(JSON.parse(lastGood)); draft=db.draft||null; }catch(e){} }
+  if(booted) render();
+  if(Date.now()-lockNoticeAt>3000){ lockNoticeAt=Date.now(); openPass(); }
+}
 
 function lsKey(){ return user? 'ptlog.v2.'+user.id : LS; }
 function load(){ try{ const s=localStorage.getItem(lsKey()); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function loadLegacy(){ try{ const s=localStorage.getItem(LS); return s?JSON.parse(s):null; }catch(e){ return null; } }
 /* 저장 = 이 기기(즉시) + 서버(1.5초 뒤 자동 전송) */
 function save(){
+  if(locked()){ blockEdit(); return; }
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   if(user&&sb){ sync.dirty=true; clearTimeout(sync.timer); sync.timer=setTimeout(pushNow, 1500); }
 }
@@ -278,7 +325,12 @@ async function pushNow(){
     }
     if(error) throw error;
     sync.dirty=false; sync.offline=false; sync.serverAt=at; updateSyncBadge();
+    lastGood=JSON.stringify(db);
   }catch(e){
+    /* 서버 저장 규칙에 막힘 = 이용 기간이 끝남 → 판정을 다시 받고 잠근다 */
+    if(e && (e.code==='42501' || /row-level security/i.test(e.message||''))){
+      await checkAccess(); if(locked()){ sync.dirty=false; updateSyncBadge(); blockEdit(); return; }
+    }
     sync.offline=true; updateSyncBadge();
     setTimeout(()=>{ if(sync.dirty) pushNow(); }, 8000); /* 연결 복구 시 자동 재전송 */
   }
@@ -289,7 +341,7 @@ async function pullNow(){
     const {data,error}=await sb.from('trainer_data').select('data,updated_at').eq('user_id',user.id).maybeSingle();
     if(error) throw error;
     if(data && data.updated_at!==sync.serverAt){ /* 다른 기기에서 저장한 최신본 반영 */
-      db=migrate(data.data); draft=db.draft||null; sync.serverAt=data.updated_at;
+      db=migrate(data.data); draft=db.draft||null; sync.serverAt=data.updated_at; lastGood=JSON.stringify(db);
       try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
       if(booted) render();
     }
@@ -298,8 +350,8 @@ async function pullNow(){
 }
 function updateSyncBadge(){
   const el=document.getElementById('sync-dot'); if(!el) return;
-  el.textContent = !user? '' : sync.offline? '⚠ 오프라인 — 연결되면 자동 전송됩니다' : (sync.dirty? '서버 저장 중…' : '✓ 서버에 저장됨 · 폰·PC 연동');
-  el.style.color = sync.offline? 'var(--warn)' : 'var(--sub)';
+  el.textContent = !user? '' : locked()? '🔒 보기 전용 — 이용권이 있으면 다시 저장됩니다' : sync.offline? '⚠ 오프라인 — 연결되면 자동 전송됩니다' : (sync.dirty? '서버 저장 중…' : '✓ 서버에 저장됨 · 폰·PC 연동');
+  el.style.color = (sync.offline||locked())? 'var(--warn)' : 'var(--sub)';
 }
 
 /* ── 로그인 화면 ── */
@@ -390,7 +442,7 @@ function doLogout(){
   ask('로그아웃할까요?\n기록은 서버에 저장돼 있어 다시 로그인하면 그대로입니다', '로그아웃', async ()=>{
     if(sync.dirty) await pushNow();
     await sb.auth.signOut();
-    user=null; db=null; draft=null; pdraft=null; booted=false; isAdmin=false;
+    user=null; db=null; draft=null; pdraft=null; booted=false; isAdmin=false; access=null; lastGood=null;
     sync={dirty:false,timer:null,serverAt:null,offline:false};
     renderLogin(); });
 }
@@ -412,8 +464,9 @@ async function bootData(){
   try{
     const {data,error}=await sb.from('trainer_data').select('data,updated_at').eq('user_id',user.id).maybeSingle();
     if(error) throw error;
-    if(data){ db=migrate(data.data); sync.serverAt=data.updated_at; sync.dirty=false; }
+    if(data){ db=migrate(data.data); sync.serverAt=data.updated_at; sync.dirty=false; lastGood=JSON.stringify(db); }
     else{
+      await checkAccess(); /* 새 계정: 첫 저장 전에 이용 가능 여부(무료 열람권 자동 적용 포함)부터 */
       /* 계정에 데이터 없음 — 이 기기에 쓰던 기록이 있으면 자동 이관 */
       const legacy=load()||loadLegacy();
       if(legacy && ((legacy.logs||[]).length || (legacy.members||[]).some(m=>!m.demo))){
@@ -429,6 +482,7 @@ async function bootData(){
   draft=db.draft||null; pdraft=null; booted=true;
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
+  checkAccess();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
   sb.from('admins').select('user_id').eq('user_id',user.id).maybeSingle()
@@ -549,6 +603,7 @@ function render(){
     programs:vPrograms, progDetail:vProgDetail, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
   el.innerHTML=fn();
+  if(view.name==='home'||view.name==='settings'){ const b=accessBanner(); if(b) el.insertAdjacentHTML('afterbegin', b); }
   updateSyncBadge();
 }
 
