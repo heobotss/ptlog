@@ -255,6 +255,7 @@ function migrate(d){
   if(d.version<6){
     /* 예약제 달력 — 날짜별 수업 예약 저장소 */
     if(!d.bookings) d.bookings=[];
+    if(!d.notify) d.notify={};          /* 날짜별 「스케줄 알림 보냄」 (2026-09-28) */
     d.version=6;
   }
   if(d.version<7){
@@ -696,10 +697,29 @@ function vHome(){
     ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
       <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
       <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
-    ${briefHtml()}${resume}${backupBanner}${todayHtml}
+    ${briefHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
     ${list || '<div class="empty">아직 회원이 없습니다.<br>아래 버튼으로 첫 회원을 등록하세요.</div>'}
     <button class="btn ghost" onclick="go({name:'memberNew'})">＋ 회원 등록</button>`;
 }
+/* ── 오늘 스케줄 알림 (2026-09-28)
+   회원에게 다음 수업 안내를 보냈는지 하루 한 번 체크한다.
+   ATC 챌린지에 참여 중이면 이 기록이 그쪽 하루 과제를 캡처 없이 채워 준다. ── */
+function notifyHtml(){
+  if(!db.members.length) return '';
+  const on = !!(db.notify||{})[today()];
+  return `<div class="card tap" onclick="markNotify()" style="${on?'':'border-color:var(--line-2)'}">
+    <div class="row"><div><b>${on?'✅ ':''}오늘 스케줄 알림</b>
+      <div class="muted">${on?'보냈다고 표시했습니다':'회원에게 다음 수업 안내를 보내셨나요?'}</div></div>
+      <span class="pill${on?' good':''}">${on?'완료':'보냈어요'}</span></div></div>`;
+}
+function markNotify(){
+  db.notify = db.notify || {};
+  const d = today();
+  if(db.notify[d]){ delete db.notify[d]; save(); render(); toast('표시를 지웠습니다'); return; }
+  db.notify[d] = new Date().toISOString();
+  save(); render(); toast('오늘 알림 보냄 — 기록했습니다');
+}
+
 /* ── 센터 대시보드 (관리자 전용) ── */
 function calcTrainer(row){
   const d=row.data||{};
