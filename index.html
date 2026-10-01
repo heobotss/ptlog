@@ -276,6 +276,7 @@ if(sb) sb.auth.onAuthStateChange((event, session)=>{
 let user=null;       /* 로그인한 트레이너 */
 let booted=false;    /* 데이터 로드 완료 */
 let isAdmin=false;   /* 대표(관리자) 여부 — admins 테이블로 판정 */
+let scorecard=null;  /* 이달의 성적표 — PC 생성기(성적표인증)가 저장소 scorecards/<user_id>/latest.json 에 올린 것 (2026-10-01) */
 let db=null, draft=null;
 let sync={dirty:false, timer:null, serverAt:null, offline:false};
 /* 이용권 (2026-09-18) — 11/2 부터 30일 무료(11/2 전 가입자는 12/1까지) 뒤에는 이용권이 있어야 새 기록이 저장된다.
@@ -507,6 +508,7 @@ async function bootData(){
   checkAccess();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
+  loadScorecard();
   sb.from('admins').select('user_id').eq('user_id',user.id).maybeSingle()
     .then(r=>{ if(r&&r.data){ isAdmin=true; if(view.name==='home'||view.name==='settings') render(); } });
 }
@@ -697,9 +699,93 @@ function vHome(){
     ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
       <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
       <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
-    ${briefHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
+    ${briefHtml()}${scorecardHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
     ${list || '<div class="empty">아직 회원이 없습니다.<br>아래 버튼으로 첫 회원을 등록하세요.</div>'}
     <button class="btn ghost" onclick="go({name:'memberNew'})">＋ 회원 등록</button>`;
+}
+/* ── 이달의 성적표 (2026-10-01)
+   매월 1일 PC 생성기가 지난달 숫자(회원 기록 경신·통증 잡은 회원·수업 횟수·블로그 순위)로 스토리 카드 두 장을 굽는다.
+   여기서는 보여 주고 「스토리에 올리기」만 한다. 센터 이름은 본인이 켜고 끈다(둘 다 이미 구워져 있다). ── */
+async function loadScorecard(){
+  scorecard=null;
+  if(!user) return;
+  try{
+    const r=await fetch(`${SB_URL}/storage/v1/object/public/scorecards/${user.id}/latest.json?t=${Date.now()}`, {cache:'no-store'});
+    if(!r.ok) return;
+    const j=await r.json();
+    if(j && j['카드']){ scorecard=j; if(view.name==='home') render(); }
+  }catch(e){ /* 아직 성적표가 없으면 조용히 */ }
+}
+function scorecardCenterOn(){
+  if(db && typeof db.scorecardCenter==='boolean') return db.scorecardCenter;
+  return scorecard ? scorecard['센터이름기본표시']!==false : true;
+}
+function scorecardUrl(){ return scorecardCenterOn() ? (scorecard['카드_센터']||scorecard['카드']) : scorecard['카드']; }
+function scorecardHtml(){
+  if(!scorecard) return '';
+  const ym=scorecard['달']||'', [y,m]=ym.split('-');
+  if(db && db.scorecardHide===ym) return `<div class="card tap" onclick="db.scorecardHide=null; save(); render()">
+    <div class="row"><span class="muted">🏅 이달의 성적표 (${+m}월) — 다시 보기</span><span class="muted">›</span></div></div>`;
+  const 줄=scorecard['줄']||[];
+  const line=x=>`${esc(x[0])} <b class="num">${esc(String(x[1]))}${esc(x[2]||'')}</b>${x[3]?` <span style="color:${String(x[3]).startsWith('▲')?'var(--blue)':'var(--muted)'}">${esc(x[3])}</span>`:''}`;
+  const sum=줄.map(line).join(' · ');
+  /* 나만 보는 숫자 — 0 도 ▼ 도 전부. 카드에는 0 과 ▼ 가 실리지 않는다(공개 카드 규칙) */
+  const priv=scorecard['비공개줄']||[];
+  const privOpen=!!(db&&db.scorecardPrivOpen);
+  const privHtml= priv.length? `<div class="card tap" style="margin:10px 0 0; padding:10px 12px" onclick="db.scorecardPrivOpen=!db.scorecardPrivOpen; save(); render()">
+      <div class="row"><span class="muted">🔒 나만 보는 숫자 (0·▼ 포함)</span><span class="muted">${privOpen?'접기':'펼치기'}</span></div>
+      ${privOpen?`<div class="muted" style="margin-top:8px; line-height:1.8; font-size:13px">${priv.map(x=>`<div>${line(x)}${x[4]?` <span style="font-size:11.5px">— ${esc(x[4])}</span>`:''}</div>`).join('')}
+        <div style="font-size:11.5px; margin-top:6px">카드엔 0인 줄과 ▼는 싣지 않고, 누적 줄이 바닥을 깝니다. 아래에서 줄을 끄면 다음 날 아침 카드에 반영됩니다.</div></div>`:''}
+    </div>`:'';
+  const prefs=(db&&db.scorecardPrefs)||{hide:[]};
+  const cands=scorecard['줄후보']||[];
+  const toggles= cands.length? `<details style="margin-top:8px"><summary class="muted" style="cursor:pointer; font-size:13px">카드에 실을 줄 고르기 (두 줄 이상)</summary>
+      <div style="margin-top:6px">${cands.map(l=>`<label class="row" style="padding:4px 0; cursor:pointer"><span style="font-size:13.5px">${esc(l)}</span>
+        <input type="checkbox" ${(prefs.hide||[]).includes(l)?'':'checked'} onchange="toggleScorecardLine('${esc(l)}', this.checked)"></label>`).join('')}
+      <div class="muted" style="font-size:11.5px">0인 줄은 켜 둬도 그 달엔 실리지 않습니다. 바꾼 건 다음 날 아침 카드부터.</div></div></details>`:'';
+  return `<div class="card" style="border-color:var(--blue)">
+    <div class="row"><b>🏅 이달의 성적표 · ${esc(y)}년 ${+m}월</b><span class="pill">${esc(scorecard['해시태그']||'')}</span></div>
+    <div class="muted" style="margin:6px 0 10px; line-height:1.6">${sum}</div>
+    <img src="${esc(scorecardUrl())}" alt="이달의 성적표" style="width:100%; border-radius:12px; display:block; background:#000">
+    <label class="row" style="margin:10px 0 6px; cursor:pointer"><span>센터 이름 넣기</span>
+      <input type="checkbox" ${scorecardCenterOn()?'checked':''} onchange="db.scorecardCenter=this.checked; db.scorecardPrefs=Object.assign({hide:[]},db.scorecardPrefs||{},{center:this.checked}); save(); render()"></label>
+    <button class="btn" onclick="shareScorecard()">📤 스토리에 올리기</button>
+    <div class="muted" style="font-size:12px; margin:6px 0 10px">공유 창에서 Instagram → 스토리를 고르세요. 올릴 때 <b>@heobotss 멘션</b>을 붙이면 베스트 스토리 후보에 들어갑니다.</div>
+    <div class="row">
+      <button class="btn ghost" style="flex:1" onclick="copyReferral()">🔗 추천 링크 복사</button>
+      <button class="btn ghost" style="flex:1" onclick="db.scorecardHide='${esc(ym)}'; save(); render()">접기</button>
+    </div>
+    <div class="muted" style="font-size:12px; margin-top:6px">추천 링크로 들어온 분이 가입하면 두 분 모두 한 달 무료 · ${esc(scorecard['혜택줄']||'')}</div>
+    ${privHtml}${toggles}
+  </div>`;
+}
+function toggleScorecardLine(label, on){
+  const p=Object.assign({hide:[]}, db.scorecardPrefs||{});
+  const hide=new Set(p.hide||[]);
+  if(on) hide.delete(label); else hide.add(label);
+  const cands=scorecard?(scorecard['줄후보']||[]):[];
+  if(cands.length && cands.filter(l=>!hide.has(l)).length<2){ toast('두 줄은 남겨야 합니다'); render(); return; }
+  p.hide=[...hide]; db.scorecardPrefs=p; save(); render();
+}
+async function shareScorecard(){
+  if(!scorecard) return;
+  const url=scorecardUrl();
+  try{
+    const b=await (await fetch(url,{cache:'no-store'})).blob();
+    const file=new File([b], `scorecard-${scorecard['달']}.jpg`, {type:'image/jpeg'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:'이달의 성적표'});
+      return;
+    }
+  }catch(e){ if(e && e.name==='AbortError') return; }
+  window.open(url,'_blank');
+  toast('이미지를 길게 눌러 저장한 뒤 인스타 스토리에 올리세요');
+}
+async function copyReferral(){
+  const link=scorecard && scorecard['추천링크'];
+  if(!link){ toast('추천 링크가 아직 없습니다'); return; }
+  try{ await navigator.clipboard.writeText(link); toast('복사됐습니다 — 인스타 프로필·DM에 붙이세요'); }
+  catch(e){ prompt('추천 링크', link); }
 }
 /* ── 오늘 스케줄 알림 (2026-09-28)
    회원에게 다음 수업 안내를 보냈는지 하루 한 번 체크한다.
