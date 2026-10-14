@@ -42,7 +42,7 @@
   .btn.danger{background:none; border:1px solid var(--line); color:var(--bad); font-weight:500; font-size:13px; padding:10px}
   .btn.chkbtn{background:var(--card2); color:var(--sub); border:1px dashed var(--line)}
   .btn.chkbtn.on{background:var(--good-soft); color:var(--good); border:1px solid var(--good)}
-  input[type=text],input[type=number],input[type=time],textarea,select{
+  input[type=text],input[type=number],input[type=time],input[type=date],textarea,select{
     width:100%; background:var(--card2); border:1px solid var(--line); border-radius:10px;
     color:var(--ink); font-family:inherit; font-size:15px; padding:11px 12px; outline:none}
   input:focus,textarea:focus,select:focus{border-color:var(--blue)}
@@ -623,7 +623,7 @@ function render(){
   [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
     const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
-    report:vReport, logs:vLogs, schedule:vSchedule, admin:vAdmin,
+    report:vReport, inbody:vInbody, logs:vLogs, schedule:vSchedule, admin:vAdmin,
     programs:vPrograms, progDetail:vProgDetail, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
   el.innerHTML=fn();
@@ -1004,6 +1004,7 @@ function vMember(){
     ${db.logs.some(l=>l.memberId===m.id)&&!(draft&&draft.memberId===m.id)?`<button class="btn ghost" style="border:1px solid var(--warn); color:var(--warn); background:var(--warn-soft)" onclick="openRefPicker('${m.id}')">📌 기준 수업 불러오기 — 지난 수업과 비교하며 수업</button>`:''}
     <button class="btn ghost" onclick="go({name:'search', id:'${m.id}'})">🔍 운동으로 기록 찾기</button>
     <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
+    <button class="btn ghost" onclick="go({name:'inbody', id:'${m.id}'})">⚖️ 인바디${(m.inbody||[]).length?` · ${m.inbody.length}회 측정 (최근 ${fullD(ibSorted(m).slice(-1)[0].date)})`:' — 측정 기록 넣기'}</button>
     <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
     <div class="grid2">
       <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
@@ -1300,6 +1301,103 @@ function applyOcr(out){
   toast(filled? `판독 완료 — ${filled}개 운동을 채웠습니다. 숫자 확인 후 저장하세요` : '읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요');
 }
 
+/* ───────────────────── 인바디 — 측정 기록·추이·변화 ─────────────────────
+   member.inbody = [{date, weight, smm(골격근), fat_kg, fat_pct, bmi, score, visceral, whr, bmr, memo}] */
+const IB_F=[
+  ['weight','체중','kg',0], ['smm','골격근량','kg',1], ['fat_kg','체지방량','kg',-1], ['fat_pct','체지방률','%',-1],
+  ['score','인바디 점수','점',1], ['visceral','내장지방 레벨','',-1], ['bmi','BMI','',0], ['whr','복부지방률','',-1], ['bmr','기초대사량','kcal',1]];
+function ibSorted(m){ return (m.inbody||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')); }
+function ibNum(v){ return (v===''||v===null||v===undefined||isNaN(+v))? null : +v; }
+function ibDelta(key,a,b,good){
+  const x=ibNum(a), y=ibNum(b); if(x===null||y===null) return '';
+  const d=Math.round((y-x)*10)/10; if(!d) return '<span class="muted">변화 없음</span>';
+  const cls= good===0? '' : ((d>0)===(good>0)? 'good':'warn');
+  return `<span class="pill ${cls}">${d>0?'+':''}${d}</span>`;
+}
+function ibSpark(list,key,good){
+  const pts=list.map(r=>ibNum(r[key])).filter(v=>v!==null); if(pts.length<2) return '';
+  const lo=Math.min(...pts), hi=Math.max(...pts), W=280, H=44, pad=4, span=(hi-lo)||1;
+  const xy=pts.map((v,i)=>[pad+i*(W-2*pad)/(pts.length-1), H-pad-(v-lo)/span*(H-2*pad)]);
+  const last=xy[xy.length-1];
+  const col= good>0? 'var(--good)' : good<0? 'var(--blue)' : 'var(--sub)';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%; height:44px; display:block">
+    <polyline fill="none" stroke="${col}" stroke-width="2" points="${xy.map(p=>p.join(',')).join(' ')}"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${col}"/></svg>`;
+}
+function ibReportLines(m){
+  const L=ibSorted(m); if(L.length<2) return [];
+  const a=L[0], b=L[L.length-1], out=[];
+  [['smm','골격근','kg'],['fat_kg','체지방','kg'],['fat_pct','체지방률','%'],['visceral','내장지방 레벨',''],['score','인바디 점수','점']].forEach(([k,n,u])=>{
+    const x=ibNum(a[k]), y=ibNum(b[k]); if(x===null||y===null) return;
+    const d=Math.round((y-x)*10)/10;
+    out.push(`${n} ${x}→${y}${u} (${d>0?'+':''}${d})`);
+  });
+  if(out.length) out.unshift(`${fullD(a.date)} → ${fullD(b.date)} · ${L.length}회 측정`);
+  return out;
+}
+function ibReportHtml(m){
+  const L=ibReportLines(m); if(!L.length) return '';
+  return `<div class="muted" style="font-size:12px; margin-bottom:4px">${esc(L[0])}</div>`+
+    L.slice(1).map(x=>`<div style="font-size:13.5px; margin-bottom:4px">⚖️ ${esc(x)}</div>`).join('');
+}
+function vInbody(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const L=ibSorted(m);
+  const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>⚖️ ${esc(m.name)} 인바디</h1><span class="muted num">${L.length}회</span></div>`;
+  const addBtn=`<button class="btn" onclick="openIbForm('${m.id}')">＋ 측정 기록 추가</button>`;
+  if(!L.length) return head+`<div class="empty">아직 인바디 기록이 없습니다.<br>결과지를 보고 숫자 몇 개만 넣으면 추이와 변화가 자동으로 나옵니다.</div>`+addBtn;
+  const a=L[0], b=L[L.length-1];
+  const rows=IB_F.filter(f=>['weight','smm','fat_kg','fat_pct','score','visceral'].includes(f[0])).map(([k,n,u,g])=>{
+    const y=ibNum(b[k]); if(y===null) return '';
+    return `<div class="row" style="padding:5px 0; border-bottom:1px solid var(--line)">
+      <span>${n}</span><span><b class="num">${y}${u}</b> ${L.length>1?ibDelta(k,a[k],b[k],g):''}</span></div>`;
+  }).join('');
+  const charts=[['smm','골격근량 (kg)',1],['fat_kg','체지방량 (kg)',-1],['fat_pct','체지방률 (%)',-1],['weight','체중 (kg)',0]].map(([k,n,g])=>{
+    const sp=ibSpark(L,k,g); if(!sp) return '';
+    const v=L.map(r=>ibNum(r[k])).filter(x=>x!==null);
+    return `<div style="margin-top:10px"><div class="row"><span class="muted">${n}</span><span class="muted num">최저 ${Math.min(...v)} · 최고 ${Math.max(...v)}</span></div>${sp}</div>`;
+  }).join('');
+  const list=L.slice().reverse().map(r=>`<div class="card tap" onclick="openIbForm('${m.id}','${r.date}')">
+    <div class="row"><b class="num">${fullD(r.date)}</b><span class="muted num">점수 ${r.score??'-'}</span></div>
+    <div class="muted num" style="margin-top:2px">체중 ${r.weight??'-'} · 골격근 ${r.smm??'-'} · 체지방 ${r.fat_kg??'-'}kg (${r.fat_pct??'-'}%) · 내장지방 ${r.visceral??'-'}</div>
+    ${r.memo?`<div style="font-size:12.5px; margin-top:4px">📝 ${esc(r.memo)}</div>`:''}</div>`).join('');
+  return head+`<div class="card"><b>${L.length>1?`첫 측정(${fullD(a.date)}) 대비 지금`:'최근 측정'}</b>
+      <div class="muted" style="margin-bottom:4px">최근 ${fullD(b.date)}</div>${rows}${charts}</div>
+    ${addBtn}
+    <div class="muted" style="margin:12px 0 6px">측정 기록 — 누르면 고칠 수 있습니다</div>${list}`;
+}
+let _ibMember=null, _ibDate=null;
+function openIbForm(memberId, date){
+  _ibMember=memberId; _ibDate=date||null;
+  const m=db.members.find(x=>x.id===memberId);
+  const r=date? (m.inbody||[]).find(x=>x.date===date) : {date:today()};
+  const f=(k,n,u)=>`<label class="fld" style="margin:0"><span class="muted">${n}${u?' ('+u+')':''}</span>
+    <input type="number" inputmode="decimal" id="ib-${k}" value="${r[k]??''}"></label>`;
+  modal(`<b>${date?'인바디 기록 고치기':'인바디 측정 추가'}</b>
+    <label class="fld" style="margin-top:10px"><span class="muted">측정일</span><input type="date" id="ib-date" value="${r.date||today()}"></label>
+    <div class="grid2">${f('weight','체중','kg')}${f('smm','골격근량','kg')}${f('fat_kg','체지방량','kg')}${f('fat_pct','체지방률','%')}
+      ${f('score','인바디 점수','')}${f('visceral','내장지방 레벨','')}${f('bmi','BMI','')}${f('bmr','기초대사량','kcal')}</div>
+    <label class="fld" style="margin-top:8px"><span class="muted">메모 (식단 처방 등)</span><input type="text" id="ib-memo" value="${esc(r.memo||'')}"></label>
+    <button class="btn" onclick="saveIb()">저장</button>
+    ${date?`<button class="btn danger" onclick="delIb()">이 측정 삭제</button>`:''}`);
+}
+function saveIb(){
+  const m=db.members.find(x=>x.id===_ibMember); if(!m) return;
+  const g=k=>{ const el=document.getElementById('ib-'+k); return el? el.value.trim() : ''; };
+  const date=g('date'); if(!date){ toast('측정일을 넣어 주세요'); return; }
+  const prev=_ibDate? (m.inbody||[]).find(x=>x.date===_ibDate) : null;
+  const r={...(prev||{}), date};
+  ['weight','smm','fat_kg','fat_pct','score','visceral','bmi','bmr'].forEach(k=>{ const v=ibNum(g(k)); if(v!==null) r[k]=v; else delete r[k]; });
+  const memo=g('memo'); if(memo) r.memo=memo; else delete r.memo;
+  m.inbody=(m.inbody||[]).filter(x=>x.date!==_ibDate && x.date!==date);
+  m.inbody.push(r); save(); closeModal(); render(); toast('인바디 기록을 저장했습니다');
+}
+function delIb(){
+  ask('이 인바디 측정을 삭제할까요?','삭제',()=>{
+    const m=db.members.find(x=>x.id===_ibMember); m.inbody=(m.inbody||[]).filter(x=>x.date!==_ibDate);
+    save(); closeModal(); render(); toast('삭제했습니다'); });
+}
+
 /* ───────────────────── 기준 수업 — 지난 수업 하나를 골라 그날과 비교하며 수업 ─────────────────────
    대표님 종이 일지의 「모서리 날짜」를 앱으로 옮긴 것. 한 바퀴를 돌았거나 특이점이 있을 때
    지난 수업 아무 날이나 기준으로 잡고, 그날 운동·기록을 옆에 두고 오늘을 비교한다. */
@@ -1510,6 +1608,7 @@ function vReport(){
       ${sec('⏱ 시간 기록 성장', timesHtml)}
       ${sec('🔵 좋아진 것', impsHtml)}
       ${sec('🩹 잡은 통증 — 이후 재발 없음', resHtml)}
+      ${sec('⚖️ 몸의 변화 (인바디)', ibReportHtml(m))}
       ${!gainsHtml&&!timesHtml&&!impsHtml&&!resHtml?'<div class="divider"></div><div class="muted">같은 운동을 2회 이상 기록하면 변화가 계산됩니다</div>':''}
     </div>
     <button class="btn kakao" onclick="shareReport('${m.id}')">💬 카톡으로 보내기</button>`;
@@ -1522,6 +1621,7 @@ function shareReport(memberId){
   if(r.times.length){ L.push('⏱ 시간 기록'); r.times.forEach(g=>L.push(`· ${g.name} ${g.f}→${g.b}초 (+${g.pct}%)`)); }
   if(r.imps.length){ L.push('🔵 좋아진 것'); r.imps.forEach(x=>L.push(`· ${x.ex} — ${x.iss} (${fmtD(x.date)})`)); }
   if(r.resolved.length){ L.push('🩹 잡은 통증'); r.resolved.forEach(x=>L.push(`· ${x.ex} — ${x.iss}, ${fmtD(x.date)} 이후 재발 없음`)); }
+  const ibL=ibReportLines(m); if(ibL.length){ L.push('⚖️ 몸의 변화 (인바디)'); ibL.forEach(x=>L.push('· '+x)); }
   L.push(`누적 볼륨 ${r.vol.toLocaleString()}kg — 여기까지 함께 온 기록입니다 💪`);
   shareTextRaw(L.join('\n'));
 }
@@ -1813,7 +1913,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v1.9 — 📌 기준 수업 불러오기 · 지난 기록 가져오기(종이 일지) · 수업지 인쇄 · 사진으로 채우기</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.0 — ⚖️ 인바디 · 📌 기준 수업 불러오기 · 지난 기록 가져오기 · 수업지 인쇄 · 사진으로 채우기</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
