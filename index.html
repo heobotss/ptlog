@@ -121,8 +121,9 @@
     #printsheet .cells .bx{display:inline-block; border-bottom:1.5px solid #000; min-width:34px; margin:0 2px}
     #printsheet .foot{margin-top:8px; font-size:10px; color:#555; text-align:center}
     @page{size:A4; margin:7mm}
-    #printsheet .s8h{display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #000; padding-bottom:3px; margin-bottom:4px; font-size:12px}
+    #printsheet .s8h{display:flex; flex-wrap:wrap; gap:2px 12px; justify-content:space-between; align-items:baseline; border-bottom:2px solid #000; padding-bottom:3px; margin-bottom:4px; font-size:12px}
     #printsheet .s8h b{font-size:14px}
+    #printsheet .s8h span{font-size:10px}
     #printsheet .g8{display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(4, 66mm); grid-auto-flow:column; border:1.5px solid #000}
     #printsheet .c8{border:1px solid #000; padding:3px 5px; overflow:hidden; display:flex; flex-direction:column}
     #printsheet .c8 .hd{display:flex; gap:6px; align-items:baseline; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:2px; font-size:10.5px}
