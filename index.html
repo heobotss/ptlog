@@ -1504,7 +1504,7 @@ function vReport(){
   const resHtml=r.resolved.map(x=>`<div style="font-size:13px; margin-bottom:4px">${esc(x.ex)} — ${issueSpan(x.iss)},
     <span class="muted">${fmtD(x.date)} 이후 <b class="num">${x.after}회</b> 수업 재발 없음</span></div>`).join('');
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>변화 리포트</h1><span></span></div>
-    <div class="card"><b>${esc(m.name)}님의 변화 (${fmtD(r.first)} ~ ${fmtD(r.last)})</b>
+    <div class="card"><b>${esc(m.name)}님의 변화 (${r.first.slice(0,4)===r.last.slice(0,4)?fmtD(r.first)+' ~ '+fmtD(r.last):fullD(r.first)+' ~ '+fullD(r.last)})</b>
       <div class="muted">수업 <span class="num">${r.cnt}</span>회 · 누적 볼륨 <span class="num">${r.vol.toLocaleString()}kg</span></div>
       ${sec('💪 근력 상승 TOP 3', gainsHtml)}
       ${sec('⏱ 시간 기록 성장', timesHtml)}
