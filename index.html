@@ -157,7 +157,7 @@
 const LS='ptlog.v1';
 /* 기록 방식: w=무게×횟수, t=시간(초), lv=레벨×횟수, band=밴드×횟수, chk=체크만 */
 const MODES={w:'무게×횟수', t:'시간(초)', lv:'레벨×횟수', band:'밴드×횟수', chk:'체크만'};
-const BANDS=['노랑','빨강','초록','파랑','검정'];
+const BANDS=['노랑','빨강','초록','파랑','보라','검정'];
 /* 특이사항 3색: 빨강=부정(통증·자세), 파랑=개선, 초록=좌우 불균형 */
 const ISSUE_SETS=[
   {cls:'bad', items:['허리 통증','무릎 통증','어깨 통증','자세 무너짐','가동범위 제한','과긴장']},
@@ -1406,6 +1406,7 @@ function sheetLine(exId, e, isRef){
   if(!e) rec= isRef? '' : '첫 기록';
   else{
     rec=sheetRec(e,mode);
+    if(rec && e.unsureNum) rec+='?';
     const mp=memoParts(e.memo);
     warn=[...(e.issues||[]), ...mp.warn]; note=mp.note;
   }
@@ -1447,7 +1448,7 @@ function printSheet8(memberId, startRefId){
   const blanks=Array(Math.max(0,8-cells.length)).fill('<div class="c8"></div>').join('');
   document.getElementById('printsheet').innerHTML=`
     <div class="s8h"><b>수업일지 · ${esc(maskName(m.name))}${m.sex?` (${m.sex})`:''}</b>
-      <span>${n0}~${n0+cells.length-1}회차 · 📌 = 기준 수업 날짜 · 작은 숫자 = 기준일 최고 무게×횟수 · ⚠ = 통증·주의</span></div>
+      <span>${n0}~${n0+cells.length-1}회차 · 📌 = 기준 수업 날짜 · 작은 숫자 = 기준일 최고 무게×횟수 · ⚠ = 통증·주의 · ? = 종이에서 끝까지 확정 못 한 숫자</span></div>
     <div class="g8">${html}${blanks}</div>
     <div class="foot">vivre 수업일지 · 칸 순서: 왼쪽 열 위→아래(1~4), 오른쪽 열(5~8) · 수업 후 「📷 사진으로 채우기」에서 칸 번호를 고르면 자동 입력</div>`;
   window.print();
