@@ -120,12 +120,25 @@
     #printsheet .cells{font-size:12px; letter-spacing:.02em}
     #printsheet .cells .bx{display:inline-block; border-bottom:1.5px solid #000; min-width:34px; margin:0 2px}
     #printsheet .foot{margin-top:8px; font-size:10px; color:#555; text-align:center}
+    @page{size:A4; margin:7mm}
+    #printsheet .s8h{display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #000; padding-bottom:3px; margin-bottom:4px; font-size:12px}
+    #printsheet .s8h b{font-size:14px}
+    #printsheet .g8{display:grid; grid-template-columns:1fr 1fr; grid-template-rows:repeat(4, 66mm); grid-auto-flow:column; border:1.5px solid #000}
+    #printsheet .c8{border:1px solid #000; padding:3px 5px; overflow:hidden; display:flex; flex-direction:column}
+    #printsheet .c8 .hd{display:flex; gap:6px; align-items:baseline; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:2px; font-size:10.5px}
+    #printsheet .c8 .hd .rf{margin-left:auto; font-size:10px; font-weight:700}
+    #printsheet .c8 .ln{font-size:10.5px; line-height:1.3; padding:1.5px 0; border-bottom:1px dotted #999; white-space:nowrap; overflow:hidden}
+    #printsheet .c8 .ln b{font-weight:700}
+    #printsheet .c8 .ln sup{font-size:8.5px; color:#333; font-weight:600}
+    #printsheet .c8.sm .ln{font-size:9px; line-height:1.2; padding:1px 0}
+    #printsheet .c8 .ln.blank{color:transparent}
   }
 </style>
 
 <div id="app"></div>
 <div id="printsheet"></div>
 <input type="file" id="ocr-file" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="ib-file" accept="image/*" capture="environment" style="display:none">
 <div class="nav"><div class="in">
   <button id="nav-home" onclick="go({name:'home'})"><span class="ico">👥</span>회원</button>
   <button id="nav-sch" onclick="go({name:'schedule'})"><span class="ico">🗓</span>시간표</button>
@@ -999,8 +1012,8 @@ function vMember(){
       ?`<button class="btn" onclick="go({name:'session'})">▶ A-${draft.dayIdx} 수업 이어하기 (자동 저장됨)</button>
         <button class="btn subtle" onclick="discardDraft()">진행 중 입력 버리기</button>`
       :`<button class="btn" onclick="startSession('${m.id}')">A-${pr.nextDay} 수업 시작</button>`}
-    <button class="btn ghost" onclick="printSheet('${m.id}')">🖨 수업지 인쇄 — 종이로 수업하기</button>`
-    :'<div class="empty">배정된 프로그램이 없습니다</div>'}
+    <button class="btn ghost" onclick="printSheet8('${m.id}')">🖨 다음 8회 수업지 인쇄 — 종이로 수업하기</button>`
+    :cycleCard(m)}
     ${db.logs.some(l=>l.memberId===m.id)&&!(draft&&draft.memberId===m.id)?`<button class="btn ghost" style="border:1px solid var(--warn); color:var(--warn); background:var(--warn-soft)" onclick="openRefPicker('${m.id}')">📌 기준 수업 불러오기 — 지난 수업과 비교하며 수업</button>`:''}
     <button class="btn ghost" onclick="go({name:'search', id:'${m.id}'})">🔍 운동으로 기록 찾기</button>
     <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
@@ -1236,7 +1249,10 @@ async function photoFill(){
   if(!draft){ toast('수업 화면에서만 쓸 수 있습니다'); return; }
   if(typeof locked==='function' && locked()){ blockEdit(); return; }
   if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
-  document.getElementById('ocr-file').click();
+  modal(`<b>📷 어떤 종이인가요?</b>
+    <div class="muted" style="margin:4px 0 10px">8칸 수업지면 이 수업이 몇 번째 칸인지 골라 주세요 (왼쪽 열 위→아래 1~4, 오른쪽 열 5~8)</div>
+    <div class="grid2" style="grid-template-columns:repeat(4,1fr)">${[1,2,3,4,5,6,7,8].map(n=>`<button class="btn subtle" onclick="window.__ocrCell=${n}; closeModal(); document.getElementById('ocr-file').click()">${n}번 칸</button>`).join('')}</div>
+    <button class="btn ghost" onclick="window.__ocrCell=0; closeModal(); document.getElementById('ocr-file').click()">한 장에 한 수업짜리 종이</button>`);
 }
 document.addEventListener('DOMContentLoaded', ()=>{
   const inp=document.getElementById('ocr-file'); if(!inp) return;
@@ -1251,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const res=await fetch(SB_URL+'/functions/v1/ocr',{method:'POST',
         headers:{'content-type':'application/json','apikey':SB_KEY,
           'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
-        body:JSON.stringify({image:b64, mime:'image/jpeg', exercises:exList,
+        body:JSON.stringify({image:b64, mime:'image/jpeg', exercises:exList, cell:window.__ocrCell||0,
           issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS})});
       if(res.status===404){ closeModal(); toast('판독 서버가 아직 설치되지 않았습니다'); return; }
       if(!res.ok){ const t=await res.text(); throw new Error('서버 '+res.status+' '+t.slice(0,80)); }
@@ -1301,6 +1317,115 @@ function applyOcr(out){
   toast(filled? `판독 완료 — ${filled}개 운동을 채웠습니다. 숫자 확인 후 저장하세요` : '읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요');
 }
 
+/* ───────────────────── 한 바퀴 전 자동 기준 · 8칸 수업지 ─────────────────────
+   대표님 방식: 30회(또는 10회) 한 바퀴를 돌면, 다음 수업의 기준 = 한 바퀴 전 같은 순번 수업.
+   1/1(1회차)…1/30(30회차) 다음 1/31 수업의 기준은 1/1, 그다음은 1/2. 종이는 A4 한 장에 8칸. */
+function memberLogs(m){ return db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||((a.id>b.id)?1:-1)); }
+function cycleOf(m){ return +m.cycle||30; }
+function autoRef(m, ahead){
+  const L=memberLogs(m), cyc=cycleOf(m), n=L.length;
+  if(n<cyc) return null;
+  const idx=n-cyc+((ahead||0)%cyc);
+  return L[idx]||null;
+}
+function cycleCard(m){
+  const L=memberLogs(m), cyc=cycleOf(m), n=L.length;
+  const going=draft&&draft.memberId===m.id;
+  const ref=autoRef(m,0);
+  return `<div class="card">
+      <div class="row"><b>자유 순서 수업 · 한 바퀴 ${cyc}회</b><button class="ichip" onclick="openCycle('${m.id}')">바퀴 길이 바꾸기</button></div>
+      <div class="muted">지금까지 <span class="num">${n}</span>회 · 다음은 <b class="num">${n+1}</b>번째 수업
+        ${ref?` · 자동 기준 <b style="color:var(--warn)">${fullD(ref.date)}</b> (한 바퀴 전 ${n+1-cyc}번째)`:` · 첫 바퀴 진행 중 (${cyc-n}회 남음)`}</div></div>
+    ${going?`<button class="btn" onclick="go({name:'session'})">▶ 수업 이어하기 (자동 저장됨)</button>
+        <button class="btn subtle" onclick="discardDraft()">진행 중 입력 버리기</button>`
+      : ref?`<button class="btn" onclick="startRefSession('${m.id}','${ref.id}')">▶ 다음 수업 시작 — 📌 기준 ${fullD(ref.date)}</button>`
+      : `<div class="muted" style="margin:4px 0 8px">첫 바퀴가 끝나기 전에는 「📌 기준 수업 불러오기」로 비교할 날을 직접 고르세요.</div>`}
+    ${ref?`<button class="btn ghost" onclick="printSheet8('${m.id}')">🖨 다음 8회 수업지 인쇄 — 종이로 수업하기</button>`:''}`;
+}
+function openCycle(memberId){
+  const m=db.members.find(x=>x.id===memberId);
+  modal(`<b>한 바퀴 길이</b><div class="muted" style="margin:4px 0 10px">몇 회를 한 바퀴로 돌리나요? 다음 수업의 기준이 이만큼 앞 수업으로 자동으로 잡힙니다.</div>
+    <div class="grid2">${[10,20,30,40].map(n=>`<button class="btn ${cycleOf(m)===n?'':'subtle'}" onclick="setCycle('${memberId}',${n})">${n}회</button>`).join('')}</div>`);
+}
+function setCycle(memberId,n){ const m=db.members.find(x=>x.id===memberId); m.cycle=n; save(); closeModal(); render(); toast(`한 바퀴 ${n}회로 바꿨습니다`); }
+function sheetPrev(e, mode){
+  if(!e) return '첫 기록';
+  let v='';
+  if(mode==='chk') v=e.chk?'✓':'';
+  else if(mode==='w'){ const bw=bestW(e.sets), br=bestR(e.sets);
+    v=[bw&&setStr(bw), br&&br!==bw&&setStr(br)].filter(Boolean).join(' · ').replace(/kg/g,''); }
+  else v=compactStr(e,mode)||'';
+  const note=[...(e.issues||[]), (e.memo||'').replace(/\(판독\?\)|판독\?/g,'').trim()].filter(Boolean).join(', ');
+  if(note) v+=(v?' ':'')+'⚠'+(note.length>16? note.slice(0,16)+'…' : note);
+  return v||'—';
+}
+function printSheet8(memberId, startRefId){
+  const m=db.members.find(x=>x.id===memberId); if(!m) return;
+  const pr=memberProgress(m), L=memberLogs(m), cells=[];
+  if(startRefId){
+    const j=L.findIndex(l=>l.id===startRefId);
+    for(let i=0;i<8 && j+i<L.length;i++){ const r=L[j+i]; cells.push({ref:r, items:[...new Set((r.entries||[]).map(e=>e.exId))].filter(id=>exOf(id)), ctx:{memberId, refLogId:r.id}}); }
+  } else if(pr){
+    for(let i=0;i<8;i++){
+      const d=((pr.nextDay-1+i)%pr.total)+1, lap=pr.lap+Math.floor((pr.nextDay-1+i)/pr.total);
+      const day=pr.p.days[d-1]||{items:[]};
+      const adds=((m.dayAdds||{})[d]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
+      cells.push({label:'A-'+d, items:[...day.items,...adds], ctx:{memberId, dayIdx:d, lap, progId:m.programId}});
+    }
+  } else {
+    for(let i=0;i<8;i++){ const r=autoRef(m,i); if(!r) break;
+      cells.push({ref:r, items:[...new Set((r.entries||[]).map(e=>e.exId))].filter(id=>exOf(id)), ctx:{memberId, refLogId:r.id}}); }
+  }
+  if(!cells.length){ toast('뽑을 수업이 없습니다 — 첫 바퀴 중이면 「📌 기준 수업 불러오기」에서 날짜를 골라 인쇄하세요'); return; }
+  const n0=L.length+1;
+  const html=cells.map((c,i)=>{
+    const lines=c.items.map(exId=>{
+      const mode=exMode(exId);
+      const p=c.ref? refPrev(c.ref.id, exId) : cmpPrev(c.ctx, exId);
+      return `<div class="ln"><b>${esc(exName(exId))}</b> <sup>${esc(sheetPrev(p&&p.e, mode))}</sup> :</div>`;
+    });
+    const pad=Math.max(0, 9-lines.length);
+    for(let k=0;k<pad;k++) lines.push('<div class="ln blank">.</div>');
+    const rf=c.ref? `📌 ${(+c.ref.date.slice(5,7))}.${(+c.ref.date.slice(8,10))}` : c.label;
+    return `<div class="c8 ${c.items.length>10?'sm':''}"><div class="hd"><span>${n0+i}회 · 날짜: ______</span><span>컨디션: __________</span><span class="rf">${rf}</span></div>${lines.join('')}</div>`;
+  }).join('');
+  const blanks=Array(Math.max(0,8-cells.length)).fill('<div class="c8"></div>').join('');
+  document.getElementById('printsheet').innerHTML=`
+    <div class="s8h"><b>수업일지 · ${esc(maskName(m.name))}${m.sex?` (${m.sex})`:''}</b>
+      <span>${n0}~${n0+cells.length-1}회차 · 칸 모서리 📌 = 기준 수업 날짜 · 위 작은 글씨 = 기준 수업 최고 무게×횟수·특이사항</span></div>
+    <div class="g8">${html}${blanks}</div>
+    <div class="foot">vivre 수업일지 · 칸 순서: 왼쪽 열 위→아래(1~4), 오른쪽 열(5~8) · 수업 후 「📷 사진으로 채우기」에서 칸 번호를 고르면 자동 입력</div>`;
+  window.print();
+}
+
+/* ── 인바디 결과지 사진 판독 ── */
+let _ibPhotoMember=null;
+function ibPhoto(memberId){
+  if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
+  _ibPhotoMember=memberId; document.getElementById('ib-file').click();
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+  const inp=document.getElementById('ib-file'); if(!inp) return;
+  inp.addEventListener('change', async function(){
+    const file=this.files&&this.files[0]; this.value=''; if(!file) return;
+    modal('<b>🔍 인바디 결과지를 읽는 중…</b><div class="muted" style="margin-top:8px">10초쯤 걸립니다.</div>');
+    try{
+      const b64=await shrinkImage(file, 1600, .85);
+      const {data:{session}}=await sb.auth.getSession();
+      const res=await fetch(SB_URL+'/functions/v1/ocr',{method:'POST',
+        headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
+        body:JSON.stringify({mode:'inbody', image:b64, mime:'image/jpeg', exercises:[{name:'_',mode:'w'}]})});
+      const out=await res.json();
+      if(!res.ok||out.error) throw new Error(out.error||res.status);
+      if(out.entries || out.weight===undefined){ closeModal(); toast('판독 서버를 새 버전으로 올려야 합니다 — 대표님께 말씀해 주세요'); return; }
+      const pre={date:out.date||today()};
+      ['weight','smm','fat_kg','fat_pct','bmi','score','visceral','whr','bmr'].forEach(k=>{ const v=ibNum(out[k]); if(v!==null) pre[k]=v; });
+      if(out.memo) pre.memo=String(out.memo);
+      closeModal(); openIbForm(_ibPhotoMember, null, pre);
+    }catch(e){ closeModal(); toast('읽기 실패 — 결과지가 화면에 꽉 차게 다시 찍어 보세요'); console.error(e); }
+  });
+});
+
 /* ───────────────────── 인바디 — 측정 기록·추이·변화 ─────────────────────
    member.inbody = [{date, weight, smm(골격근), fat_kg, fat_pct, bmi, score, visceral, whr, bmr, memo}] */
 const IB_F=[
@@ -1344,7 +1469,8 @@ function vInbody(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
   const L=ibSorted(m);
   const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>⚖️ ${esc(m.name)} 인바디</h1><span class="muted num">${L.length}회</span></div>`;
-  const addBtn=`<button class="btn" onclick="openIbForm('${m.id}')">＋ 측정 기록 추가</button>`;
+  const addBtn=`<button class="btn" onclick="ibPhoto('${m.id}')">📷 인바디 결과지 사진으로 넣기</button>
+    <button class="btn subtle" onclick="openIbForm('${m.id}')">＋ 숫자로 직접 넣기</button>`;
   if(!L.length) return head+`<div class="empty">아직 인바디 기록이 없습니다.<br>결과지를 보고 숫자 몇 개만 넣으면 추이와 변화가 자동으로 나옵니다.</div>`+addBtn;
   const a=L[0], b=L[L.length-1];
   const rows=IB_F.filter(f=>['weight','smm','fat_kg','fat_pct','score','visceral'].includes(f[0])).map(([k,n,u,g])=>{
@@ -1367,13 +1493,13 @@ function vInbody(){
     <div class="muted" style="margin:12px 0 6px">측정 기록 — 누르면 고칠 수 있습니다</div>${list}`;
 }
 let _ibMember=null, _ibDate=null;
-function openIbForm(memberId, date){
+function openIbForm(memberId, date, pre){
   _ibMember=memberId; _ibDate=date||null;
   const m=db.members.find(x=>x.id===memberId);
-  const r=date? (m.inbody||[]).find(x=>x.date===date) : {date:today()};
+  const r=pre? pre : date? (m.inbody||[]).find(x=>x.date===date) : {date:today()};
   const f=(k,n,u)=>`<label class="fld" style="margin:0"><span class="muted">${n}${u?' ('+u+')':''}</span>
     <input type="number" inputmode="decimal" id="ib-${k}" value="${r[k]??''}"></label>`;
-  modal(`<b>${date?'인바디 기록 고치기':'인바디 측정 추가'}</b>
+  modal(`<b>${pre?'📷 사진에서 읽은 값 — 확인 후 저장':date?'인바디 기록 고치기':'인바디 측정 추가'}</b>
     <label class="fld" style="margin-top:10px"><span class="muted">측정일</span><input type="date" id="ib-date" value="${r.date||today()}"></label>
     <div class="grid2">${f('weight','체중','kg')}${f('smm','골격근량','kg')}${f('fat_kg','체지방량','kg')}${f('fat_pct','체지방률','%')}
       ${f('score','인바디 점수','')}${f('visceral','내장지방 레벨','')}${f('bmi','BMI','')}${f('bmr','기초대사량','kcal')}</div>
@@ -1446,7 +1572,7 @@ function openRefActions(logId){
   modal(`<b>📌 기준: ${esc(fullD(ref.date))}</b>${ref.cond?`<div class="muted" style="margin-top:2px">🩺 ${esc(ref.cond)}</div>`:''}
     <div class="card" style="margin:10px 0; max-height:34vh; overflow-y:auto">${list||'<div class="muted">기록 없음</div>'}</div>
     <button class="btn" onclick="closeModal(); startRefSession('${ref.memberId}','${ref.id}')">이 수업 기준으로 오늘 수업 시작</button>
-    <button class="btn ghost" onclick="closeModal(); printSheet('${ref.memberId}','${ref.id}')">🖨 이 수업 기준으로 수업지 인쇄</button>
+    <button class="btn ghost" onclick="closeModal(); printSheet8('${ref.memberId}','${ref.id}')">🖨 이 날부터 8회 수업지 인쇄</button>
     <button class="btn subtle" onclick="openRefPicker('${ref.memberId}')">← 다른 날 고르기</button>`);
 }
 function startRefSession(memberId, refLogId){
@@ -1913,7 +2039,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.0 — ⚖️ 인바디 · 📌 기준 수업 불러오기 · 지난 기록 가져오기 · 수업지 인쇄 · 사진으로 채우기</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.1 — 🖨 8칸 수업지(다음 8회) · 한 바퀴 전 자동 기준 · ⚖️ 인바디 사진 판독 · 📌 기준 수업</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
