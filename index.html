@@ -1359,16 +1359,21 @@ function openCycle(memberId){
     <div class="grid2">${[10,20,30,40].map(n=>`<button class="btn ${+m.cycle===n?'':'subtle'}" onclick="setCycle('${memberId}',${n})">${n}회</button>`).join('')}</div>`);
 }
 function setCycle(memberId,n){ const m=db.members.find(x=>x.id===memberId); if(n) m.cycle=n; else delete m.cycle; save(); closeModal(); render(); toast(n?`한 바퀴 ${n}회로 바꿨습니다`:'마지막 기준을 이어 가도록 바꿨습니다'); }
-function sheetPrev(e, mode){
-  if(!e) return '첫 기록';
+/* 종이 일지 판독 때 붙인 메모(원문·기록 없음·물음표)는 수업지에 찍지 않는다 */
+function sheetNote(t){
+  return (t||'').replace(/원문[^.;]*[.;]?/g,'').replace(/기록\s*없음\.?/g,'').replace(/[^\s(]*미기재(\([^)]*\))?/g,'')
+    .replace(/\(판독\?\)|판독\?|\(\?\)|\?/g,'').replace(/['"‘’“”]/g,'').replace(/\s{2,}/g,' ').replace(/^[\s,.·—\-/]+|[\s,.·—\-/]+$/g,'');
+}
+function sheetPrev(e, mode, isRef){
+  if(!e) return isRef? '' : '첫 기록';
   let v='';
   if(mode==='chk') v=e.chk?'✓':'';
   else if(mode==='w'){ const bw=bestW(e.sets), br=bestR(e.sets);
     v=[bw&&setStr(bw), br&&br!==bw&&setStr(br)].filter(Boolean).join(' · ').replace(/kg/g,''); }
   else v=compactStr(e,mode)||'';
-  const note=[...(e.issues||[]), (e.memo||'').replace(/\(판독\?\)|판독\?/g,'').trim()].filter(Boolean).join(', ');
+  const note=[...(e.issues||[]), sheetNote(e.memo)].filter(Boolean).join(', ');
   if(note) v+=(v?' ':'')+'⚠'+(note.length>16? note.slice(0,16)+'…' : note);
-  return v||'—';
+  return v||(isRef?'':'—');
 }
 function printSheet8(memberId, startRefId){
   const m=db.members.find(x=>x.id===memberId); if(!m) return;
@@ -1393,7 +1398,7 @@ function printSheet8(memberId, startRefId){
     const lines=c.items.map(exId=>{
       const mode=exMode(exId);
       const p=c.ref? refPrev(c.ref.id, exId) : cmpPrev(c.ctx, exId);
-      return `<div class="ln"><b>${esc(exName(exId))}</b> <sup>${esc(sheetPrev(p&&p.e, mode))}</sup> :</div>`;
+      return `<div class="ln"><b>${esc(exName(exId))}</b> <sup>${esc(sheetPrev(p&&p.e, mode, !!c.ref))}</sup> :</div>`;
     });
     const pad=Math.max(0, 9-lines.length);
     for(let k=0;k<pad;k++) lines.push('<div class="ln blank">.</div>');
