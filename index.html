@@ -1361,8 +1361,8 @@ function openCycle(memberId){
 function setCycle(memberId,n){ const m=db.members.find(x=>x.id===memberId); if(n) m.cycle=n; else delete m.cycle; save(); closeModal(); render(); toast(n?`한 바퀴 ${n}회로 바꿨습니다`:'마지막 기준을 이어 가도록 바꿨습니다'); }
 /* 종이 일지 판독 때 붙인 메모(원문·기록 없음·물음표)는 수업지에 찍지 않는다 */
 function sheetNote(t){
-  return (t||'').replace(/원문[^.;]*[.;]?/g,'').replace(/기록\s*없음\.?/g,'').replace(/[^\s(]*미기재(\([^)]*\))?/g,'')
-    .replace(/\(판독\?\)|판독\?|\(\?\)|\?/g,'').replace(/['"‘’“”]/g,'').replace(/\s{2,}/g,' ').replace(/^[\s,.·—\-/]+|[\s,.·—\-/]+$/g,'');
+  return (t||'').replace(/원문[^.;]*[.;]?/g,'').replace(/기록\s*없음\.?/g,'').replace(/(세트\s*수\s*|횟수\s*)?미기재(\([^)]*\)?)?/g,'')
+    .replace(/\(판독\?\)|판독\?|\(\?\)/g,'').replace(/['"‘’“”]/g,'').replace(/\s{2,}/g,' ').replace(/^[\s,.·—\-/]+|[\s,.·—\-/]+$/g,'');
 }
 function sheetPrev(e, mode, isRef){
   if(!e) return isRef? '' : '첫 기록';
