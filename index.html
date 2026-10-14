@@ -647,7 +647,7 @@ function briefData(){
   const rebadge=db.members.filter(m=>!m.demo).filter(m=>{ const p=memberProgress(m); return p&&p.rebadge; }).map(m=>m.name);
   const cut=new Date(); cut.setDate(cut.getDate()-14); const cutoff=dfmt(cut);
   const idle=db.members.filter(m=>!m.demo).map(m=>{
-    const ds=db.logs.filter(l=>l.memberId===m.id).map(l=>l.date||'').sort();
+    const ds=db.logs.filter(l=>l.memberId===m.id && !l.imported).map(l=>l.date||'').sort();
     return {name:m.name, last:ds[ds.length-1]};
   }).filter(x=>x.last && x.last<cutoff);
   return {lastCnt, diff:lastCnt-prevCnt, noshowCnt:noshows.length, nsNames, rebadge, idle};
@@ -1110,7 +1110,7 @@ function vSession(){
   }).join('');
   const editing=!!draft.editLogId;
   return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
-    <h1>${editing?'기록 수정':esc(m.name)} · A-${draft.dayIdx}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
+    <h1>${editing?'기록 수정':esc(m.name)}${draft.dayIdx?' · A-'+draft.dayIdx:''}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
     ${editing?`<div class="muted" style="margin:-8px 0 10px">${esc(m.name)} · ${fmtD(draft.editDate)} 수업을 수정하는 중</div>`
       : draft.lap>1?`<div class="muted" style="margin:-8px 0 10px">${draft.lap}바퀴째 — 지난 바퀴 기록과 비교하며 진행</div>`:''}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
@@ -1296,7 +1296,7 @@ function vLogs(){
   const list=logs.map(l=>{
     const p=db.programs.find(p=>p.id===l.progId);
     return `<div class="card tap" onclick="startEditLog('${l.id}')">
-      <div class="row"><div><b class="num">${fmtD(l.date)}</b> <span class="muted">A-${l.dayIdx} · ${l.lap}바퀴${p?' · '+esc(p.name):''}</span>
+      <div class="row"><div><b class="num">${l.imported?(l.date||'').replace(/-/g,'.'):fmtD(l.date)}</b> <span class="muted">${l.imported?'📥 종이 일지':`A-${l.dayIdx} · ${l.lap}바퀴${p?' · '+esc(p.name):''}`}</span>
         <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div></div><span class="muted">수정 ›</span></div></div>`; }).join('');
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 수업 기록</h1><span class="muted num">${logs.length}회</span></div>
     ${list||'<div class="empty">아직 수업 기록이 없습니다</div>'}`;
@@ -1475,7 +1475,7 @@ function vSearch(){
       const evs=logs.map(({l,e})=>{
         const iss=(e.issues||[]).map(issueSpan).join(', ');
         const rm= mode==='w'? e1rm(e.sets):null;
-        return `<div class="ev"><div class="d">${fmtD(l.date)} · ${l.lap}바퀴 A-${l.dayIdx}${l.cond?' · 🩺'+esc(l.cond):''}</div>
+        return `<div class="ev"><div class="d">${l.imported?(l.date||'').replace(/-/g,'.')+' · 📥 종이 일지':fmtD(l.date)+' · '+l.lap+'바퀴 A-'+l.dayIdx}${l.cond?' · 🩺'+esc(l.cond):''}</div>
           <b class="num">${plainStr(e,mode)||'✓'}</b> ${rm?`<span class="muted num">e1RM ${rm.v}kg</span>`:''}
           ${iss||e.memo?`<br>⚠ ${[iss,esc(e.memo)].filter(Boolean).join(', ')}`:''}</div>`; }).join('');
       body=`<div class="card"><div class="row"><b>${esc(exName(view.exId))}</b>${totalPill}</div>
@@ -1726,10 +1726,17 @@ function vSettings(){
       <div class="muted" style="margin:10px 0 6px">복원 — 백업해둔 내용을 붙여넣고 복원을 누르세요</div>
       <textarea id="restore-box" placeholder="여기에 백업 데이터 붙여넣기"></textarea>
       <button class="btn subtle" style="margin-top:8px" onclick="restore()">복원</button></div>
+    <div class="card"><b>📥 지난 기록 가져오기</b>
+      <div class="muted" style="margin:4px 0 10px">종이 일지를 정리한 가져오기 파일(.json)을 넣으면 회원·운동·수업 기록을 <b>지금 기록에 더합니다</b> — 덮어쓰지 않고, 같은 날짜 기록은 건너뜁니다.</div>
+      <input type="file" id="imp-file" accept=".json,application/json" style="display:none" onchange="importFromFile(this)">
+      <button class="btn ghost" onclick="document.getElementById('imp-file').click()">📂 가져오기 파일 선택</button>
+      <div class="muted" style="margin:10px 0 6px">또는 파일 내용을 붙여넣기</div>
+      <textarea id="import-box" placeholder="가져오기 내용 붙여넣기"></textarea>
+      <button class="btn subtle" style="margin-top:8px" onclick="importFromBox()">가져오기</button></div>
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v1.7 — 수업지 인쇄(종이 수업) · 사진으로 채우기(무료 AI 판독) · 노쇼·주간 브리핑</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v1.8 — 지난 기록 가져오기(종이 일지) · 수업지 인쇄 · 사진으로 채우기 · 노쇼·주간 브리핑</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
@@ -1747,6 +1754,82 @@ function restore(){
   }catch(e){ toast('복원 실패 — 백업 데이터 형식이 아닙니다'); return; }
   ask('현재 데이터를 백업 내용으로 덮어쓸까요?', '복원', ()=>{
     db=migrate(d); draft=db.draft||null; save(); go({name:'home'}); toast('복원됐습니다'); });
+}
+/* ── 지난 기록 가져오기 (ptlog-import-v1) ──
+   종이 일지를 정리한 꾸러미를 지금 기록에 「더한다」. 덮어쓰지 않는다.
+   가져온 수업은 imported 표시 + 프로그램 회차 밖(progId 'import')이라 회차 비교에는 안 끼고,
+   운동별 「최근 기록」·검색 타임라인·변화 리포트에는 그대로 쓰인다. */
+function importFromFile(inp){
+  const f=inp.files&&inp.files[0]; inp.value=''; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>importText(String(rd.result||''));
+  rd.onerror=()=>toast('파일을 읽지 못했습니다');
+  rd.readAsText(f,'utf-8');
+}
+function importFromBox(){ importText((document.getElementById('import-box')||{}).value||''); }
+function importText(s){
+  let pkg;
+  try{ pkg=JSON.parse(s.trim()); }catch(e){ toast('가져오기 실패 — 형식이 맞지 않습니다'); return; }
+  if(!pkg||pkg.format!=='ptlog-import-v1'||!pkg.member||!Array.isArray(pkg.logs)){ toast('가져오기 파일이 아닙니다'); return; }
+  if(typeof locked==='function' && locked()){ blockEdit(); return; }
+  const plan=importPlan(pkg);
+  modal(`<b>📥 기록 가져오기</b>
+    <div style="font-size:14px; margin:10px 0 14px; line-height:1.9">
+      회원 <b>${esc(pkg.member.name)}</b> — ${plan.member?'기존 회원에 더합니다':'<span style="color:var(--blue)">새로 등록합니다</span>'}<br>
+      수업 기록 <b class="num">${plan.newLogs}</b>회 (${esc(plan.first)} ~ ${esc(plan.last)})${plan.dup?` · 이미 있는 날짜 <b class="num">${plan.dup}</b>회는 건너뜀`:''}<br>
+      새 운동 <b class="num">${plan.newEx.length}</b>개 추가${plan.newEx.length?` <span class="muted" style="font-size:12px">(${esc(plan.newEx.slice(0,6).join(', '))}${plan.newEx.length>6?' 외':''})</span>`:''}</div>
+    <div class="grid2"><button class="btn subtle" onclick="closeModal()">취소</button>
+      <button class="btn" onclick="closeModal(); applyImport(window.__impPkg)">가져오기</button></div>`);
+  window.__impPkg=pkg;
+}
+function impKey(s){ return String(s||'').trim().toLowerCase(); }
+function importPlan(pkg){
+  const member=db.members.find(m=>!m.demo && impKey(m.name)===impKey(pkg.member.name));
+  const have=new Set(member? db.logs.filter(l=>l.memberId===member.id).map(l=>l.date):[]);
+  const dates=pkg.logs.map(l=>l.date).filter(Boolean).sort();
+  const newLogs=pkg.logs.filter(l=>l.date && !have.has(l.date)).length;
+  const names=new Set(); pkg.logs.forEach(l=>(l.entries||[]).forEach(e=>e.ex&&names.add(String(e.ex).trim())));
+  const newEx=[...names].filter(n=>!db.exercises.some(x=>impKey(x.name)===impKey(n)));
+  return {member, newLogs, dup:pkg.logs.length-newLogs, newEx, first:dates[0]||'-', last:dates[dates.length-1]||'-'};
+}
+function applyImport(pkg){
+  if(!pkg) return;
+  let m=db.members.find(x=>!x.demo && impKey(x.name)===impKey(pkg.member.name));
+  if(!m){
+    m={id:uid(), name:String(pkg.member.name).trim(), sex:pkg.member.sex||'', note:pkg.member.note||'',
+       programId:null, sessionsDone:0, dayAdds:{}, rereg:0};
+    db.members.push(m);
+  }
+  const spec={}; (pkg.exercises||[]).forEach(a=>{ if(Array.isArray(a)) spec[impKey(a[0])]={tag:a[1],mode:a[2]}; });
+  const exId=name=>{
+    const k=impKey(name); let e=db.exercises.find(x=>impKey(x.name)===k);
+    if(!e){ const sp=spec[k]||{};
+      e={id:uid(), name:String(name).trim(), tag:TAG_ORDER.includes(sp.tag)?sp.tag:'기타',
+         mode:MODES[sp.mode]?sp.mode:'w', custom:true};
+      db.exercises.push(e); }
+    return e.id;
+  };
+  const have=new Set(db.logs.filter(l=>l.memberId===m.id).map(l=>l.date));
+  let added=0;
+  pkg.logs.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(L=>{
+    if(!L.date || have.has(L.date)) return;
+    const entries=(L.entries||[]).map(E=>{
+      const id=exId(E.ex);
+      const sets=[];
+      (E.sets||[]).forEach(s=>{ if(Array.isArray(s)&&num(s[1])>0) sets.push({w:num(s[0]), r:num(s[1])}); });
+      (E.sec||[]).forEach(v=>{ if(num(v)>0) sets.push({sec:num(v)}); });
+      (E.band||[]).forEach(b=>{ if(Array.isArray(b)&&num(b[1])>0) sets.push({band:BANDS.includes(b[0])?b[0]:BANDS[0], r:num(b[1])}); });
+      const o={exId:id, sets, issues:(E.issues||[]).filter(x=>typeof x==='string'), memo:String(E.memo||'').trim()};
+      if(E.chk) o.chk=true;
+      return o;
+    }).filter(e=>e.sets.length||e.chk||e.issues.length||e.memo);
+    if(!entries.length) return;
+    db.logs.push({id:uid(), memberId:m.id, dayIdx:0, lap:0, date:L.date, cond:String(L.cond||'').trim(),
+      progId:'import', imported:true, entries});
+    have.add(L.date); added++;
+  });
+  save(); go({name:'logs', id:m.id});
+  toast(`가져오기 완료 — 수업 ${added}회를 더했습니다`);
 }
 function clearDemo(){
   ask('예시 회원과 예시 기록을 삭제할까요?', '삭제', ()=>{
