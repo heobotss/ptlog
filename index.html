@@ -909,7 +909,7 @@ function renderAdmin(){
           <div class="stat"><div class="muted">이번 달 수업</div><div class="v num">${totMonth}회</div></div>
           <div class="stat"><div class="muted">전체 회원</div><div class="v num">${totMembers}명</div></div>
         </div>
-        <div class="muted" style="margin:8px 0 4px">월별 수업 (센터 합계 · 누적 ${totAll}회 · 재등록 누적 <b class="num" style="color:var(--good)">${totRereg}</b>회)</div>
+        <div class="muted" style="margin:8px 0 4px">월별 수업 (합계 · 누적 ${totAll}회 · 재등록 누적 <b class="num" style="color:var(--good)">${totRereg}</b>회)</div>
         ${monthHtml||'<div class="muted">아직 기록 없음</div>'}</div>
       <div class="muted" style="margin:14px 0 6px">${title} 트레이너 ${rows.length}명 — 이번 달 수업 많은 순</div>
       ${trainerHtml||`<div class="empty">${grp==='student'?'아직 가입한 수강생이 없습니다':'아직 가입한 트레이너가 없습니다'}</div>`}
