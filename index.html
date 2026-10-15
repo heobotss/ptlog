@@ -63,7 +63,9 @@
   .setrow input,.setrow select{text-align:center; padding:9px 6px; font-size:14.5px}
   .setrow .del{background:none; border:none; color:var(--sub); font-size:16px; cursor:pointer; padding:4px}
   .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
-  .pk-row{padding:11px 2px; border-bottom:1px solid var(--line)}
+  .pk-row{padding:9px 2px; border-bottom:1px solid var(--line)}
+  .pk-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+  .pk-top .pk-rec{margin-top:0; text-align:right; flex-shrink:0; max-width:48%}
   .pk-row:last-child{border-bottom:none}
   .pk-ex{font-size:18px; font-weight:700; line-height:1.3}
   .pk-rec{font-size:18px; font-weight:700; color:var(--blue); margin-top:2px}
@@ -1537,7 +1539,7 @@ function peekLine(exId, e, isRef){
   }
   const recHtml= rec? `<div class="pk-rec num">${esc(rec)}</div>`
     : `<div class="pk-rec none">${e? '기록 없음' : isRef? '그날 기록 없음' : '첫 기록'}</div>`;
-  return `<div class="pk-row"><div class="pk-ex">${esc(exName(exId))}</div>${recHtml}
+  return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div>${recHtml}</div>
     ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
     ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
 }
