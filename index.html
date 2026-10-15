@@ -1578,8 +1578,15 @@ function peekLine(exId, e, isRef, memberId){
     const mp=memoParts(e.memo); warn=[...(e.issues||[]), ...mp.warn]; note=mp.note;
   }
   const best=bestTxt(memberId, exId);
+  /* 기준일에 숫자가 없으면 옮겨 적을 자리(파란 숫자)에 바로 최고 기록을 넣는다 */
+  if(!rec && best && best.kind!=='last'){
+    return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div><div class="pk-rec num">${esc(best.rec)}</div></div>
+      <div class="pk-best">🏆 ${bestWord(best)} 기록 · ${fullD(best.date)} <span class="muted">(${isRef?'기준일':'지난 수업'}엔 숫자 없음)</span></div>
+      ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
+      ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
+  }
   const recHtml= rec? `<div class="pk-rec num">${esc(rec)}</div>`
-    : `<div class="pk-rec none">${best? (isRef?'기준일 기록 없음':'지난 기록 없음') : e? '기록 없음' : isRef? '기록 없음' : '첫 기록'}</div>`;
+    : `<div class="pk-rec none">${e? '기록 없음' : isRef? '기록 없음' : '첫 기록'}</div>`;
   from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막으로 한 날 · ${fullD(best.date)}</div>`
     : (rec && best.e===e)? `<div class="pk-best">🏆 이 날이 ${bestWord(best)} 기록 · ${fullD(best.date)}</div>`
     : `<div class="pk-best">🏆 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</div>`;
