@@ -1272,7 +1272,7 @@ async function loadOcrQuota(){
 function ocrUnlimited(){ return !!(ocrQuota&&(ocrQuota.member||ocrQuota.admin)); }
 function ocrLeftText(){
   if(!ocrQuota) return '';
-  if(ocrUnlimited()) return '사진 판독 무제한 (멤버십)';
+  if(ocrUnlimited()) return ocrQuota.admin? '사진 판독 무제한 (관리자)' : '사진 판독 무제한 (멤버십)';
   return `이번 달 무료 사진 판독 <b>${ocrQuota.left??Math.max(0,ocrQuota.limit-ocrQuota.used)}장</b> 남음 (한 달 ${ocrQuota.limit}장)`;
 }
 function ocrLimitModal(){
