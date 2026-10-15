@@ -2111,6 +2111,8 @@ function renderPickList(q){
 function vSettings(){
   const cnt=db.logs.length;
   return `<div class="top"><h1>설정</h1><span></span></div>
+    <a class="btn ghost" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px" href="manual.html" target="_blank" rel="noopener">📖 사용설명서 보기</a>
+    ${ocrQuota?`<div class="muted" style="font-size:13px;margin:-4px 0 12px;text-align:center">기록은 평생 무료 · ${ocrLeftText()}</div>`:''}
     ${user?`<div class="card"><b>계정</b>
       <div class="muted" style="margin:4px 0 2px">${esc(user.email||'')}</div>
       <div class="muted" id="sync-dot" style="font-size:12px; margin-bottom:10px"></div>
