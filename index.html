@@ -1555,7 +1555,8 @@ function vPeek(){
   return head+`<div class="card">
       <div class="row"><b style="font-size:17px">${k===0?'오늘':k===1?'다음':(k+1)+'번째 뒤'} 수업 · <span class="num">${n0+k}</span>회</b><span class="muted num">${k+1}/${cells.length}</span></div>
       <div style="margin-top:4px">${label}</div>
-      ${c.ref&&c.ref.cond?`<div class="muted" style="margin-top:4px">그날 컨디션: ${esc(c.ref.cond)}</div>`:''}
+      ${(()=>{ const cd=(c.ref&&c.ref.cond||'').replace(/\[[^\]]*\]/g,'').replace(/📌\s*기준\s*[\d.\-]+/g,'').replace(/\s{2,}/g,' ').trim();
+        return cd?`<div class="muted" style="margin-top:4px">그날 컨디션: ${esc(cd)}</div>`:''; })()}
       <div class="muted" style="font-size:12.5px; margin-top:6px">운동 아래 파란 숫자 = 기준일 최고 무게×횟수 · ⚠ = 통증·주의</div></div>
     <div class="card">${rows||'<div class="muted">운동이 없습니다</div>'}</div>
     ${nav}
