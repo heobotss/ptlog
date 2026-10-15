@@ -402,7 +402,7 @@ function renderLogin(msg){
   document.getElementById('app').innerHTML=`
    <div style="max-width:360px; margin:56px auto 0">
     <h1 style="text-align:center; font-size:26px">🏋️ 수업일지</h1>
-    <p class="muted" style="text-align:center; margin:6px 0 24px">vivre 트레이너 로그인</p>
+    <p class="muted" style="text-align:center; margin:6px 0 24px">허봇스 트레이너 로그인</p>
     <label class="fld"><span class="muted">이메일</span><input type="text" id="lg-email" inputmode="email" autocomplete="username" placeholder="name@example.com"></label>
     <label class="fld"><span class="muted">비밀번호 (6자 이상)</span><input type="password" id="lg-pw" autocomplete="current-password" placeholder="비밀번호"></label>
     ${msg?`<div class="warn" style="margin-bottom:10px">${msg}</div>`:''}
@@ -524,7 +524,7 @@ async function bootData(){
   draft=db.draft||null; pdraft=null; booted=true;
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
-  checkAccess();
+  checkAccess(); loadOcrQuota();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
   loadScorecard();
@@ -1249,13 +1249,49 @@ function printSheet(memberId, refLogId){
   window.print();
 }
 
+/* ───────────────────── AI 사진 판독 한도 (2026-10-15 대표님 결정) ─────────────────────
+   기록은 평생 무료. AI 사진 판독(수업지·인바디)만 한 달 10장 무료, 그 이상은 멤버십.
+   세는 건 서버(ocr 함수)가 한다 — 앱은 남은 장수를 보여주고, 막히면 안내만. */
+let ocrQuota=null;   /* {used, limit, left, member, admin} */
+/* 변화 리포트 카톡 공유는 멤버십 기능 — 멤버십 판매(토스 카드사 심사 뒤)가 열리면 true 로 바꾼다 */
+const MEMBERSHIP_OPEN=false;
+async function ocrCall(body){
+  const {data:{session}}=await sb.auth.getSession();
+  const res=await fetch(SB_URL+'/functions/v1/ocr',{method:'POST',
+    headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
+    body:JSON.stringify(body)});
+  let out={}; try{ out=await res.json(); }catch(e){}
+  if(out && out._quota){ ocrQuota={...(ocrQuota||{}), used:out._quota.used, limit:out._quota.limit, left:Math.max(0,out._quota.limit-out._quota.used)}; delete out._quota; }
+  if(res.status===402 && out && out.error==='limit'){ ocrQuota=out; return {limit:true}; }
+  return {res, out};
+}
+async function loadOcrQuota(){
+  if(!user||!sb) return;
+  try{ const r=await ocrCall({mode:'status'}); if(r.res&&r.res.ok&&r.out&&r.out.limit) ocrQuota=r.out; }catch(e){}
+}
+function ocrUnlimited(){ return !!(ocrQuota&&(ocrQuota.member||ocrQuota.admin)); }
+function ocrLeftText(){
+  if(!ocrQuota) return '';
+  if(ocrUnlimited()) return '사진 판독 무제한 (멤버십)';
+  return `이번 달 무료 사진 판독 <b>${ocrQuota.left??Math.max(0,ocrQuota.limit-ocrQuota.used)}장</b> 남음 (한 달 ${ocrQuota.limit}장)`;
+}
+function ocrLimitModal(){
+  modal(`<b>이번 달 무료 사진 판독 ${ocrQuota&&ocrQuota.limit||10}장을 다 쓰셨어요</b>
+    <div class="muted" style="margin:10px 0 0;line-height:1.7">기록은 지금처럼 <b>직접 입력으로 계속 무료</b>입니다. 사진 판독은 다음 달 1일에 다시 ${ocrQuota&&ocrQuota.limit||10}장이 채워져요.<br>
+    ${MEMBERSHIP_OPEN?'사진 판독을 제한 없이 쓰려면 허봇스 멤버십을 이용해 주세요.':'제한 없이 쓰는 허봇스 멤버십은 곧 열립니다.'}</div>
+    <button class="btn" style="margin-top:14px" onclick="closeModal()">알겠어요</button>`);
+}
+function ocrBlocked(){ return !!(ocrQuota && !ocrUnlimited() && (ocrQuota.used>=ocrQuota.limit)); }
+
 /* ───────────────────── 사진 판독 — 종이 일지를 찍으면 오늘 기록이 채워진다 ─────────────────────
    사진은 서버(Supabase 함수)를 거쳐 무료 AI(Gemini)가 읽는다. 결과는 반드시 확인 후 저장. */
 async function photoFill(){
   if(!draft){ toast('수업 화면에서만 쓸 수 있습니다'); return; }
   if(typeof locked==='function' && locked()){ blockEdit(); return; }
   if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
+  if(ocrBlocked()){ ocrLimitModal(); return; }
   modal(`<b>📷 어떤 종이인가요?</b>
+    ${ocrQuota?`<div class="muted" style="margin:4px 0 0">${ocrLeftText()}</div>`:''}
     <div class="muted" style="margin:4px 0 10px">8칸 수업지면 이 수업이 몇 번째 칸인지 골라 주세요 (왼쪽 열 위→아래 1~4, 오른쪽 열 5~8)</div>
     <div class="grid2" style="grid-template-columns:repeat(4,1fr)">${[1,2,3,4,5,6,7,8].map(n=>`<button class="btn subtle" onclick="window.__ocrCell=${n}; closeModal(); document.getElementById('ocr-file').click()">${n}번 칸</button>`).join('')}</div>
     <button class="btn ghost" onclick="window.__ocrCell=0; closeModal(); document.getElementById('ocr-file').click()">한 장에 한 수업짜리 종이</button>`);
@@ -1268,18 +1304,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
     modal('<b>🔍 사진을 읽는 중…</b><div class="muted" style="margin-top:8px">10초쯤 걸립니다. 화면을 닫지 마세요.</div>');
     try{
       const b64=await shrinkImage(file, 1400, .82);
-      const {data:{session}}=await sb.auth.getSession();
       const exList=draft.entries.map(en=>({name:exName(en.exId), mode:en.mode}));
-      const res=await fetch(SB_URL+'/functions/v1/ocr',{method:'POST',
-        headers:{'content-type':'application/json','apikey':SB_KEY,
-          'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
-        body:JSON.stringify({image:b64, mime:'image/jpeg', exercises:exList, cell:window.__ocrCell||0,
-          issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS})});
+      const r=await ocrCall({image:b64, mime:'image/jpeg', exercises:exList, cell:window.__ocrCell||0,
+          issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS});
+      if(r.limit){ ocrLimitModal(); return; }
+      const {res,out}=r;
       if(res.status===404){ closeModal(); toast('판독 서버가 아직 설치되지 않았습니다'); return; }
-      if(!res.ok){ const t=await res.text(); throw new Error('서버 '+res.status+' '+t.slice(0,80)); }
-      const out=await res.json();
-      if(out.error) throw new Error(out.error);
+      if(!res.ok||out.error) throw new Error('서버 '+res.status+' '+(out.error||''));
       applyOcr(out);
+      if(ocrQuota&&!ocrUnlimited()) toast(`이번 달 무료 판독 ${ocrQuota.left}장 남았습니다`);
     }catch(e){ closeModal(); toast('판독 실패 — 밝은 곳에서 똑바로 다시 찍어보세요'); console.error(e); }
   });
 });
@@ -1459,6 +1492,7 @@ function printSheet8(memberId, startRefId){
 let _ibPhotoMember=null;
 function ibPhoto(memberId){
   if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
+  if(ocrBlocked()){ ocrLimitModal(); return; }
   _ibPhotoMember=memberId; document.getElementById('ib-file').click();
 }
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -1468,11 +1502,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     modal('<b>🔍 인바디 결과지를 읽는 중…</b><div class="muted" style="margin-top:8px">10초쯤 걸립니다.</div>');
     try{
       const b64=await shrinkImage(file, 1600, .85);
-      const {data:{session}}=await sb.auth.getSession();
-      const res=await fetch(SB_URL+'/functions/v1/ocr',{method:'POST',
-        headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
-        body:JSON.stringify({mode:'inbody', image:b64, mime:'image/jpeg', exercises:[{name:'_',mode:'w'}]})});
-      const out=await res.json();
+      const r=await ocrCall({mode:'inbody', image:b64, mime:'image/jpeg', exercises:[{name:'_',mode:'w'}]});
+      if(r.limit){ ocrLimitModal(); return; }
+      const {res,out}=r;
       if(!res.ok||out.error) throw new Error(out.error||res.status);
       if(out.entries || out.weight===undefined){ closeModal(); toast('판독 서버를 새 버전으로 올려야 합니다 — 대표님께 말씀해 주세요'); return; }
       const pre={date:out.date||today()};
@@ -1526,7 +1558,7 @@ function vInbody(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
   const L=ibSorted(m);
   const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>⚖️ ${esc(m.name)} 인바디</h1><span class="muted num">${L.length}회</span></div>`;
-  const addBtn=`<button class="btn" onclick="ibPhoto('${m.id}')">📷 인바디 결과지 사진으로 넣기</button>
+  const addBtn=`${ocrQuota?`<div class="muted" style="font-size:12.5px;margin:0 0 6px">${ocrLeftText()}</div>`:''}<button class="btn" onclick="ibPhoto('${m.id}')">📷 인바디 결과지 사진으로 넣기</button>
     <button class="btn subtle" onclick="openIbForm('${m.id}')">＋ 숫자로 직접 넣기</button>`;
   if(!L.length) return head+`<div class="empty">아직 인바디 기록이 없습니다.<br>결과지를 보고 숫자 몇 개만 넣으면 추이와 변화가 자동으로 나옵니다.</div>`+addBtn;
   const a=L[0], b=L[L.length-1];
@@ -1797,6 +1829,10 @@ function vReport(){
     <button class="btn kakao" onclick="shareReport('${m.id}')">💬 카톡으로 보내기</button>`;
 }
 function shareReport(memberId){
+  if(MEMBERSHIP_OPEN && !(ocrQuota&&(ocrQuota.member||ocrQuota.admin))){
+    modal(`<b>변화 리포트 카톡 공유는 멤버십 기능입니다</b>
+      <div class="muted" style="margin:10px 0 0;line-height:1.7">리포트 화면은 지금처럼 무료로 보실 수 있어요. 회원에게 카톡으로 보내는 기능은 허봇스 멤버십에서 쓸 수 있습니다.</div>
+      <button class="btn" style="margin-top:14px" onclick="closeModal()">알겠어요</button>`); return; }
   const m=db.members.find(x=>x.id===memberId); const r=reportData(m); if(!r) return;
   const name=m.name.replace(' (예시)','');
   const L=[`[${name}님의 변화 리포트 — ${fmtD(r.first)}~${fmtD(r.last)} · 수업 ${r.cnt}회]`];
@@ -2096,7 +2132,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.1 — 🖨 8칸 수업지(다음 8회) · 한 바퀴 전 자동 기준 · ⚖️ 인바디 사진 판독 · 📌 기준 수업</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.2 — 기록 평생 무료 · AI 사진 판독 월 10장 무료 · 🖨 8칸 수업지 · 한 바퀴 전 자동 기준</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
