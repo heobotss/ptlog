@@ -1501,6 +1501,17 @@ function bestTxt(memberId, exId){
   const r=sheetRec(b.e, mode); if(!r) return null;
   return {rec:r+(b.e.unsureNum?'?':''), date:b.date, e:b.e, kind: mode==='band'?'recent':'best'};
 }
+/* 숫자 최고 기록이 없는 운동(측정·메모로만 적는 Grip·Treadmill 등) → 마지막으로 적은 기록·메모 */
+function lastNote(memberId, exId){
+  const mode=exMode(exId); let out=null;
+  db.logs.filter(l=>l.memberId===memberId).forEach(l=>(l.entries||[]).forEach(e=>{
+    if(e.exId!==exId) return;
+    const mp=memoParts(e.memo), r=(mode!=='chk'? sheetRec(e,mode):'');
+    const txt=[r, ...mp.warn.map(w=>'⚠ '+w), ...mp.note].filter(Boolean).join(' / ');
+    if(txt && (!out || (l.date||'')>=out.date)) out={txt, date:l.date};
+  }));
+  return out;
+}
 function bestWord(b){ return b.kind==='last'? '마지막으로 한 날' : b.kind==='recent'? '최근' : '최고'; }
 function sheetLine(exId, e, isRef){
   const mode=exMode(exId);
@@ -1512,10 +1523,15 @@ function sheetLine(exId, e, isRef){
     warn=[...(e.issues||[]), ...mp.warn]; note=mp.note;
   }
   const best=bestTxt(_sheetMember, exId);
-  if(best){
-    const w= best.kind==='last'? '마지막' : bestWord(best);
-    if(best.kind==='last' || (rec && best.e===e)) rec=(rec? rec+' · ' : '')+`${w}(${shortD(best.date)})`;
-    else rec=(rec? rec+' · ' : '')+`${w} ${best.rec}(${shortD(best.date)})`;
+  const numBest= best && best.kind!=='last';
+  if(numBest){
+    if(rec && best.e===e) rec+=` · ${bestWord(best)}(${shortD(best.date)})`;
+    else rec=(rec? rec+' · ' : '')+`${bestWord(best)} ${best.rec}(${shortD(best.date)})`;
+  } else {
+    /* 숫자 최고가 없는 운동(체크·측정 메모) → 마지막으로 적은 기록을 붙인다 */
+    const ln= _sheetMember? lastNote(_sheetMember, exId) : null;
+    if(ln) rec=(rec? rec+' · ' : '')+`마지막 ${ln.txt}(${shortD(ln.date)})`;
+    else if(best) rec=(rec? rec+' · ' : '')+`마지막(${shortD(best.date)})`;
   }
   if(!rec && !e) rec= isRef? '' : '첫 기록';
   const sub=[warn.length?`<b>⚠ ${esc(warn.join(' / '))}</b>`:'', note.length? esc(note.join(' / ')) :''].filter(Boolean).join(' &nbsp;');
@@ -1585,9 +1601,17 @@ function peekLine(exId, e, isRef, memberId){
       ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
       ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
   }
+  /* 숫자 최고가 없는 운동(체크·측정 메모) → 마지막으로 적은 기록을 옮겨 적을 자리에 */
+  const ln= (!best || best.kind==='last')? lastNote(memberId, exId) : null;
+  if(!rec && ln){
+    return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div><div class="pk-rec num" style="font-size:15.5px">${esc(ln.txt)}</div></div>
+      <div class="pk-best">🕘 마지막 기록 · ${fullD(ln.date)} <span class="muted">(${isRef?'기준일':'지난 수업'}엔 기록 없음)</span></div>
+      ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
+      ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
+  }
   const recHtml= rec? `<div class="pk-rec num">${esc(rec)}</div>`
     : `<div class="pk-rec none">${e? '기록 없음' : isRef? '기록 없음' : '첫 기록'}</div>`;
-  from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막으로 한 날 · ${fullD(best.date)}</div>`
+  from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막 기록 · ${fullD(ln?ln.date:best.date)}${ln?` — ${esc(ln.txt)}`:''}</div>`
     : (rec && best.e===e)? `<div class="pk-best">🏆 이 날이 ${bestWord(best)} 기록 · ${fullD(best.date)}</div>`
     : `<div class="pk-best">🏆 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</div>`;
   return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div>${recHtml}</div>${from}
