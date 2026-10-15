@@ -1134,10 +1134,10 @@ function vSession(){
     const done=entryHasRecord(en,mode);
     /* 접힌 상태 오른쪽: 종이 일지의 위첨자처럼 지난 최고 기록을 작게 */
     const best=bestTxt(draft.memberId, en.exId);
-    const bestPeek= best && !(prev && prev.e===best.e)? ` · 🏆${best.rec}` : '';
+    const bestPeek= best && best.kind!=='last' && !(prev && prev.e===best.e)? ` · 🏆${best.rec}` : '';
     const peek = done? `<span class="peek done">✓ 기록됨</span>`
       : prev? `<span class="peek">${prev.isRef?'📌':'지난'} ${mode==='chk'?'✓ '+(prev.label.split(' · ')[1]||prev.label) : compactStr(prev.e,mode)}${bestPeek}</span>`
-      : best? `<span class="peek">🏆${best.rec}</span>` : `<span class="peek">첫 기록</span>`;
+      : best&&best.kind!=='last'? `<span class="peek">🏆${best.rec}</span>` : `<span class="peek">첫 기록</span>`;
     let body='';
     if(en.open){
       let prevHtml='';
@@ -1147,8 +1147,8 @@ function vSession(){
         prevHtml=`<div class="prev"><span class="muted">${prev.isRef?'📌 기준 수업':prev.samePos?'지난 바퀴 같은 회차':'참고'} · ${prev.label}</span><br>
           ${mode==='chk'? '✓ 완료': detailStr(prev.e,mode)}
           ${iss||memoTxt?`<br>⚠ ${[iss,memoTxt].filter(Boolean).join(', ')}`:''}
-          ${best?`<br><span style="color:var(--warn)">🏆 전체 최고 <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}${prev.e===best.e?' (이 날)':''}</span>`:''}</div>`;
-      } else prevHtml= best? `<div class="prev"><span style="color:var(--warn)">🏆 전체 최고 <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</span></div>`
+          ${best?`<br><span style="color:var(--warn)">${best.kind==='last'?`🕘 마지막으로 한 날 · ${fullD(best.date)}`:`🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}${prev.e===best.e?' (이 날)':''}`}</span>`:''}</div>`;
+      } else prevHtml= best&&best.kind!=='last'? `<div class="prev"><span style="color:var(--warn)">🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</span></div>`
         : `<div class="prev muted">이전 기록 없음 — 오늘이 기준점이 됩니다</div>`;
       const chips=ISSUE_SETS.map(g=>g.items.map(p=>
         `<button class="ichip ${en.issues.includes(p)?'on-'+g.cls:''}" onclick="togIssue(${i},'${p}')">${p}</button>`).join('')).join('');
@@ -1492,13 +1492,16 @@ function bestEver(memberId, exId){
   return bs>=0? best : null;
 }
 function shortD(d){ const p=(d||'').split('-'); return p.length===3? `${p[0].slice(2)}.${+p[1]}.${+p[2]}` : ''; }
-/* 항상 같이 보여 줄 「전체 최고 + 날짜」 — 무게·시간·레벨 운동만 (체크·밴드는 최고가 의미 없음) */
+/* 항상 같이 보여 줄 「전체 최고 + 날짜」 — 모든 운동에 날짜를 붙인다 (10-15 대표님 지시)
+   무게·시간·레벨 = 최고 기록, 밴드 = 가장 최근 기록, 체크만 하는 운동 = 마지막으로 한 날 */
 function bestTxt(memberId, exId){
-  const mode=exMode(exId); if(!memberId || !['w','t','lv'].includes(mode)) return null;
+  const mode=exMode(exId); if(!memberId) return null;
   const b=bestEver(memberId, exId); if(!b) return null;
+  if(mode==='chk') return {rec:'', date:b.date, e:b.e, kind:'last'};
   const r=sheetRec(b.e, mode); if(!r) return null;
-  return {rec:r+(b.e.unsureNum?'?':''), date:b.date, e:b.e};
+  return {rec:r+(b.e.unsureNum?'?':''), date:b.date, e:b.e, kind: mode==='band'?'recent':'best'};
 }
+function bestWord(b){ return b.kind==='last'? '마지막으로 한 날' : b.kind==='recent'? '최근' : '최고'; }
 function sheetLine(exId, e, isRef){
   const mode=exMode(exId);
   let rec, warn=[], note=[];
@@ -1510,8 +1513,9 @@ function sheetLine(exId, e, isRef){
   }
   const best=bestTxt(_sheetMember, exId);
   if(best){
-    if(rec && best.e===e) rec+=' (최고)';
-    else rec=(rec? rec+' · ' : '')+`최고 ${best.rec}(${shortD(best.date)})`;
+    const w= best.kind==='last'? '마지막' : bestWord(best);
+    if(best.kind==='last' || (rec && best.e===e)) rec=(rec? rec+' · ' : '')+`${w}(${shortD(best.date)})`;
+    else rec=(rec? rec+' · ' : '')+`${w} ${best.rec}(${shortD(best.date)})`;
   }
   if(!rec && !e) rec= isRef? '' : '첫 기록';
   const sub=[warn.length?`<b>⚠ ${esc(warn.join(' / '))}</b>`:'', note.length? esc(note.join(' / ')) :''].filter(Boolean).join(' &nbsp;');
@@ -1559,7 +1563,7 @@ function printSheet8(memberId, startRefId){
   const blanks=Array(Math.max(0,8-cells.length)).fill('<div class="c8"></div>').join('');
   document.getElementById('printsheet').innerHTML=`
     <div class="s8h"><b>수업일지 · ${esc(maskName(m.name))}${m.sex?` (${m.sex})`:''}</b>
-      <span>${n0}~${n0+cells.length-1}회차 · 📌 = 기준 수업 날짜 · 작은 숫자 = 기준일 최고 무게×횟수 · 「최고」 = 전체 기록 중 최고와 그 날짜 · ⚠ = 통증·주의 · ? = 확정 못 한 숫자</span></div>
+      <span>${n0}~${n0+cells.length-1}회차 · 📌 = 기준 수업 날짜 · 작은 숫자 = 기준일 최고 무게×횟수 · 「최고」 = 전체 기록 중 최고와 그 날짜(체크 운동은 마지막으로 한 날) · ⚠ = 통증·주의 · ? = 확정 못 한 숫자</span></div>
     <div class="g8">${html}${blanks}</div>
     <div class="foot">허봇스 수업일지 · 칸 순서: 왼쪽 열 위→아래(1~4), 오른쪽 열(5~8) · 수업 후 「📷 사진으로 채우기」에서 칸 번호를 고르면 자동 입력</div>`;
   window.print();
@@ -1576,8 +1580,9 @@ function peekLine(exId, e, isRef, memberId){
   const best=bestTxt(memberId, exId);
   const recHtml= rec? `<div class="pk-rec num">${esc(rec)}</div>`
     : `<div class="pk-rec none">${best? (isRef?'기준일 기록 없음':'지난 기록 없음') : e? '기록 없음' : isRef? '기록 없음' : '첫 기록'}</div>`;
-  from= best? (rec && best.e===e? `<div class="pk-best">🏆 이 날이 전체 최고 기록</div>`
-    : `<div class="pk-best">🏆 최고 <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</div>`) : '';
+  from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막으로 한 날 · ${fullD(best.date)}</div>`
+    : (rec && best.e===e)? `<div class="pk-best">🏆 이 날이 ${bestWord(best)} 기록 · ${fullD(best.date)}</div>`
+    : `<div class="pk-best">🏆 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</div>`;
   return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div>${recHtml}</div>${from}
     ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
     ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
@@ -1598,7 +1603,7 @@ function vPeek(){
       <div style="margin-top:4px">${label}</div>
       ${(()=>{ const cd=(c.ref&&c.ref.cond||'').replace(/\[[^\]]*\]/g,'').replace(/📌\s*기준\s*[\d.\-]+/g,'').replace(/\s{2,}/g,' ').trim();
         return cd?`<div class="muted" style="margin-top:4px">그날 컨디션: ${esc(cd)}</div>`:''; })()}
-      <div class="muted" style="font-size:12.5px; margin-top:6px">파란 숫자 = 기준일 최고 무게×횟수 · 🏆 = 전체 기록 중 최고와 그 날짜 · ⚠ = 통증·주의</div></div>
+      <div class="muted" style="font-size:12.5px; margin-top:6px">파란 숫자 = 기준일 기록 · 🏆 = 전체 기록 중 최고와 그 날짜 · 🕘 = 마지막으로 한 날 · ⚠ = 통증·주의</div></div>
     <div class="card">${rows||'<div class="muted">운동이 없습니다</div>'}</div>
     ${nav}
     <div class="muted" style="font-size:12.5px; margin-top:12px; line-height:1.6">종이에 옮겨 적고 수업한 뒤, 수업 화면에서 「📷 사진으로 채우기」 → 「한 장에 한 수업짜리 종이」로 찍으면 기록이 들어갑니다.</div>`;
