@@ -380,6 +380,10 @@ async function pushNow(){
 async function pullNow(){
   if(!user||!sb||sync.dirty) return; /* 이 기기에 미전송 변경이 있으면 덮어쓰지 않음 */
   try{
+    /* 시각만 먼저 본다 — 바뀌었을 때만 기록 전체를 받는다 (서버 전송량 = 서버 비용) */
+    const {data:head,error:e1}=await sb.from('trainer_data').select('updated_at').eq('user_id',user.id).maybeSingle();
+    if(e1) throw e1;
+    if(head && head.updated_at===sync.serverAt){ sync.offline=false; updateSyncBadge(); return; }
     const {data,error}=await sb.from('trainer_data').select('data,updated_at').eq('user_id',user.id).maybeSingle();
     if(error) throw error;
     if(data && data.updated_at!==sync.serverAt){ /* 다른 기기에서 저장한 최신본 반영 */
