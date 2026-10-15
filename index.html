@@ -847,7 +847,7 @@ function calcTrainer(row){
   logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k) byMonth[k]=(byMonth[k]||0)+1; });
   const rereg=members.reduce((a,m)=>a+(m.rereg||0),0);
   const noshow=(d.bookings||[]).filter(b=>(b.date||'').slice(0,7)===ym && b.status==='noshow').length;
-  return {noshow, name:(d.trainerName||'').trim(), email:row.email||'(이메일 미기록)',
+  return {uid:row.user_id, noshow, name:(d.trainerName||'').trim(), email:row.email||'(이메일 미기록)',
     updated:(row.updated_at||'').slice(0,10).replace(/-/g,'.'),
     members:members.length, monthCnt, total:logs.length, rereg, rebadge, byMonth};
 }
@@ -857,12 +857,30 @@ function vAdmin(){
     <button class="back" onclick="loadAdmin(); toast('새로고침')">↺</button></div>
     <div id="adm"><div class="empty">전체 현황 불러오는 중…</div></div>`;
 }
+/* 우리 센터 / 수강생 구분 (2026-10-15) — 관리자 계정의 db.teamTags {user_id:'center'|'student'} 에 저장.
+   표시가 없는 계정 = 수강생 (10-15 공지 전 가입한 5명은 센터로 넣어 둠). 카드의 버튼으로 옮긴다 */
+let _admAll=null;
+function teamOf(uid){ return ((db.teamTags||{})[uid])||'student'; }
+function setTeam(uid, t){ db.teamTags=db.teamTags||{}; db.teamTags[uid]=t; save(); renderAdmin(); toast(t==='center'?'우리 센터로 옮겼습니다':'수강생으로 옮겼습니다'); }
 async function loadAdmin(){
   const box=document.getElementById('adm'); if(!box) return;
   try{
     const {data,error}=await sb.from('trainer_data').select('user_id,email,data,updated_at');
     if(error) throw error;
-    const rows=(data||[]).map(calcTrainer).sort((a,b)=>b.monthCnt-a.monthCnt);
+    _admAll=(data||[]).map(calcTrainer).sort((a,b)=>b.monthCnt-a.monthCnt);
+    renderAdmin();
+  }catch(e){
+    box.innerHTML='<div class="empty">불러오지 못했습니다.<br>관리자 권한(admins 등록)이 설정됐는지 확인하세요.</div>';
+  }
+}
+function renderAdmin(){
+  const box=document.getElementById('adm'); if(!box||!_admAll) return;
+  const grp=view.grp||'center';
+  const cnt={center:_admAll.filter(r=>teamOf(r.uid)==='center').length, student:_admAll.filter(r=>teamOf(r.uid)==='student').length, all:_admAll.length};
+  const tabs=`<div class="grid2" style="grid-template-columns:repeat(3,1fr); margin-bottom:10px">${[['center','🏢 우리 센터'],['student','🎓 수강생'],['all','전체']].map(([k,l])=>
+    `<button class="btn ${grp===k?'':'subtle'}" style="margin:0" onclick="view.grp='${k}'; renderAdmin()">${l} ${cnt[k]}</button>`).join('')}</div>`;
+  {
+    const rows=_admAll.filter(r=>grp==='all'||teamOf(r.uid)===grp);
     const totMembers=rows.reduce((a,r)=>a+r.members,0);
     const totMonth=rows.reduce((a,r)=>a+r.monthCnt,0);
     const totAll=rows.reduce((a,r)=>a+r.total,0);
@@ -880,20 +898,22 @@ async function loadAdmin(){
         이번 달 수업 <b class="num" style="color:var(--ink)">${r.monthCnt}</b>회 · 누적 <span class="num">${r.total}</span>회 ·
         재등록 <b class="num" style="color:var(--good)">${r.rereg}</b>회${r.noshow?` · 노쇼 <b class="num" style="color:var(--bad)">${r.noshow}</b>회`:''}</div>
       ${r.rebadge.length?`<div style="font-size:12.5px; margin-top:5px; color:var(--warn)">🔔 재등록 타이밍: ${r.rebadge.map(esc).join(', ')}</div>`:''}
+      ${r.uid&&r.uid!==(user&&user.id)?`<div style="text-align:right; margin-top:6px">${teamOf(r.uid)==='center'
+        ?`<button class="ichip" onclick="setTeam('${r.uid}','student')">수강생으로 옮기기</button>`
+        :`<button class="ichip" onclick="setTeam('${r.uid}','center')">우리 센터로 옮기기</button>`}</div>`:''}
     </div>`).join('');
-    box.innerHTML=`
-      <div class="card"><b>센터 전체</b>
+    const title={center:'우리 센터',student:'수강생',all:'전체'}[grp];
+    box.innerHTML=tabs+`
+      <div class="card"><b>${title} 합계</b>
         <div class="grid2" style="margin-top:8px">
           <div class="stat"><div class="muted">이번 달 수업</div><div class="v num">${totMonth}회</div></div>
           <div class="stat"><div class="muted">전체 회원</div><div class="v num">${totMembers}명</div></div>
         </div>
         <div class="muted" style="margin:8px 0 4px">월별 수업 (센터 합계 · 누적 ${totAll}회 · 재등록 누적 <b class="num" style="color:var(--good)">${totRereg}</b>회)</div>
         ${monthHtml||'<div class="muted">아직 기록 없음</div>'}</div>
-      <div class="muted" style="margin:14px 0 6px">트레이너 ${rows.length}명 — 이번 달 수업 많은 순</div>
-      ${trainerHtml||'<div class="empty">아직 가입한 트레이너가 없습니다</div>'}
-      <div class="muted" style="margin-top:10px; font-size:12px">예시 회원·예시 기록은 집계에서 제외됩니다. 트레이너 개인 화면의 회원 상세는 각자의 계정에서만 보입니다.</div>`;
-  }catch(e){
-    box.innerHTML='<div class="empty">불러오지 못했습니다.<br>관리자 권한(admins 등록)이 설정됐는지 확인하세요.</div>';
+      <div class="muted" style="margin:14px 0 6px">${title} 트레이너 ${rows.length}명 — 이번 달 수업 많은 순</div>
+      ${trainerHtml||`<div class="empty">${grp==='student'?'아직 가입한 수강생이 없습니다':'아직 가입한 트레이너가 없습니다'}</div>`}
+      <div class="muted" style="margin-top:10px; font-size:12px">새로 가입한 계정은 「수강생」으로 들어옵니다. 우리 센터 선생님이면 카드의 「우리 센터로 옮기기」를 누르세요. 예시 회원·예시 기록은 집계에서 제외됩니다.</div>`;
   }
 }
 
