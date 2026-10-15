@@ -1486,7 +1486,7 @@ function bestEver(memberId, exId){
     else if(mode==='t'){ const t=bestT(e.sets); sc=t||-1; }
     else if(mode==='lv'){ const b=bestLv(e.sets); sc=b? num(b.lv)*1e4+num(b.n) : -1; }
     else if(mode==='band'){ sc= lastBand(e.sets)? Date.parse(l.date||0)||0 : -1; }
-    else if(mode==='chk'){ sc= e.chk? Date.parse(l.date||0)||0 : -1; }
+    else if(mode==='chk'){ sc= (e.chk || (e.memo||'').trim() || (e.sets||[]).length)? Date.parse(l.date||0)||0 : -1; }
     if(sc>bs || (sc===bs && sc>=0 && best && (l.date||'')>(best.date||''))){ bs=sc; best={e, date:l.date}; }
   }));
   return bs>=0? best : null;
