@@ -2111,10 +2111,60 @@ function vProgNew(){
 }
 function progLibHtml(){
   const q=((pdraft&&pdraft.q)||'').trim();
-  return sortedEx(db.exercises.filter(e=>!q||e.name.includes(q))).map(e=>
+  return newExRow(q,'quickNewFromProg()') + sortedEx(db.exercises.filter(e=>exMatch(e,q))).map(e=>
     `<div class="opt" onclick="pdraft.patterns[pdraft.cur].push('${e.id}'); psave(); render()">
-    <span>${esc(e.name)}</span><span class="t">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div>`).join('')
-    || '<div class="empty">검색 결과 없음</div>';
+    <span>${esc(e.name)}</span><span class="t">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div>`).join('');
+}
+/* ── 라이브러리에 없는 운동을 그 자리에서 만들기 (2026-10-27 트레이너 요청) ──
+   검색어가 라이브러리에 딱 맞는 이름으로 없으면 맨 위에 「＋ 새 운동으로 추가」가 뜬다.
+   만든 운동은 라이브러리에 자동 저장(내 운동)되고, 지금 고르던 루틴·수업에 바로 담긴다 */
+function exMatch(e,q){ return !q || e.name.toLowerCase().includes(q.toLowerCase()); }
+function newExRow(q, onclick){
+  if(!q) return '';
+  if(db.exercises.some(e=>e.name.trim().toLowerCase()===q.toLowerCase())) return '';
+  return `<div class="opt" style="border:1.5px dashed var(--blue); border-radius:10px; margin-bottom:6px" onclick="${onclick}">
+    <span><b>＋ 「${esc(q)}」 새 운동으로 추가</b></span><span class="t">라이브러리에도 저장</span></div>`;
+}
+const EX_TAGS=['하체','가슴','등','어깨','팔','코어','전신','유산소','재활','웜업','기타'];
+function guessEx(name){
+  const n=name.toLowerCase();
+  const mode= /plank|플랭크|hang|행잉|sec|버티기|hold/.test(n)? 't'
+    : /band|밴드/.test(n)? 'band'
+    : /stretch|스트레칭|smr|롤러|roller|wgs|cars|breathing|호흡/.test(n)? 'chk' : 'w';
+  const tag= /stretch|스트레칭|smr|롤러|roller|wgs|cars/.test(n)? '웜업'
+    : /treadmill|트레드밀|run|bike|사이클|rowing|로잉|stepper|스텝퍼|interval/.test(n)? '유산소'
+    : /sq|스쿼트|lunge|런지|leg|레그|dl|데드|calf|카프|hip|힙|thigh|타이|glute|둔근/.test(n)? '하체'
+    : /bp|bench|벤치|chest|체스트|push|푸시|fly|플라이|dip|딥스/.test(n)? '가슴'
+    : /row|로우|pull|풀|lat|랫|chin|친업|back|등/.test(n)? '등'
+    : /sp|ohp|shoulder|숄더|raise|레이즈|press|프레스/.test(n)? '어깨'
+    : /curl|컬|tricep|삼두|이두|te|extension|익스텐션/.test(n)? '팔'
+    : /plank|crunch|크런치|core|코어|ab|복근|twist|트위스트/.test(n)? '코어' : '기타';
+  return {mode, tag};
+}
+let _newExCb=null;
+function quickNewEx(name, cb){
+  name=(name||'').trim(); if(!name) return;
+  _newExCb=cb; const g=guessEx(name);
+  modal(`<b>＋ 새 운동 추가</b>
+    <div class="muted" style="margin:4px 0 10px">운동 라이브러리에 「내 운동」으로 저장되고, 지금 고르던 곳에 바로 담깁니다.</div>
+    <label class="fld"><span class="muted">운동 이름 — 현장에서 쓰는 이름·약어 그대로</span><input type="text" id="nx-name" value="${esc(name)}"></label>
+    <div class="grid2">
+      <label class="fld" style="margin:0"><span class="muted">부위</span><select id="nx-tag">${EX_TAGS.map(t=>`<option ${t===g.tag?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label class="fld" style="margin:0"><span class="muted">기록 방식</span><select id="nx-mode">${Object.entries(MODES).map(([k,v])=>`<option value="${k}" ${k===g.mode?'selected':''}>${v}</option>`).join('')}</select></label></div>
+    <button class="btn" style="margin-top:12px" onclick="saveQuickNewEx()">추가하고 담기</button>`);
+}
+function saveQuickNewEx(){
+  const name=(document.getElementById('nx-name').value||'').trim();
+  if(!name){ toast('운동 이름을 입력하세요'); return; }
+  let e=db.exercises.find(x=>x.name.trim().toLowerCase()===name.toLowerCase());
+  if(!e){ e={id:uid(), name, tag:document.getElementById('nx-tag').value, mode:document.getElementById('nx-mode').value, custom:true};
+    db.exercises.push(e); }
+  save(); closeModal(); const cb=_newExCb; _newExCb=null;
+  toast(`「${name}」 운동을 라이브러리에 추가했습니다`);
+  if(cb) cb(e.id);
+}
+function quickNewFromProg(){
+  quickNewEx(pdraft&&pdraft.q, id=>{ pdraft.patterns[pdraft.cur].push(id); pdraft.q=''; psave(); render(); });
 }
 function progLibRender(){ const box=document.getElementById('prog-lib'); if(box) box.innerHTML=progLibHtml(); }
 function createProgram(){
@@ -2131,7 +2181,7 @@ function createProgram(){
 /* 검색 입력 중에는 목록만 갈아끼운다 — 전체 재렌더링은 한글 조합을 끊어 멈춘 것처럼 보임 */
 function libListHtml(){
   const q=(view.q||'').trim();
-  return sortedEx(db.exercises.filter(e=>!q||e.name.includes(q))).map(e=>`<div class="card">
+  return sortedEx(db.exercises.filter(e=>exMatch(e,q))).map(e=>`<div class="card">
     <div class="row"><span>${esc(e.name)} ${e.custom?'<span class="pill">내 운동</span>':''}</span>
       <span class="muted">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div></div>`).join('')
     || '<div class="empty">검색 결과 없음</div>';
@@ -2246,14 +2296,16 @@ function pickExercise(cb){
     <div id="pick-list" class="exlist" style="max-height:46vh"></div>`);
   renderPickList('');
 }
+let _pickQ='';
 function renderPickList(q){
   const box=document.getElementById('pick-list'); if(!box) return;
-  q=(q||'').trim();
-  const hits=sortedEx(db.exercises.filter(e=>!q||e.name.includes(q)));
-  box.innerHTML = hits.map(e=>`<div class="opt" onclick="closeModal(); _pickCb&&_pickCb('${e.id}')">
+  q=(q||'').trim(); _pickQ=q;
+  const hits=sortedEx(db.exercises.filter(e=>exMatch(e,q)));
+  box.innerHTML = newExRow(q,'quickNewFromPick()') + hits.map(e=>`<div class="opt" onclick="closeModal(); _pickCb&&_pickCb('${e.id}')">
     <span>${esc(e.name)}</span><span class="t">${esc(e.tag)} · ${MODES[e.mode||'w']}</span></div>`).join('')
-    || '<div class="empty">없음 — 운동 탭에서 먼저 추가하세요</div>';
+    || '<div class="empty">검색어를 넣으면 새 운동으로 바로 추가할 수 있어요</div>';
 }
+function quickNewFromPick(){ const cb=_pickCb; quickNewEx(_pickQ, id=>{ cb&&cb(id); }); }
 
 /* ───────────────────── 화면: 설정 ───────────────────── */
 function vSettings(){
