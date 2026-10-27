@@ -2123,7 +2123,8 @@ function newExRow(q, onclick){
   if(!q) return '';
   if(db.exercises.some(e=>e.name.trim().toLowerCase()===q.toLowerCase())) return '';
   return `<div class="opt" style="border:1.5px dashed var(--blue); border-radius:10px; margin-bottom:6px" onclick="${onclick}">
-    <span><b>＋ 「${esc(q)}」 새 운동으로 추가</b></span><span class="t">라이브러리에도 저장</span></div>`;
+    <div style="min-width:0"><b style="color:var(--blue)">＋ 「${esc(q)}」 새 운동으로 추가</b>
+      <div class="t" style="margin-top:2px">탭하면 바로 담기고, 운동 라이브러리에도 저장돼요</div></div></div>`;
 }
 const EX_TAGS=['하체','가슴','등','어깨','팔','코어','전신','유산소','재활','웜업','기타'];
 function guessEx(name){
@@ -2133,7 +2134,7 @@ function guessEx(name){
     : /stretch|스트레칭|smr|롤러|roller|wgs|cars|breathing|호흡/.test(n)? 'chk' : 'w';
   const tag= /stretch|스트레칭|smr|롤러|roller|wgs|cars/.test(n)? '웜업'
     : /treadmill|트레드밀|run|bike|사이클|rowing|로잉|stepper|스텝퍼|interval/.test(n)? '유산소'
-    : /sq|스쿼트|lunge|런지|leg|레그|dl|데드|calf|카프|hip|힙|thigh|타이|glute|둔근/.test(n)? '하체'
+    : /sq|스쿼트|lunge|런지|leg|레그|dl|데드|calf|카프|hip|힙|thigh|타이|glute|둔근|nordic|노르딕|hamstring|햄스트링|bss|bulgarian|불가리안/.test(n)? '하체'
     : /bp|bench|벤치|chest|체스트|push|푸시|fly|플라이|dip|딥스/.test(n)? '가슴'
     : /row|로우|pull|풀|lat|랫|chin|친업|back|등/.test(n)? '등'
     : /sp|ohp|shoulder|숄더|raise|레이즈|press|프레스/.test(n)? '어깨'
