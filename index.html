@@ -308,13 +308,13 @@ let isAdmin=false;   /* 대표(관리자) 여부 — admins 테이블로 판정 
 let scorecard=null;  /* 이달의 성적표 — PC 생성기(성적표인증)가 저장소 scorecards/<user_id>/latest.json 에 올린 것 (2026-10-01) */
 let db=null, draft=null;
 let sync={dirty:false, timer:null, serverAt:null, offline:false};
-/* 이용권 (2026-09-18) — 11/2 부터 30일 무료(11/2 전 가입자는 12/1까지) 뒤에는 이용권이 있어야 새 기록이 저장된다.
-   잠겨도 쌓인 기록은 그대로 본다. 판정은 서버(app_my_access)가 하고, 서버 저장 규칙도 같은 판정으로 막는다 */
+/* 수업일지는 전부 무료, 기간 없음 (2026-10-01 결정 · 10-15 「평생 무료」 공지). 서버 판정(app_access_of)도 항상 열림이다.
+   09-18 「11/2 부터 이용권」 설계는 폐기 — 잠금 화면·이용권 안내는 10-27 걷어냈다. access 는 OCR 한도 같은 다른 판정 자리로 남겨 둔다 */
 let access=null;      /* {ok, reason:'before'|'trial'|'pass'|'admin'|'ended', until} · null = 아직 모름(막지 않음) */
 let lastGood=null;    /* 서버와 맞춰진 마지막 기록 — 잠긴 상태에서 고친 내용을 되돌릴 때 쓴다 */
 const PASS_URL='https://heobotss.com/pay/?p=app-trainer-month';
 const FN_FREE='https://kpubgeejyiupdvbbdxwt.supabase.co/functions/v1/free-claim';
-function locked(){ return !!(access && access.ok===false); }
+function locked(){ return false; }   /* 10-27 전부 무료 — 잠그지 않는다 */
 async function checkAccess(tryClaim){
   if(!user||!sb) return;
   try{
@@ -332,6 +332,7 @@ async function checkAccess(tryClaim){
 function ymdK(d){ const x=new Date(d); return (x.getMonth()+1)+'월 '+x.getDate()+'일'; }
 function lastDay(d){ return ymdK(new Date(new Date(d).getTime()-1)); }   /* 12/2 0시까지 = 12월 1일까지 */
 function accessBanner(){
+  return '';   /* 10-27 전부 무료 — 이용권 안내 배너 없음 */
   if(!access) return '';
   const now=Date.now(), until=access.until?Date.parse(access.until):0, left=until?Math.ceil((until-now)/864e5):0;
   const box=(t,btn)=>`<div class="card" style="border-color:var(--warn)"><div style="font-size:14px;line-height:1.6">${t}</div>${btn?`<button class="btn" style="margin-top:10px" onclick="openPass()">${btn}</button>`:''}</div>`;
@@ -343,6 +344,7 @@ function accessBanner(){
   return '';
 }
 function openPass(){
+  return;   /* 10-27 전부 무료 — 이용권 창 없음 */
   modal(`<b>트레이너 플랜 · 1개월 이용권</b>
     <p class="muted" style="margin:10px 0 0;line-height:1.7">9,900원 · 30일 · 자동으로 다시 결제되지 않습니다.<br>결제 페이지에서 <b>${esc(user&&user.email||'')}</b> 계정으로 로그인하면 이 앱에 바로 적용됩니다.</p>
     <a class="btn" style="margin-top:14px;display:block;text-align:center;text-decoration:none" href="${PASS_URL}" target="_blank" rel="noopener">결제 페이지 열기</a>
@@ -406,7 +408,7 @@ async function pullNow(){
 }
 function updateSyncBadge(){
   const el=document.getElementById('sync-dot'); if(!el) return;
-  el.textContent = !user? '' : locked()? '🔒 보기 전용 — 이용권이 있으면 다시 저장됩니다' : sync.offline? '⚠ 오프라인 — 연결되면 자동 전송됩니다' : (sync.dirty? '서버 저장 중…' : '✓ 서버에 저장됨 · 폰·PC 연동');
+  el.textContent = !user? '' : sync.offline? '⚠ 오프라인 — 연결되면 자동 전송됩니다' : (sync.dirty? '서버 저장 중…' : '✓ 서버에 저장됨 · 폰·PC 연동');
   el.style.color = (sync.offline||locked())? 'var(--warn)' : 'var(--sub)';
 }
 
@@ -415,8 +417,11 @@ function renderLogin(msg){
   const nav=document.querySelector('.nav'); if(nav) nav.style.display='none';
   document.getElementById('app').innerHTML=`
    <div style="max-width:360px; margin:56px auto 0">
-    <h1 style="text-align:center; font-size:26px">🏋️ 수업일지</h1>
-    <p class="muted" style="text-align:center; margin:6px 0 24px">허봇스 트레이너 로그인</p>
+    <h1 style="text-align:center; font-size:26px">수업일지</h1>
+    <p class="muted" style="text-align:center; margin:6px 0 6px">허봇스 트레이너 로그인</p>
+    <p style="text-align:center; margin:0 0 22px; font-size:14px; color:var(--blue)">전부 무료입니다 · 기간 제한 없이 계속 씁니다</p>
+    <button class="btn" onclick="doKakao()" style="background:#FEE500; color:#191600; margin-bottom:6px">카카오로 계속하기</button>
+    <div class="muted" style="text-align:center; margin:0 0 18px; font-size:12.5px">처음이셔도 카카오로 바로 시작됩니다</div>
     <label class="fld"><span class="muted">이메일</span><input type="text" id="lg-email" inputmode="email" autocomplete="username" placeholder="name@example.com"></label>
     <label class="fld"><span class="muted">비밀번호 (6자 이상)</span><input type="password" id="lg-pw" autocomplete="current-password" placeholder="비밀번호"></label>
     ${msg?`<div class="warn" style="margin-bottom:10px">${msg}</div>`:''}
@@ -425,6 +430,24 @@ function renderLogin(msg){
     <button class="btn subtle" onclick="doReset()">비밀번호를 잊었어요</button>
     <div class="muted" style="text-align:center; margin-top:14px; font-size:12.5px">같은 계정으로 폰·PC 어디서 로그인해도<br>기록이 그대로 보입니다</div>
    </div>`;
+}
+/* 10-27 카카오 로그인 — 홈페이지(heobotss.com)와 같은 카카오 앱·같은 계정. 돌아오면 boot 가 세션을 이어받는다 */
+async function doKakao(){
+  const {error}=await sb.auth.signInWithOAuth({provider:'kakao', options:{redirectTo: location.origin + '/'}});
+  if(error) renderLogin('카카오 로그인을 열지 못했습니다. 이메일로 해 주세요.');
+}
+/* 10-27 인스타 아이디 — 홈페이지 연락처 창고(contacts.instagram)와 같은 칸. 스토리 멘션을 이 아이디로 찾는다 */
+let myIg='';
+async function loadIg(){
+  try{ const {data}=await sb.from('contacts').select('instagram').eq('email',(user.email||'').toLowerCase()).maybeSingle();
+    myIg=(data&&data.instagram)||''; if(booted&&view.name==='settings') render(); }catch(e){}
+}
+async function saveIg(v){
+  const id=String(v||'').trim().replace(/^@/,'').toLowerCase();
+  if(id && !/^[a-z0-9._]{2,30}$/.test(id)){ toast('아이디를 확인해 주세요 — 영문·숫자·밑줄·점만'); return; }
+  try{ const {error}=await sb.from('contacts').upsert({email:(user.email||'').toLowerCase(), instagram:id||null},{onConflict:'email'});
+    if(error) throw error; myIg=id; toast(id?'@'+id+' 로 저장됐습니다':'인스타 아이디를 지웠습니다'); }
+  catch(e){ toast('저장하지 못했습니다. 잠시 뒤 다시 해 주세요'); }
 }
 /* ── 비밀번호 재설정: 메일 발송 → 링크 클릭 → 새 비밀번호 입력 ── */
 async function doReset(){
@@ -539,6 +562,7 @@ async function bootData(){
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
   checkAccess(); loadOcrQuota();
+  loadIg();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
   loadScorecard();
@@ -2320,6 +2344,9 @@ function vSettings(){
       <label class="fld"><span class="muted">내 이름 — 센터 대시보드에 이 이름으로 표시됩니다</span>
         <input type="text" placeholder="예: 허재윤" value="${esc(db.trainerName||'')}"
           onchange="db.trainerName=this.value.trim(); save(); toast('이름이 저장됐습니다')"></label>
+      <label class="fld"><span class="muted">인스타그램 아이디 — 스토리에 @heobotss 를 멘션하면 이 아이디로 성적표가 찾아갑니다</span>
+        <input type="text" placeholder="my_id (@ 없이)" autocapitalize="off" spellcheck="false" value="${esc(myIg)}"
+          onchange="saveIg(this.value)"></label>
       <div class="grid2">
         <button class="btn subtle" onclick="openChangePw()">비밀번호 변경</button>
         <button class="btn subtle" onclick="doLogout()">로그아웃</button></div></div>`:''}
@@ -2452,3 +2479,4 @@ document.addEventListener('visibilitychange', ()=>{
 window.addEventListener('online', ()=>{ if(sync.dirty) pushNow(); });
 boot();
 </script>
+<script src="https://heobotss.com/t.js" defer></script>
