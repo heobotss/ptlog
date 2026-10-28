@@ -63,6 +63,16 @@
   .setrow input,.setrow select{text-align:center; padding:9px 6px; font-size:14.5px}
   .setrow .del{background:none; border:none; color:var(--sub); font-size:16px; cursor:pointer; padding:4px}
   .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+  .sd-row{padding:8px 0; border-bottom:1px solid var(--line)}
+  .sd-row:last-child{border-bottom:none}
+  .sd-top{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14.5px; font-weight:600}
+  .sd-in{display:flex; align-items:center; gap:5px; margin-top:6px; font-size:13px; color:var(--sub)}
+  .sd-in input,.sd-in select{text-align:center; padding:8px 4px; font-size:15px; min-width:0}
+  .sd-in .w{flex:1.2} .sd-in .n{flex:1} .sd-in .d{flex:1.6; font-size:13.5px}
+  .sd-nav{display:flex; gap:5px; overflow-x:auto; padding-bottom:4px; margin-bottom:8px}
+  .sd-nav span{flex-shrink:0; border:1px solid var(--line); border-radius:8px; padding:4px 9px; font-size:13px; cursor:pointer}
+  .sd-nav span.on{background:var(--blue); color:#fff; border-color:var(--blue)}
+  .sd-nav span.fill{border-color:var(--blue); color:var(--blue)}
   .pk-row{padding:9px 2px; border-bottom:1px solid var(--line)}
   .pk-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
   .pk-top .pk-rec{margin-top:0; text-align:right; flex-shrink:0; max-width:48%}
@@ -200,7 +210,7 @@ const BASE_EXERCISES=[
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
 function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function fmtD(s){ return s ? s.slice(5).replace('-','/') : ''; }
+function fmtD(s){ return !s ? '' : s.length===7 ? s.slice(2).replace('-','.') : s.slice(5).replace('-','/'); }
 
 function seed(){
   const ex = BASE_EXERCISES.map(([name,tag,mode])=>({id:uid(),name,tag,mode:mode||'w',custom:false}));
@@ -634,12 +644,12 @@ function memberProgress(m){
 function prevRecord(memberId, exId, dayIdx, lap, progId){
   const mode=exMode(exId);
   const has=e=> e.exId===exId && (mode==='chk'? e.chk : validSets(e.sets,mode).length);
-  const logs=db.logs.filter(l=>l.memberId===memberId);
+  const logs=db.logs.filter(l=>l.memberId===memberId && l.seed!=='best');
   /* 같은 회차 비교는 같은 프로그램 안에서만 — 프로그램을 바꾸면 회차 의미가 달라지므로 */
   const same=logs.filter(l=>l.dayIdx===dayIdx && l.lap<lap && (!progId||!l.progId||l.progId===progId)).sort((a,b)=>b.lap-a.lap);
-  for(const l of same){ const e=(l.entries||[]).find(has); if(e) return {e, label:l.lap+'바퀴 · '+fmtD(l.date), samePos:true}; }
+  for(const l of same){ const e=(l.entries||[]).find(has); if(e) return {e, label:l.seed? '📥 옮긴 기록'+(l.date?' · '+fmtD(l.date):'') : l.lap+'바퀴 · '+fmtD(l.date), samePos:true}; }
   const all=logs.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  for(const l of all){ const e=(l.entries||[]).find(has); if(e) return {e, label:'최근 기록 · '+fmtD(l.date), samePos:false}; }
+  for(const l of all){ const e=(l.entries||[]).find(has); if(e) return {e, label:(l.seed?'📥 옮긴 기록':'최근 기록')+(l.date?' · '+fmtD(l.date):''), samePos:false}; }
   return null;
 }
 
@@ -680,7 +690,7 @@ function render(){
   [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
     const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
-    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin,
+    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed,
     programs:vPrograms, progDetail:vProgDetail, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
   el.innerHTML=fn();
@@ -697,14 +707,14 @@ function briefData(){
   const prevMon=new Date(mon); prevMon.setDate(mon.getDate()-14);
   const lm=dfmt(lastMon), pm=dfmt(prevMon);
   const inR=(s,a,b)=> s>=a && s<b;
-  const lastCnt=db.logs.filter(l=>inR(l.date||'',lm,tm)).length;
-  const prevCnt=db.logs.filter(l=>inR(l.date||'',pm,lm)).length;
+  const lastCnt=db.logs.filter(l=>!l.seed && inR(l.date||'',lm,tm)).length;
+  const prevCnt=db.logs.filter(l=>!l.seed && inR(l.date||'',pm,lm)).length;
   const noshows=db.bookings.filter(b=>inR(b.date||'',lm,tm)&&b.status==='noshow');
   const nsNames=[...new Set(noshows.map(b=>{ const m=db.members.find(x=>x.id===b.memberId); return m?m.name:null; }).filter(Boolean))];
   const rebadge=db.members.filter(m=>!m.demo).filter(m=>{ const p=memberProgress(m); return p&&p.rebadge; }).map(m=>m.name);
   const cut=new Date(); cut.setDate(cut.getDate()-14); const cutoff=dfmt(cut);
   const idle=db.members.filter(m=>!m.demo).map(m=>{
-    const ds=db.logs.filter(l=>l.memberId===m.id && !l.imported).map(l=>l.date||'').sort();
+    const ds=db.logs.filter(l=>l.memberId===m.id && !l.imported && !l.seed).map(l=>l.date||'').sort();
     return {name:m.name, last:ds[ds.length-1]};
   }).filter(x=>x.last && x.last<cutoff);
   return {lastCnt, diff:lastCnt-prevCnt, noshowCnt:noshows.length, nsNames, rebadge, idle};
@@ -869,7 +879,7 @@ function calcTrainer(row){
   const d=row.data||{};
   const demoIds=(d.members||[]).filter(m=>m.demo).map(m=>m.id);
   const members=(d.members||[]).filter(m=>!m.demo);
-  const logs=(d.logs||[]).filter(l=>!demoIds.includes(l.memberId));
+  const logs=(d.logs||[]).filter(l=>!l.seed && !demoIds.includes(l.memberId));
   const ym=today().slice(0,7);
   const monthCnt=logs.filter(l=>(l.date||'').slice(0,7)===ym).length;
   const rebadge=[];
@@ -996,10 +1006,10 @@ function vSchedule(){
   }
   /* 월별 통계: 예약 + 완료 수업 + 노쇼 */
   const bkCnt=Object.values(cntByDate).reduce((a,b)=>a+b,0);
-  const logCnt=db.logs.filter(l=>(l.date||'').slice(0,7)===ym).length;
+  const logCnt=db.logs.filter(l=>!l.seed && (l.date||'').slice(0,7)===ym).length;
   const nsCnt=db.bookings.filter(b=>(b.date||'').slice(0,7)===ym && b.status==='noshow').length;
   const byMonth={};
-  db.logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k) byMonth[k]=(byMonth[k]||0)+1; });
+  db.logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k && !l.seed) byMonth[k]=(byMonth[k]||0)+1; });
   const months=Object.keys(byMonth).sort().reverse().slice(0,6);
   const statHtml=months.map(k=>`<div class="row" style="padding:3px 0"><span class="muted num">${k.replace('-','.')}</span><b class="num">${byMonth[k]}회</b></div>`).join('');
   return `<div class="top">
@@ -1056,7 +1066,8 @@ function setSex(memberId,s){
 function vMember(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
   const pr=memberProgress(m);
-  const recent=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,3);
+  const recent=db.logs.filter(l=>l.memberId===m.id && !l.seed).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,3);
+  const seedN=db.logs.filter(l=>l.memberId===m.id && l.seed).reduce((a,l)=>a+(l.entries||[]).length,0);
   const notes=[];
   recent.forEach(l=>{
     if(l.cond) notes.push(`🩺 ${fmtD(l.date)} 컨디션 — ${esc(l.cond)}`);
@@ -1085,6 +1096,7 @@ function vMember(){
     <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
     <button class="btn ghost" onclick="go({name:'inbody', id:'${m.id}'})">⚖️ 인바디${(m.inbody||[]).length?` · ${m.inbody.length}회 측정 (최근 ${fullD(ibSorted(m).slice(-1)[0].date)})`:' — 측정 기록 넣기'}</button>
     <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
+    <button class="btn ghost" onclick="openSeed('${m.id}')">📥 옛 기록 빠르게 넣기${seedN?` · ${seedN}줄 옮김 (고치기)`:' — 최고 기록·최근 한 바퀴만'}</button>
     <div class="grid2">
       <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
       <button class="btn subtle" onclick="openRereg('${m.id}')">🔁 재등록 처리</button></div>
@@ -1171,8 +1183,8 @@ function vSession(){
         prevHtml=`<div class="prev"><span class="muted">${prev.isRef?'📌 기준 수업':prev.samePos?'지난 바퀴 같은 회차':'참고'} · ${prev.label}</span><br>
           ${mode==='chk'? '✓ 완료': detailStr(prev.e,mode)}
           ${iss||memoTxt?`<br>⚠ ${[iss,memoTxt].filter(Boolean).join(', ')}`:''}
-          ${best?`<br><span style="color:var(--warn)">${best.kind==='last'?`🕘 마지막으로 한 날 · ${fullD(best.date)}`:`🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}${prev.e===best.e?' (이 날)':''}`}</span>`:''}</div>`;
-      } else prevHtml= best&&best.kind!=='last'? `<div class="prev"><span style="color:var(--warn)">🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</span></div>`
+          ${best?`<br><span style="color:var(--warn)">${best.kind==='last'?`🕘 마지막으로 한 날 · ${bestD(best.date)}`:`🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${bestD(best.date)}${prev.e===best.e?' (이 날)':''}`}</span>`:''}</div>`;
+      } else prevHtml= best&&best.kind!=='last'? `<div class="prev"><span style="color:var(--warn)">🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${bestD(best.date)}</span></div>`
         : `<div class="prev muted">이전 기록 없음 — 오늘이 기준점이 됩니다</div>`;
       const chips=ISSUE_SETS.map(g=>g.items.map(p=>
         `<button class="ichip ${en.issues.includes(p)?'on-'+g.cls:''}" onclick="togIssue(${i},'${p}')">${p}</button>`).join('')).join('');
@@ -1198,7 +1210,7 @@ function vSession(){
     <h1>${editing?'기록 수정':esc(m.name)}${draft.dayIdx?' · A-'+draft.dayIdx:''}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
     ${editing?`<div class="muted" style="margin:-8px 0 10px">${esc(m.name)} · ${fmtD(draft.editDate)} 수업을 수정하는 중</div>`
       : draft.lap>1?`<div class="muted" style="margin:-8px 0 10px">${draft.lap}바퀴째 — 지난 바퀴 기록과 비교하며 진행</div>`:''}
-    ${draft.refDate?`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📌 기준 수업 ${esc(fullD(draft.refDate))}</b><div class="muted">운동마다 그날 기록이 옆에 붙습니다 — 오늘 숫자를 적으면 변화가 바로 계산됩니다</div></div>`:''}
+    ${draft.refLogId?`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📌 기준 수업 ${esc((l=>l?logDate(l):fullD(draft.refDate))(db.logs.find(x=>x.id===draft.refLogId)))}</b><div class="muted">운동마다 그날 기록이 옆에 붙습니다 — 오늘 숫자를 적으면 변화가 바로 계산됩니다</div></div>`:''}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
     <div class="grid2">
@@ -1306,7 +1318,7 @@ function printSheet(memberId, refLogId){
   }).join('');
   document.getElementById('printsheet').innerHTML=`
     <div class="ph"><b>수업일지 · ${esc(maskName(m.name))}${m.sex?` (${m.sex})`:''}</b>
-      <span class="r">${ref?`<b>📌 기준 수업 ${esc(fullD(ref.date))}</b>`:`${esc(pr.p.name)} · <b>A-${dayIdx}</b> · ${pr.lap}바퀴째`}</span></div>
+      <span class="r">${ref?`<b>📌 기준 수업 ${esc(logDate(ref))}</b>`:`${esc(pr.p.name)} · <b>A-${dayIdx}</b> · ${pr.lap}바퀴째`}</span></div>
     <div class="cline">날짜: ________________ &nbsp;&nbsp;&nbsp; 컨디션: ____________________________________________</div>
     <table><tr><th style="width:36%">운동 (${ref?'기준 수업 기록':'지난 기록'})</th><th>오늘 기록 — 밑줄 위에 숫자만 적으세요</th></tr>${rows}</table>
     <div class="foot">허봇스 수업일지 · 수업 후 앱의 「📷 사진으로 채우기」로 이 종이를 찍으면 자동 입력됩니다</div>`;
@@ -1423,7 +1435,10 @@ function applyOcr(out){
 /* ───────────────────── 한 바퀴 전 자동 기준 · 8칸 수업지 ─────────────────────
    대표님 방식: 30회(또는 10회) 한 바퀴를 돌면, 다음 수업의 기준 = 한 바퀴 전 같은 순번 수업.
    1/1(1회차)…1/30(30회차) 다음 1/31 수업의 기준은 1/1, 그다음은 1/2. 종이는 A4 한 장에 8칸. */
-function memberLogs(m){ return db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||((a.id>b.id)?1:-1)); }
+/* 옮긴 한 바퀴(seed:'lap')는 진짜 수업보다 앞에 seq 순서로 선다 — 날짜를 몰라도 바퀴 계산이 맞게. 최고 기록(seed:'best')은 수업이 아니라 뺀다 */
+function memberLogs(m){ return db.logs.filter(l=>l.memberId===m.id && l.seed!=='best').sort((a,b)=>(!!b.seed-!!a.seed) || (a.seed? (a.seq||0)-(b.seq||0) : 0) || (a.date||'').localeCompare(b.date||'')||((a.id>b.id)?1:-1)); }
+function realCnt(L){ return L.filter(l=>!l.seed).length; }
+function logDate(l){ return l.date? fullD(l.date) : l.seed? '옮긴 기록'+(l.seq!=null?' '+(l.seq+1)+'번':'') : ''; }
 /* 바퀴 길이: 직접 정했으면 그 값, 아니면 가장 최근 「기준 수업」이 몇 회 전이었는지를 이어 간다
    (종이 모서리 날짜가 3.11이었으면 다음 수업은 그다음 날인 3.23 — 대표님 실제 일지 방식), 그것도 없으면 30. */
 function cycleInfo(m){
@@ -1442,16 +1457,16 @@ function autoRef(m, ahead){
   return L[idx]||null;
 }
 function cycleCard(m){
-  const L=memberLogs(m), ci=cycleInfo(m), cyc=ci.n, n=L.length;
+  const L=memberLogs(m), ci=cycleInfo(m), cyc=ci.n, n=L.length, nr=realCnt(L);
   const going=draft&&draft.memberId===m.id;
   const ref=autoRef(m,0);
   return `<div class="card">
       <div class="row"><b>자유 순서 수업 · 한 바퀴 ${cyc}회${ci.auto?' <span class="muted" style="font-weight:400">(마지막 기준 따라감)</span>':''}</b><button class="ichip" onclick="openCycle('${m.id}')">바퀴 길이 바꾸기</button></div>
-      <div class="muted">지금까지 <span class="num">${n}</span>회 · 다음은 <b class="num">${n+1}</b>번째 수업
-        ${ref?` · 자동 기준 <b style="color:var(--warn)">${fullD(ref.date)}</b> (한 바퀴 전 ${n+1-cyc}번째)`:` · 첫 바퀴 진행 중 (${cyc-n}회 남음)`}</div></div>
+      <div class="muted">지금까지 <span class="num">${nr}</span>회${n>nr?` <span class="muted">(+옮긴 기록 ${n-nr}회)</span>`:''} · 다음은 <b class="num">${nr+1}</b>번째 수업
+        ${ref?` · 자동 기준 <b style="color:var(--warn)">${ref.seed?'📥 '+logDate(ref):fullD(ref.date)}</b>${ref.seed?'':` (한 바퀴 전 ${n+1-cyc}번째)`}`:` · 첫 바퀴 진행 중 (${cyc-n}회 남음)`}</div></div>
     ${going?`<button class="btn" onclick="go({name:'session'})">▶ 수업 이어하기 (자동 저장됨)</button>
         <button class="btn subtle" onclick="discardDraft()">진행 중 입력 버리기</button>`
-      : ref?`<button class="btn" onclick="startRefSession('${m.id}','${ref.id}')">▶ 다음 수업 시작 — 📌 기준 ${fullD(ref.date)}</button>`
+      : ref?`<button class="btn" onclick="startRefSession('${m.id}','${ref.id}')">▶ 다음 수업 시작 — 📌 기준 ${logDate(ref)}</button>`
       : `<div class="muted" style="margin:4px 0 8px">첫 바퀴가 끝나기 전에는 「📌 기준 수업 불러오기」로 비교할 날을 직접 고르세요.</div>`}
     ${ref?`<button class="btn ghost" onclick="go({name:'peek', id:'${m.id}', k:0})">📋 오늘 수업 보기 — 종이에 옮겨 적기용</button>
     <button class="btn ghost" onclick="printSheet8('${m.id}')">🖨 다음 8회 수업지 인쇄 — 종이로 수업하기</button>`:''}`;
@@ -1515,7 +1530,7 @@ function bestEver(memberId, exId){
   }));
   return bs>=0? best : null;
 }
-function shortD(d){ const p=(d||'').split('-'); return p.length===3? `${p[0].slice(2)}.${+p[1]}.${+p[2]}` : ''; }
+function shortD(d){ const p=(d||'').split('-'); return p.length===3? `${p[0].slice(2)}.${+p[1]}.${+p[2]}` : p.length===2? `${p[0].slice(2)}.${+p[1]}` : ''; }
 /* 항상 같이 보여 줄 「전체 최고 + 날짜」 — 모든 운동에 날짜를 붙인다 (10-15 대표님 지시)
    무게·시간·레벨 = 최고 기록, 밴드 = 가장 최근 기록, 체크만 하는 운동 = 마지막으로 한 날 */
 function bestTxt(memberId, exId){
@@ -1536,6 +1551,9 @@ function lastNote(memberId, exId){
   }));
   return out;
 }
+/* 옮긴 최고 기록은 날짜를 모를 수 있다 (10-27) */
+function bestD(d){ return d? fullD(d) : '날짜 모름'; }
+function bestS(d){ return d? shortD(d) : '날짜?'; }
 function bestWord(b){ return b.kind==='last'? '마지막으로 한 날' : b.kind==='recent'? '최근' : '최고'; }
 function sheetLine(exId, e, isRef){
   const mode=exMode(exId);
@@ -1549,13 +1567,13 @@ function sheetLine(exId, e, isRef){
   const best=bestTxt(_sheetMember, exId);
   const numBest= best && best.kind!=='last';
   if(numBest){
-    if(rec && best.e===e) rec+=` · ${bestWord(best)}(${shortD(best.date)})`;
-    else rec=(rec? rec+' · ' : '')+`${bestWord(best)} ${best.rec}(${shortD(best.date)})`;
+    if(rec && best.e===e) rec+=` · ${bestWord(best)}(${bestS(best.date)})`;
+    else rec=(rec? rec+' · ' : '')+`${bestWord(best)} ${best.rec}(${bestS(best.date)})`;
   } else {
     /* 숫자 최고가 없는 운동(체크·측정 메모) → 마지막으로 적은 기록을 붙인다 */
     const ln= _sheetMember? lastNote(_sheetMember, exId) : null;
     if(ln) rec=(rec? rec+' · ' : '')+`마지막 ${ln.txt}(${shortD(ln.date)})`;
-    else if(best) rec=(rec? rec+' · ' : '')+`마지막(${shortD(best.date)})`;
+    else if(best) rec=(rec? rec+' · ' : '')+`마지막(${bestS(best.date)})`;
   }
   if(!rec && !e) rec= isRef? '' : '첫 기록';
   const sub=[warn.length?`<b>⚠ ${esc(warn.join(' / '))}</b>`:'', note.length? esc(note.join(' / ')) :''].filter(Boolean).join(' &nbsp;');
@@ -1588,7 +1606,7 @@ function printSheet8(memberId, startRefId){
   _sheetMember=memberId;
   const L=memberLogs(m), cells=nextCells(m, startRefId);
   if(!cells.length){ toast('뽑을 수업이 없습니다 — 첫 바퀴 중이면 「📌 기준 수업 불러오기」에서 날짜를 골라 인쇄하세요'); return; }
-  const n0=L.length+1;
+  const n0=realCnt(L)+1;
   const html=cells.map((c,i)=>{
     let rows=0;
     const lines=c.items.map(exId=>{
@@ -1597,7 +1615,7 @@ function printSheet8(memberId, startRefId){
     });
     const pad=Math.max(0, 9-rows);
     for(let k=0;k<pad;k++) lines.push('<div class="ln blank">.</div>');
-    const rf=c.ref? `📌 ${(+c.ref.date.slice(5,7))}.${(+c.ref.date.slice(8,10))}` : c.label;
+    const rf=!c.ref? c.label : c.ref.date? `📌 ${(+c.ref.date.slice(5,7))}${c.ref.date.length>7?'.'+(+c.ref.date.slice(8,10)):'월'}` : `📌 옮긴 ${(c.ref.seq||0)+1}번`;
     return `<div class="c8 ${rows>16?'xs':rows>11?'sm':''}"><div class="hd"><span>${n0+i}회 · 날짜: ______</span><span>컨디션: __________</span><span class="rf">${rf}</span></div>${lines.join('')}</div>`;
   }).join('');
   const blanks=Array(Math.max(0,8-cells.length)).fill('<div class="c8"></div>').join('');
@@ -1621,7 +1639,7 @@ function peekLine(exId, e, isRef, memberId){
   /* 기준일에 숫자가 없으면 옮겨 적을 자리(파란 숫자)에 바로 최고 기록을 넣는다 */
   if(!rec && best && best.kind!=='last'){
     return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div><div class="pk-rec num">${esc(best.rec)}</div></div>
-      <div class="pk-best">🏆 ${bestWord(best)} 기록 · ${fullD(best.date)} <span class="muted">(${isRef?'기준일':'지난 수업'}엔 숫자 없음)</span></div>
+      <div class="pk-best">🏆 ${bestWord(best)} 기록 · ${bestD(best.date)} <span class="muted">(${isRef?'기준일':'지난 수업'}엔 숫자 없음)</span></div>
       ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
       ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
   }
@@ -1635,9 +1653,9 @@ function peekLine(exId, e, isRef, memberId){
   }
   const recHtml= rec? `<div class="pk-rec num">${esc(rec)}</div>`
     : `<div class="pk-rec none">${e? '기록 없음' : isRef? '기록 없음' : '첫 기록'}</div>`;
-  from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막 기록 · ${fullD(ln?ln.date:best.date)}${ln?` — ${esc(ln.txt)}`:''}</div>`
-    : (rec && best.e===e)? `<div class="pk-best">🏆 이 날이 ${bestWord(best)} 기록 · ${fullD(best.date)}</div>`
-    : `<div class="pk-best">🏆 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${fullD(best.date)}</div>`;
+  from= !best? '' : best.kind==='last'? `<div class="pk-best">🕘 마지막 기록 · ${bestD(ln?ln.date:best.date)}${ln?` — ${esc(ln.txt)}`:''}</div>`
+    : (rec && best.e===e)? `<div class="pk-best">🏆 이 날이 ${bestWord(best)} 기록 · ${bestD(best.date)}</div>`
+    : `<div class="pk-best">🏆 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${bestD(best.date)}</div>`;
   return `<div class="pk-row"><div class="pk-top"><div class="pk-ex">${esc(exName(exId))}</div>${recHtml}</div>${from}
     ${warn.length?`<div class="pk-warn">⚠ ${esc(warn.join(' / '))}</div>`:''}
     ${note.length?`<div class="pk-note">${esc(note.join(' / '))}</div>`:''}</div>`;
@@ -1645,10 +1663,10 @@ function peekLine(exId, e, isRef, memberId){
 function vPeek(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
   const cells=nextCells(m), k=Math.min(view.k||0, Math.max(0,cells.length-1)), c=cells[k];
-  const n0=memberLogs(m).length+1;
+  const n0=realCnt(memberLogs(m))+1;
   const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>📋 ${esc(m.name)}</h1><span></span></div>`;
   if(!c) return head+`<div class="empty">아직 보여 줄 수업이 없습니다.<br>첫 바퀴 중이면 회원 화면의 「📌 기준 수업 불러오기」로 비교할 날을 골라 주세요.</div>`;
-  const label= c.ref? `📌 기준 ${fullD(c.ref.date)} <span class="muted" style="font-weight:400">(한 바퀴 전)</span>` : `${esc(c.label)} <span class="muted" style="font-weight:400">(지난 바퀴 같은 회차)</span>`;
+  const label= c.ref? `📌 기준 ${c.ref.seed?'📥 ':''}${logDate(c.ref)} <span class="muted" style="font-weight:400">(한 바퀴 전)</span>` : `${esc(c.label)} <span class="muted" style="font-weight:400">(지난 바퀴 같은 회차)</span>`;
   const rows=c.items.map(exId=>{ const p=c.ref? refPrev(c.ref.id, exId) : cmpPrev(c.ctx, exId); return peekLine(exId, p&&p.e, !!c.ref, m.id); }).join('');
   const nav=`<div class="grid2" style="margin-top:12px">
     <button class="btn subtle" ${k<=0?'disabled style="opacity:.4"':''} onclick="view.k=${k-1}; render()">‹ 이전 회차</button>
@@ -1797,7 +1815,7 @@ function refPrev(refLogId, exId){
   const ref=db.logs.find(l=>l.id===refLogId); if(!ref) return null;
   const mode=exMode(exId);
   const e=(ref.entries||[]).find(x=>x.exId===exId && (mode==='chk'? x.chk : validSets(x.sets,mode).length || (x.issues||[]).length || x.memo));
-  return e? {e, label:fullD(ref.date), samePos:true, isRef:true} : null;
+  return e? {e, label:logDate(ref), samePos:true, isRef:true} : null;
 }
 function cmpPrev(ctx, exId){
   return (ctx.refLogId && refPrev(ctx.refLogId, exId)) || prevRecord(ctx.memberId, exId, ctx.dayIdx, ctx.lap, ctx.progId);
@@ -1814,15 +1832,15 @@ function openRefPicker(memberId){
 function renderRefList(q){
   const box=document.getElementById('ref-list'); if(!box) return;
   q=(q||'').trim().toLowerCase();
-  const logs=db.logs.filter(l=>l.memberId===_refMember).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const logs=db.logs.filter(l=>l.memberId===_refMember && l.seed!=='best').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const rows=logs.filter(l=>{
     if(!q) return true;
-    if(fullD(l.date).includes(q)) return true;
+    if(logDate(l).includes(q)) return true;
     return (l.entries||[]).some(e=>exName(e.exId).toLowerCase().includes(q));
   }).slice(0,120).map(l=>{
     const names=(l.entries||[]).map(e=>exName(e.exId));
     return `<div class="opt" style="display:block" onclick="openRefActions('${l.id}')">
-      <div class="row"><b class="num">${fullD(l.date)}</b><span class="t">${l.imported?'📥 종이 일지':l.dayIdx?'A-'+l.dayIdx:'수업'} · ${names.length}개 운동</span></div>
+      <div class="row"><b class="num">${logDate(l)}</b><span class="t">${l.seed?'📥 옮긴 기록':l.imported?'📥 종이 일지':l.dayIdx?'A-'+l.dayIdx:'수업'} · ${names.length}개 운동</span></div>
       <div class="t" style="margin-top:2px">${esc(names.slice(0,4).join(' · '))}${names.length>4?' 외':''}</div></div>`;
   }).join('');
   box.innerHTML=rows||'<div class="empty">맞는 수업이 없습니다</div>';
@@ -1834,7 +1852,7 @@ function openRefActions(logId){
     const v=mode==='chk'?(e.chk?'✓':''):compactStr(e,mode);
     return `<div class="row" style="padding:3px 0; font-size:13px"><span>${esc(exName(e.exId))}</span><span class="muted num">${esc(v||'—')}</span></div>`;
   }).join('');
-  modal(`<b>📌 기준: ${esc(fullD(ref.date))}</b>${ref.cond?`<div class="muted" style="margin-top:2px">🩺 ${esc(ref.cond)}</div>`:''}
+  modal(`<b>📌 기준: ${esc(logDate(ref))}</b>${ref.cond?`<div class="muted" style="margin-top:2px">🩺 ${esc(ref.cond)}</div>`:''}
     <div class="card" style="margin:10px 0; max-height:34vh; overflow-y:auto">${list||'<div class="muted">기록 없음</div>'}</div>
     <button class="btn" onclick="closeModal(); startRefSession('${ref.memberId}','${ref.id}')">이 수업 기준으로 오늘 수업 시작</button>
     <button class="btn ghost" onclick="closeModal(); printSheet8('${ref.memberId}','${ref.id}')">🖨 이 날부터 8회 수업지 인쇄</button>
@@ -1851,14 +1869,17 @@ function startRefSession(memberId, refLogId){
     entries: ids.map(exId=>{ const mode=exMode(exId);
       return {exId, mode, sets: mode==='chk'? []:[newSet(mode)], chk:false, issues:[], memo:'', open:false}; })};
   dsave(); go({name:'session'});
-  toast(`📌 ${fullD(ref.date)} 수업을 기준으로 시작합니다`);
+  toast(`📌 ${logDate(ref)} 수업을 기준으로 시작합니다`);
 }
 
 /* ── 지난 수업 기록 목록·수정 ── */
 function vLogs(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
-  const logs=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const list=logs.map(l=>{
+  const logs=db.logs.filter(l=>l.memberId===m.id && !l.seed).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const seeds=db.logs.filter(l=>l.memberId===m.id && l.seed);
+  const seedCard= seeds.length? `<div class="card tap" onclick="openSeed('${m.id}')"><div class="row"><div><b>📥 옮긴 기록</b>
+      <div class="muted">최고 기록 ${seeds.filter(l=>l.seed==='best').reduce((a,l)=>a+(l.entries||[]).length,0)}개 · 한 바퀴 ${seeds.filter(l=>l.seed==='lap').length}회 — 수업 횟수에는 안 셉니다</div></div><span class="muted">고치기 ›</span></div></div>` : '';
+  const list=seedCard+logs.map(l=>{
     const p=db.programs.find(p=>p.id===l.progId);
     return `<div class="card tap" onclick="startEditLog('${l.id}')">
       <div class="row"><div><b class="num">${l.imported?(l.date||'').replace(/-/g,'.'):fmtD(l.date)}</b> <span class="muted">${l.imported?'📥 종이 일지':l.dayIdx?`A-${l.dayIdx} · ${l.lap}바퀴${p?' · '+esc(p.name):''}`:'수업'}${l.refDate?' · 📌 기준 '+fmtD(l.refDate):''}</span>
@@ -1944,7 +1965,7 @@ async function shareSummary(logId){
 
 /* ───────────────────── 화면: 변화 리포트 (재등록 상담용) ───────────────────── */
 function reportData(m){
-  const logs=db.logs.filter(l=>l.memberId===m.id).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const logs=db.logs.filter(l=>l.memberId===m.id && !l.seed).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(!logs.length) return null;
   const byEx={};
   logs.forEach(l=>(l.entries||[]).forEach(e=>{ (byEx[e.exId]=byEx[e.exId]||[]).push({date:l.date, e}); }));
@@ -2034,7 +2055,7 @@ function vSearch(){
   if(view.exId){
     const mode=exMode(view.exId);
     const has=e=> e.exId===view.exId && (mode==='chk'? e.chk : validSets(e.sets,mode).length);
-    const logs=db.logs.filter(l=>l.memberId===m.id).map(l=>{
+    const logs=db.logs.filter(l=>l.memberId===m.id && !l.seed).map(l=>{
       const e=(l.entries||[]).find(has); return e?{l,e}:null; }).filter(Boolean)
       .sort((a,b)=>(b.l.date||'').localeCompare(a.l.date||''));
     if(!logs.length) body='<div class="empty">이 운동의 기록이 아직 없습니다</div>';
@@ -2311,6 +2332,300 @@ function applyProgChange(memberId, progId){
   ask(`${p.name} (${p.total}회)으로 ${m.programId?'변경':'배정'}할까요?`, m.programId?'변경':'배정', ()=>{
     m.programId=progId; m.sessionsDone=0; m.dayAdds={};
     save(); render(); toast('완료 — A-1부터 시작합니다'); });
+}
+
+/* ───────────────────── 화면: 📥 옛 기록 빠르게 넣기 (2026-10-27 대표님) ─────────────────────
+   2년치를 다 옮기지 않는다 — 앱이 실제로 쓰는 「운동별 최고 기록」과 「최근 한 바퀴」만.
+   저장하면 seed:'best' / seed:'lap' 표시가 붙고, 수업 횟수·통계·변화 리포트에는 안 센다.
+   날짜는 월까지, 모르면 비움. 자유 순서 회원은 바퀴 전체(seq 순서), 프로그램 회원은 A-날짜 칸마다.
+   말로 넣기 = 휴대폰 키보드 받아쓰기로 들어온 글을 아래 규칙으로 나눈다 (AI 안 씀, 무료). */
+let sd=null;
+const SD_LS='ptlog.seed';
+function sdsave(){ try{ localStorage.setItem(SD_LS, JSON.stringify(sd)); }catch(e){} }
+function sdRow(exId){ return {exId, a:'', b:'', s:'', ym:''}; }
+function sdHas(r){ return exMode(r.exId)==='chk'? !!r.a : String(r.a||'').trim()!=='' || String(r.b||'').trim()!==''; }
+function sdProgEx(m){ const p=db.programs.find(p=>p.id===m.programId); if(!p) return [];
+  const ids=[]; p.days.forEach((d,i)=>[...d.items, ...((m.dayAdds||{})[i+1]||[])].forEach(id=>{ if(exOf(id)&&!ids.includes(id)) ids.push(id); }));
+  return ids; }
+function sdFromEntry(e, lap){
+  const mode=exMode(e.exId), v=(e.sets||[]).filter(Boolean), f=v[0]||{}, s=x=>x==null?'':String(x);
+  const r={exId:e.exId, a:'', b:'', s: lap&&v.length>1? String(v.length):'', ym:''};
+  if(mode==='w'){ r.a=s(f.w); r.b=s(f.r); }
+  else if(mode==='t') r.a=s(f.sec);
+  else if(mode==='lv'){ r.a=s(f.lv); r.b=s(f.n); }
+  else if(mode==='band'){ r.a=f.band||''; r.b=s(f.r); }
+  else r.a=e.chk?'1':'';
+  return r;
+}
+/* 날짜 글 → 2025-03 / 2025-10-20. 연도가 없으면 올해(아직 안 온 달이면 작년) */
+function seedDate(v, monthOnly){
+  v=String(v||'').trim(); if(!v) return '';
+  const n=(v.match(/\d+/g)||[]).map(Number); if(!n.length) return '';
+  const now=new Date(); let y=null, mo=null, d=null;
+  if(String(v.match(/\d+/)[0]).length===4){ y=n[0]; mo=n[1]; d=n[2]; }
+  else if(n.length>=3){ y=2000+n[0]; mo=n[1]; d=n[2]; }
+  else if(/년/.test(v)){ y=n[0]<100?2000+n[0]:n[0]; mo=n[1]; }
+  else if(n.length===2){ if(monthOnly||n[0]>12){ y=2000+n[0]; mo=n[1]; } else { mo=n[0]; d=n[1]; } }
+  else mo=n[0];
+  if(!mo||mo<1||mo>12) return '';
+  if(y==null) y= mo>now.getMonth()+1? now.getFullYear()-1 : now.getFullYear();
+  const mm=String(mo).padStart(2,'0');
+  return (monthOnly||!d||d<1||d>31)? `${y}-${mm}` : `${y}-${mm}-${String(d).padStart(2,'0')}`;
+}
+function openSeed(memberId){
+  const m=db.members.find(x=>x.id===memberId); if(!m) return;
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem(SD_LS)||'null'); }catch(e){}
+  if(saved && saved.memberId===memberId){ sd=saved; go({name:'seed'}); return; }
+  const mine=db.logs.filter(l=>l.memberId===memberId && l.seed), pr=memberProgress(m);
+  sd={memberId, step:1, cur:0, unk:[], prog:!!pr, best:[]};
+  mine.filter(l=>l.seed==='best').forEach(l=>(l.entries||[]).forEach(e=>{ if(!exOf(e.exId)) return; const r=sdFromEntry(e,false); r.ym=fullD(l.date||''); sd.best.push(r); }));
+  if(!sd.best.length){
+    const ids= pr? sdProgEx(m) : [...new Set(memberLogs(m).filter(l=>!l.seed).slice(-30).flatMap(l=>(l.entries||[]).map(e=>e.exId)))].filter(id=>exOf(id));
+    ids.forEach(id=>sd.best.push(sdRow(id)));
+  }
+  if(pr){
+    sd.days={}; sd.next=pr.nextDay;
+    pr.p.days.forEach((d,i)=>{ const k=i+1, old=mine.find(l=>l.seed==='lap'&&l.dayIdx===k);
+      const ids=[...d.items, ...((m.dayAdds||{})[k]||[]).filter(id=>!d.items.includes(id))].filter(id=>exOf(id));
+      sd.days[k]={date:old?fullD(old.date||''):'', rows:ids.map(id=>{ const e=old&&(old.entries||[]).find(x=>x.exId===id); return e? sdFromEntry(e,true) : sdRow(id); })};
+    });
+  } else {
+    const old=mine.filter(l=>l.seed==='lap').sort((a,b)=>(a.seq||0)-(b.seq||0));
+    sd.n=old.length||cycleOf(m); sd.sess=[];
+    for(let i=0;i<sd.n;i++){ const o=old[i];
+      sd.sess.push({date:o?fullD(o.date||''):'', rows:o?(o.entries||[]).filter(e=>exOf(e.exId)).map(e=>sdFromEntry(e,true)):[]}); }
+  }
+  sdsave(); go({name:'seed'});
+}
+function sdReset(){
+  const id=sd&&sd.memberId; ask('지금까지 고친 내용을 버리고 저장돼 있던 상태로 다시 열까요?', '다시 열기', ()=>{
+    try{ localStorage.removeItem(SD_LS); }catch(e){} sd=null; if(id) openSeed(id); });
+}
+function sdList(){
+  if(!sd) return [];
+  if(sd.step===1) return sd.best;
+  if(sd.prog) return (sd.days[sd.cur+1]||{rows:[]}).rows;
+  return (sd.sess[sd.cur]||{rows:[]}).rows;
+}
+function sdIn(i,k,v){ const r=sdList()[i]; if(!r) return; r[k]=v; sdsave(); }
+function sdDel(i){ sdList().splice(i,1); sdsave(); render(); }
+function sdAdd(){ pickExercise(id=>{ const l=sdList(); if(!l.some(r=>r.exId===id)) l.push(sdRow(id)); sdsave(); render(); }); }
+function sdGo(step){ sd.step=step; sd.cur=0; sd.unk=[]; sdsave(); go({name:'seed'}); }
+function sdCur(i){ sd.cur=i; sd.unk=[]; sdsave(); render(); }
+function sdDateIn(where,i,el){
+  const iso=seedDate(el.value, where==='best');
+  const shown=iso? fullD(iso) : '';
+  if(where==='best'){ const r=sd.best[i]; if(r) r.ym=shown; }
+  else if(where==='day'){ sd.days[sd.cur+1].date=shown; }
+  else sd.sess[sd.cur].date=shown;
+  if(el.value.trim() && !iso) toast('날짜를 못 알아들었어요 — 예: 2025.3 / 10.20');
+  el.value=shown; sdsave();
+}
+function sdSetN(v){
+  const n=Math.max(1, Math.min(120, parseInt(v)||0)); if(!n) return;
+  while(sd.sess.length<n) sd.sess.push({date:'', rows:[]});
+  if(sd.sess.length>n) sd.sess=sd.sess.slice(0,n);
+  sd.n=n; sd.cur=Math.min(sd.cur, n-1); sdsave(); render();
+}
+function sdCopyPrev(){
+  if(!sd.cur) return; const list=sdList();
+  sd.sess[sd.cur-1].rows.forEach(r=>{ if(!list.some(x=>x.exId===r.exId)) list.push(sdRow(r.exId)); });
+  sdsave(); render();
+}
+function sdBestFill(){
+  let k=0; sdList().forEach(r=>{ if(sdHas(r)) return; const b=sd.best.find(x=>x.exId===r.exId && sdHas(x)); if(b){ r.a=b.a; r.b=b.b; k++; } });
+  sdsave(); render(); toast(k? `${k}줄을 최고 기록으로 채웠어요 — 다른 건 고쳐 주세요` : '채울 최고 기록이 없어요');
+}
+/* ── 말로 넣기: 「스쿼트 60킬로 8개 3세트 3월, 플랭크 1분 30초」 ── */
+const SD_ALIAS=[['스쿼트','squat','sq'],['벤치','bench','bp'],['데드리프트','deadlift','dl'],['데드','deadlift','dl'],['랫풀다운','lat pull down','latpulldown'],['랫풀','lat pull'],
+  ['레그프레스','leg press'],['레그컬','leg curl'],['레그익스텐션','leg extension'],['익스텐션','extension'],['플랭크','plank'],['런지','lunge'],
+  ['숄더프레스','shoulder press','ohp'],['로우','row'],['컬','curl'],['힙쓰러스트','hip thrust'],['푸시업','push up'],['푸쉬업','push up'],['풀업','pull up'],
+  ['케틀벨','kb'],['덤벨','db'],['바벨','bb'],['스미스','smith'],['크런치','crunch'],['브릿지','bridge'],['스텝퍼','stepper'],['행잉','hanging'],
+  ['니업','knee up'],['카프','calf'],['플라이','fly'],['프레스','press'],['체스트','chest'],['시티드','seated'],['인클라인','incline'],['레터럴','lateral'],['레이즈','raise']];
+function sdNorm(s){ return String(s||'').toLowerCase().replace(/[\s\-_.()·&+]/g,''); }
+function sdVariants(name){
+  let vs=[sdNorm(name)];
+  SD_ALIAS.forEach(([ko,...en])=>{ const k=sdNorm(ko);
+    vs=vs.flatMap(v=> v.includes(k)? [v, ...en.map(e=>v.split(k).join(sdNorm(e)))] : [v]).slice(0,60); });
+  return [...new Set(vs)].filter(Boolean);
+}
+function sdFindEx(name, scopeIds){
+  const vs=sdVariants(name); if(!vs.length) return null;
+  const pool=[...scopeIds.map(exOf).filter(Boolean), ...db.exercises];
+  for(const v of vs){ const e=pool.find(e=>sdNorm(e.name)===v); if(e) return e.id; }
+  let best=null, gap=1e9;
+  vs.forEach(v=>{ if(v.length<2) return; pool.forEach(e=>{ const n=sdNorm(e.name);
+    if(n.length>=2 && (n.includes(v)||v.includes(n))){ const g=Math.abs(n.length-v.length); if(g<gap){ gap=g; best=e.id; } } }); });
+  return best;
+}
+function sdParse(text){
+  const out=[];
+  String(text||'').split(/[\n,，;]|그리고|다음에|다음은/).map(s=>s.trim()).filter(Boolean).forEach(raw=>{
+    let c=' '+raw.replace(/곱하기|×|\*/g,' × ').replace(/(\d)\s*[xX]\s*(\d)/g,'$1 × $2')+' ';
+    const r={name:'', a:'', b:'', s:'', ym:'', sec:'', lv:'', band:''};
+    const take=(re,f)=>{ const m=c.match(re); if(!m) return false; f(m); c=c.replace(m[0],' '); return true; };
+    if(!take(/(20\d{2}|\d{2})\s*년\s*(\d{1,2})\s*월/, m=>r.ym=seedDate(m[1]+'년 '+m[2],true))) take(/(\d{1,2})\s*월/, m=>r.ym=seedDate(m[1],true));
+    if(!take(/(\d+)\s*분\s*(\d+)\s*초/, m=>r.sec=String(+m[1]*60+ +m[2])))
+      if(!take(/(\d+)\s*(?:초|sec)/i, m=>r.sec=m[1])) take(/(\d+)\s*분/, m=>r.sec=String(+m[1]*60));
+    take(/(\d+)\s*(?:세트|셋|set)/i, m=>r.s=m[1]);
+    take(/(\d+(?:\.\d+)?)\s*(?:kg|키로|킬로그램|킬로)/i, m=>r.a=m[1]);
+    take(/(?:레벨|lv|level)\s*(\d+)/i, m=>r.lv=m[1]);
+    take(/(\d+)\s*(?:개|회|번|reps?|랩스?|렙스?)/i, m=>r.b=m[1]);
+    const band=BANDS.find(b=>c.includes(b)); if(band){ r.band=band; c=c.replace(band,' '); }
+    if(/맨몸/.test(c) && !r.a){ r.a='0'; c=c.replace(/맨몸/g,' '); }
+    const nums=c.match(/\d+(?:\.\d+)?/g)||[]; c=c.replace(/\d+(?:\.\d+)?/g,' ').replace(/×/g,' ');
+    if(nums.length>=2 && !r.a && !r.b){ r.a=nums[0]; r.b=nums[1]; if(nums[2]&&!r.s) r.s=nums[2]; }
+    else if(nums.length===1){ if(r.a&&!r.b) r.b=nums[0]; else if(!r.a&&r.b) r.a=nums[0]; else if(!r.a&&!r.b) r.b=nums[0]; }
+    r.name=c.replace(/(최고|기록|으로|에서|했어요|했음|정도)/g,' ').replace(/\s+/g,' ').trim();
+    if(r.name) out.push(r);
+  });
+  return out;
+}
+function sdFill(r, it){
+  const mode=exMode(r.exId);
+  if(mode==='t'){ if(it.sec||it.b) r.a=it.sec||it.b; }
+  else if(mode==='lv'){ if(it.lv||it.a) r.a=it.lv||it.a; if(it.b) r.b=it.b; }
+  else if(mode==='band'){ if(it.band) r.a=it.band; if(it.b) r.b=it.b; }
+  else if(mode==='chk') r.a='1';
+  else { if(it.a!=='') r.a=it.a; if(it.b!=='') r.b=it.b; }
+  if(it.s && sd.step===2) r.s=it.s;
+  if(it.ym && sd.step===1) r.ym=fullD(it.ym);
+}
+function sdVoice(){
+  const ta=document.getElementById('sd-voice'), items=sdParse(ta?ta.value:'');
+  if(!items.length){ toast('알아들은 운동이 없어요 — 「스쿼트 60킬로 8개」처럼 말해 보세요'); return; }
+  const list=sdList(); let ok=0;
+  items.forEach(it=>{
+    const id=sdFindEx(it.name, list.map(r=>r.exId));
+    if(!id){ sd.unk.push(it); return; }
+    let r=list.find(x=>x.exId===id); if(!r){ r=sdRow(id); list.push(r); }
+    sdFill(r, it); ok++;
+  });
+  sdsave(); render();
+  toast(`${ok}개 넣었어요${sd.unk.length?` · 못 찾은 운동 ${sd.unk.length}개는 골라 주세요`:''}`);
+}
+function sdResolve(k,id){
+  const it=sd.unk[k]; if(!it) return; sd.unk.splice(k,1);
+  const list=sdList(); let r=list.find(x=>x.exId===id); if(!r){ r=sdRow(id); list.push(r); }
+  sdFill(r,it); sdsave(); render();
+}
+function sdUnkNew(k){ const it=sd.unk[k]; if(it) quickNewEx(it.name, id=>sdResolve(k,id)); }
+function sdUnkPick(k){ pickExercise(id=>sdResolve(k,id)); }
+function sdRowHtml(r,i,lap){
+  const mode=exMode(r.exId);
+  const inp=(k,cls,ph,im)=>`<input class="${cls}" ${im?`inputmode="${im}"`:''} placeholder="${ph}" value="${esc(r[k])}" oninput="sdIn(${i},'${k}',this.value)">`;
+  const sets= lap? '×'+inp('s','n','1','numeric')+'세트' : '';
+  let ins;
+  if(mode==='w') ins=inp('a','w','맨몸 0','decimal')+'kg ×'+inp('b','n','','numeric')+'회'+sets;
+  else if(mode==='t') ins=inp('a','w','','numeric')+'초'+sets;
+  else if(mode==='lv') ins='Lv'+inp('a','n','','numeric')+'×'+inp('b','n','','numeric')+'회'+sets;
+  else if(mode==='band') ins=`<select class="w" onchange="sdIn(${i},'a',this.value)"><option value="">밴드 색</option>${BANDS.map(b=>`<option ${r.a===b?'selected':''}>${b}</option>`).join('')}</select>×`+inp('b','n','','numeric')+'회'+sets;
+  else ins=`<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" style="width:auto" ${r.a?'checked':''} onchange="sdIn(${i},'a',this.checked?'1':'')"> ${lap?'했음':'한 적 있음'}</label>`;
+  const dt= lap? '' : `<div class="sd-in"><input class="d" placeholder="${mode==='chk'?'마지막으로 한 달':'날짜'} 2025.3 · 모르면 비움" value="${esc(r.ym)}" onchange="sdDateIn('best',${i},this)"></div>`;
+  return `<div class="sd-row"><div class="sd-top"><span>${esc(exName(r.exId))}</span><button class="ichip" onclick="sdDel(${i})">빼기</button></div><div class="sd-in">${ins}</div>${dt}</div>`;
+}
+function vSeed(){
+  const m=sd&&db.members.find(x=>x.id===sd.memberId); if(!m){ sd=null; return vHome(); }
+  const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>📥 ${esc(m.name)} 옛 기록</h1><span class="muted num">${sd.step}/3</span></div>`;
+  const voice=`<div class="card"><div class="muted" style="margin-bottom:6px">🎤 말로 넣기 — 칸을 누르고 키보드의 마이크 버튼으로 말하세요. 여러 운동은 쉼표나 「그리고」로 이어서.</div>
+    <textarea id="sd-voice" rows="2" placeholder="${sd.step===1?'스쿼트 60킬로 8개 3월, 플랭크 1분 30초':'스쿼트 50킬로 10개 3세트, 레그컬 25킬로 12개 3세트'}"></textarea>
+    <button class="btn ghost" style="margin-top:8px" onclick="sdVoice()">말한 내용 넣기</button></div>`;
+  const unk= sd.unk.length? `<div class="card" style="border:1px solid var(--warn)"><div class="muted" style="margin-bottom:6px">못 찾은 운동 — 골라 주세요</div>
+    ${sd.unk.map((u,k)=>`<div class="row" style="padding:4px 0; gap:6px"><span>「${esc(u.name)}」</span><span style="flex-shrink:0"><button class="ichip" onclick="sdUnkNew(${k})">＋ 새 운동</button> <button class="ichip" onclick="sdUnkPick(${k})">고르기</button> <button class="ichip" onclick="sd.unk.splice(${k},1); sdsave(); render()">버리기</button></span></div>`).join('')}</div>` : '';
+  const rows=list=>list.map((r,i)=>sdRowHtml(r,i,sd.step===2)).join('')||'<div class="muted">아직 운동이 없어요</div>';
+  if(sd.step===1){
+    return head+`<div class="card"><b>1단계 · 운동별 최고 기록</b>
+        <div class="muted" style="margin-top:4px; line-height:1.6">운동마다 가장 좋았던 기록 한 줄씩. 날짜는 월까지, 모르면 비워 두세요. 숫자를 안 넣은 줄은 저장하지 않아요.</div></div>
+      ${voice}${unk}
+      <div class="card">${rows(sd.best)}<button class="btn subtle" style="margin-top:10px" onclick="sdAdd()">＋ 운동 추가</button></div>
+      <button class="btn" onclick="sdGo(2)">다음 — 최근 한 바퀴</button>
+      <button class="btn subtle" onclick="sdReset()">처음 상태로 다시 열기</button>`;
+  }
+  if(sd.step===2){
+    const has=rs=>rs.some(sdHas);
+    if(sd.prog){
+      const p=memberProgress(m).p, total=p.days.length, k=sd.cur+1, day=sd.days[k];
+      const nav=`<div class="sd-nav">${p.days.map((_,i)=>`<span class="${i===sd.cur?'on':has(sd.days[i+1].rows)?'fill':''}" onclick="sdCur(${i})">A-${i+1}</span>`).join('')}</div>`;
+      return head+`<div class="card"><b>2단계 · 최근 한 바퀴</b>
+          <div class="muted" style="margin-top:4px; line-height:1.6">${esc(p.name)} — 칸마다 그 날짜(A-몇)를 마지막으로 한 날의 기록. 비워 둔 칸은 수업 화면에서 최고 기록으로 보여 줘요.</div></div>
+        ${nav}
+        <div class="card"><div class="row"><b>A-${k}</b><input class="d" style="max-width:55%; text-align:center" placeholder="한 날 10.20 · 모르면 비움" value="${esc(day.date)}" onchange="sdDateIn('day',0,this)"></div>
+          ${rows(day.rows)}
+          <button class="btn subtle" style="margin-top:10px" onclick="sdBestFill()">🏆 빈 줄을 최고 기록으로 채우기</button></div>
+        ${voice}${unk}
+        <div class="grid2"><button class="btn subtle" ${k<=1?'disabled style="opacity:.4"':''} onclick="sdCur(${sd.cur-1})">‹ A-${k-1}</button>
+          <button class="btn subtle" ${k>=total?'disabled style="opacity:.4"':''} onclick="sdCur(${sd.cur+1})">A-${k+1} ›</button></div>
+        <div class="card" style="margin-top:12px"><div class="row"><span>다음 수업은</span>
+          <select style="max-width:40%" onchange="sd.next=+this.value; sdsave()">${p.days.map((_,i)=>`<option value="${i+1}" ${sd.next===i+1?'selected':''}>A-${i+1}</option>`).join('')}</select><span>부터</span></div></div>
+        <button class="btn" onclick="sdGo(3)">다음 — 확인</button>
+        <button class="btn subtle" onclick="sdGo(1)">← 1단계 최고 기록</button>`;
+    }
+    const s=sd.sess[sd.cur], n=sd.n;
+    const nav=`<div class="sd-nav">${sd.sess.map((x,i)=>`<span class="${i===sd.cur?'on':x.rows.length?'fill':''}" onclick="sdCur(${i})">${i+1}</span>`).join('')}</div>`;
+    return head+`<div class="card"><b>2단계 · 최근 한 바퀴 (자유 순서)</b>
+        <div class="muted" style="margin-top:4px; line-height:1.6">한 바퀴를 이루는 지난 수업을 오래된 것부터 차례로. <b>1번 = 가장 오래된 수업 = 다음 수업의 기준</b>이 됩니다. 운동만 넣고 숫자를 비워 두면 그 운동은 최고 기록으로 보여 줘요.</div>
+        <div class="row" style="margin-top:8px"><span>한 바퀴</span><input class="num" style="max-width:30%; text-align:center" inputmode="numeric" value="${n}" onchange="sdSetN(this.value)"><span>회</span></div></div>
+      ${nav}
+      <div class="card"><div class="row"><b>${sd.cur+1}번 수업</b><input class="d" style="max-width:55%; text-align:center" placeholder="날짜 10.20 · 모르면 비움" value="${esc(s.date)}" onchange="sdDateIn('sess',0,this)"></div>
+        ${rows(s.rows)}
+        <div class="grid2" style="margin-top:10px"><button class="btn subtle" onclick="sdAdd()">＋ 운동 추가</button>
+          <button class="btn subtle" ${sd.cur?'':'disabled style="opacity:.4"'} onclick="sdCopyPrev()">앞 수업 운동 그대로</button></div>
+        <button class="btn subtle" style="margin-top:8px" onclick="sdBestFill()">🏆 빈 줄을 최고 기록으로 채우기</button></div>
+      ${voice}${unk}
+      <div class="grid2"><button class="btn subtle" ${sd.cur<=0?'disabled style="opacity:.4"':''} onclick="sdCur(${sd.cur-1})">‹ ${sd.cur}번</button>
+        <button class="btn subtle" ${sd.cur>=n-1?'disabled style="opacity:.4"':''} onclick="sdCur(${sd.cur+1})">${sd.cur+2}번 ›</button></div>
+      <button class="btn" style="margin-top:12px" onclick="sdGo(3)">다음 — 확인</button>
+      <button class="btn subtle" onclick="sdGo(1)">← 1단계 최고 기록</button>`;
+  }
+  const bestN=sd.best.filter(r=>sdEntry(r,false)).length, bestHalf=sd.best.filter(r=>sdHas(r)&&!sdEntry(r,false)).length;
+  let lapTxt;
+  if(sd.prog){ const ks=Object.keys(sd.days), f=ks.filter(k=>sd.days[k].rows.some(r=>sdEntry(r,true))).length;
+    lapTxt=`한 바퀴 <b class="num">${ks.length}</b>칸 중 기록 넣은 칸 <b class="num">${f}</b> · 다음 수업 <b>A-${sd.next}</b>`; }
+  else { const f=sd.sess.filter(x=>x.rows.length).length;
+    lapTxt=`한 바퀴 <b class="num">${sd.n}</b>회 중 운동 넣은 수업 <b class="num">${f}</b>회${f<sd.n?` <div style="color:var(--warn); margin-top:4px">비어 있는 수업 ${sd.n-f}회 — 그 차례엔 기준 수업이 비어 나와요</div>`:''}`; }
+  return head+`<div class="card"><b>3단계 · 이렇게 저장돼요</b>
+      <div style="margin-top:8px; line-height:1.9">🏆 최고 기록 <b class="num">${bestN}</b>개${bestHalf?` <span style="color:var(--warn)">(횟수가 빠져 저장 안 되는 줄 ${bestHalf}개)</span>`:''}<br>🔁 ${lapTxt}</div>
+      <div class="muted" style="margin-top:8px; line-height:1.6">옮긴 기록은 수업 횟수·통계·변화 리포트에 세지 않아요. 저장한 뒤에도 회원 화면의 「📥 옛 기록 빠르게 넣기」에서 다시 고칠 수 있어요.</div></div>
+    <button class="btn" onclick="sdSave()">저장하고 오늘 수업 보기</button>
+    <button class="btn subtle" onclick="sdGo(2)">← 2단계로</button>`;
+}
+function sdEntry(r, lap){
+  const mode=exMode(r.exId), A=String(r.a||'').trim(), B=String(r.b||'').trim();
+  const n=lap? Math.max(1, Math.min(20, parseInt(r.s)||1)) : 1;
+  const e={exId:r.exId, sets:[], chk:false, issues:[], memo:''};
+  if(mode==='chk'){ if(!A) return null; e.chk=true; return e; }
+  let one=null;
+  if(mode==='w' && num(B)>0) one={w:num(A), r:num(B)};
+  else if(mode==='t' && num(A)>0) one={sec:num(A)};
+  else if(mode==='lv' && num(B)>0) one={lv:num(A), n:num(B)};
+  else if(mode==='band' && num(B)>0) one={band:A||BANDS[0], r:num(B)};
+  if(!one) return null;
+  for(let i=0;i<n;i++) e.sets.push({...one});
+  return e;
+}
+function sdSave(){
+  const m=db.members.find(x=>x.id===sd.memberId); if(!m) return;
+  if(draft&&draft.memberId===m.id){ toast('진행 중인 수업이 있어요 — 먼저 완료하거나 버리세요'); return; }
+  db.logs=db.logs.filter(l=>!(l.memberId===m.id && l.seed));
+  const groups={}; let bestN=0, lapN=0;
+  sd.best.forEach(r=>{ const e=sdEntry(r,false); if(!e) return; const k=seedDate(r.ym,true); (groups[k]=groups[k]||[]).push(e); bestN++; });
+  Object.keys(groups).forEach(k=>db.logs.push({id:uid(), memberId:m.id, seed:'best', date:k, dayIdx:0, lap:0, progId:null, cond:'', entries:groups[k]}));
+  if(sd.prog){
+    const pr=memberProgress(m);
+    Object.keys(sd.days).forEach(k=>{ const day=sd.days[k], entries=day.rows.map(r=>sdEntry(r,true)).filter(Boolean);
+      if(!entries.length) return;
+      db.logs.push({id:uid(), memberId:m.id, seed:'lap', date:seedDate(day.date,false), dayIdx:+k, lap:0, progId:m.programId, cond:'', entries}); lapN++; });
+    if(pr && sd.next && sd.next!==pr.nextDay) m.sessionsDone=(pr.lap-1)*pr.total+(sd.next-1);
+  } else {
+    sd.sess.forEach((s,i)=>{
+      const entries=s.rows.map(r=>sdEntry(r,true)||{exId:r.exId, sets:[], chk:false, issues:[], memo:''});
+      db.logs.push({id:uid(), memberId:m.id, seed:'lap', seq:i, date:seedDate(s.date,false), dayIdx:0, lap:0, progId:null, cond:'', entries});
+      if(entries.length) lapN++; });
+    m.cycle=sd.n;
+  }
+  save(); sd=null; try{ localStorage.removeItem(SD_LS); }catch(e){}
+  toast(`저장했어요 — 최고 기록 ${bestN}개 · 한 바퀴 ${lapN}회`);
+  go({name:'peek', id:m.id, k:0});
 }
 
 let _pickCb=null;
