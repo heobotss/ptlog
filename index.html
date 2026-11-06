@@ -80,8 +80,15 @@
   .pc-in.bad,.pc-d.bad{border:1.5px solid var(--bad)}
   .pc-memo{margin-top:6px; padding:7px 10px; font-size:13px}
   .pc-d{width:150px; max-width:60%; padding:6px 8px; text-align:center; font-size:14px}
-  .pc-cells{display:grid; grid-template-columns:repeat(8,1fr); gap:4px; margin-top:8px}
-  .pc-cells .ichip{padding:5px 0; margin:0}
+  .cg{display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px; background:#F4F1EA; border-radius:8px; margin-top:6px}
+  .cg button{position:relative; padding:16px 0; border:1.5px solid #B9B3A6; border-radius:6px; background:#fff; color:#333; font-size:17px; font-weight:700; cursor:pointer}
+  .cg button small{display:block; font-size:11px; font-weight:600; color:var(--blue); margin-top:2px}
+  .cg button.sug{border-color:var(--blue); background:#E8F0FF; color:#1B4FC4}
+  .cg button.on{border-color:var(--blue); background:#E8F0FF; color:#1B4FC4}
+  .cg button.offc{opacity:.45; text-decoration:line-through}
+  .cg.mini{gap:3px; padding:5px; margin:6px auto; max-width:110px}
+  .cg.mini span{display:block; padding:3px 0; border:1px solid #B9B3A6; border-radius:3px; background:#fff; color:#333; font-size:12px; font-weight:700; text-align:center}
+  .ordbtn{height:auto!important; padding:10px 6px!important; line-height:1.4}
   .sd-nav span.warnc{border-color:var(--warn); color:var(--warn)}
   .sd-nav span.off{opacity:.35; text-decoration:line-through}
   .sd-row{padding:8px 0; border-bottom:1px solid var(--line)}
@@ -1402,11 +1409,15 @@ async function photoFill(){
   if(typeof locked==='function' && locked()){ blockEdit(); return; }
   if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
   if(ocrBlocked()){ ocrLimitModal(); return; }
-  modal(`<b>📷 어떤 종이인가요?</b>
+  if(!db.cellOrder){ pickCellOrder('photo'); return; }
+  const m=db.members.find(x=>x.id===draft.memberId), ord=CELL_ORDERS[cellOrder()];
+  const sug= m&&m.lastCell? ord[(ord.indexOf(m.lastCell)+1)%8] : null;
+  modal(`<b>📷 오늘 쓴 칸을 누르세요</b>
     ${ocrQuota?`<div class="muted" style="margin:4px 0 0">${ocrLeftText()}</div>`:''}
-    <div class="muted" style="margin:4px 0 10px">8칸 수업지면 이 수업이 몇 번째 칸인지 골라 주세요 (왼쪽 열 위→아래 1~4, 오른쪽 열 5~8)</div>
-    <div class="grid2" style="grid-template-columns:repeat(4,1fr)">${[1,2,3,4,5,6,7,8].map(n=>`<button class="btn subtle" onclick="window.__ocrCell=${n}; closeModal(); document.getElementById('ocr-file').click()">${n}번 칸</button>`).join('')}</div>
-    <button class="btn ghost" onclick="window.__ocrCell=0; closeModal(); document.getElementById('ocr-file').click()">한 장에 한 수업짜리 종이</button>`);
+    <div class="muted" style="margin:4px 0 2px">8칸 일지 모양 그대로예요. 숫자는 선생님이 쓰는 순서(${cellOrder()==='row'?'가로':'세로'})입니다.${sug?' 파란 칸이 지난번 다음 칸이에요.':''}</div>
+    ${cellGrid(p=>`<button class="${p===sug?'sug':''}" onclick="window.__ocrCell=${p}; closeModal(); document.getElementById('ocr-file').click()">${cellSeq(p)}${p===sug?'<small>다음 칸</small>':''}</button>`)}
+    <button class="btn ghost" style="margin-top:10px" onclick="window.__ocrCell=0; closeModal(); document.getElementById('ocr-file').click()">한 장에 한 수업짜리 종이</button>
+    <div style="text-align:center; margin-top:4px"><span class="muted" style="font-size:12.5px; text-decoration:underline; cursor:pointer" onclick="pickCellOrder('photo')">쓰는 순서 바꾸기 (지금: ${cellOrder()==='row'?'가로':'세로'})</span></div>`);
 }
 document.addEventListener('DOMContentLoaded', ()=>{
   const inp=document.getElementById('ocr-file'); if(!inp) return;
@@ -1424,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(!res.ok||out.error) throw new Error('서버 '+res.status+' '+(out.error||''));
       const got=piFromOut(out, draft.memberId);
       if(!got.rows.length){ closeModal(); toast('읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요'); return; }
-      pi={mode:'today', memberId:draft.memberId, cur:0, cells:[{status:'ok', img, seen:true, ...got}], gone:[]};
+      pi={mode:'today', memberId:draft.memberId, cur:0, cells:[{status:'ok', img, seen:true, cell, ...got}], gone:[]};
       const has=id=>got.rows.some(x=>x.exId===id||x.sug===id);
       pi.gone=draft.entries.filter(en=>!has(en.exId)).map(en=>({exId:en.exId, keep:entryHasRecord(en,en.mode)}));
       closeModal(); go({name:'pcheck'});
@@ -1635,8 +1646,8 @@ function printSheet8(memberId, startRefId){
   document.getElementById('printsheet').innerHTML=`
     <div class="s8h"><b>수업일지 · ${esc(maskName(m.name))}${m.sex?` (${m.sex})`:''}</b>
       <span>${n0}~${n0+cells.length-1}회차 · 📌 = 기준 수업 날짜 · 작은 숫자 = 기준일 최고 무게×횟수 · 「최고」 = 전체 기록 중 최고와 그 날짜(체크 운동은 마지막으로 한 날) · ⚠ = 통증·주의 · ? = 확정 못 한 숫자</span></div>
-    <div class="g8">${html}${blanks}</div>
-    <div class="foot">허봇스 수업일지 · 칸 순서: 왼쪽 열 위→아래(1~4), 오른쪽 열(5~8) · 수업 후 「📷 사진으로 채우기」에서 칸 번호를 고르면 자동 입력</div>`;
+    <div class="g8" style="grid-auto-flow:${cellOrder()==='row'?'row':'column'}">${html}${blanks}</div>
+    <div class="foot">허봇스 수업일지 · 칸 순서: ${cellOrder()==='row'?'왼쪽→오른쪽, 한 줄씩 아래로':'왼쪽 열 위→아래, 다음 오른쪽 열'} · 수업 후 「📷 사진으로 채우기」에서 그 칸을 누르면 자동 입력</div>`;
   window.print();
 }
 
@@ -2648,7 +2659,23 @@ function sdSave(){
    8칸 종이는 앱이 칸별로 잘라 읽는다(10월 실측 통째 50.5% → 칸별 60.3%). 1칸 = 판독 1회. 서버는 한 번에 한 칸씩(사용량을 정확히 세려고). */
 let pi=null;
 const CELL_ROWS=[[.105,.335],[.305,.545],[.505,.75],[.71,.96]], CELL_COLS=[[.02,.515],[.475,.985]];
-function cellLabel(n){ return (n<=4?'왼쪽 ':'오른쪽 ')+((n-1)%4+1)+'번'; }
+/* 8칸 종이 (11-06 대표님): 칸 위치 번호(pos)는 늘 「왼쪽 열 위→아래 1~4, 오른쪽 열 5~8」로 저장하고,
+   선생님이 쓰는 순서(세로=왼쪽 줄 먼저 / 가로=한 줄씩 왼→오)는 db.cellOrder 로 따로 기억한다. 화면 숫자는 쓰는 순서다 */
+const CELL_ORDERS={col:[1,2,3,4,5,6,7,8], row:[1,5,2,6,3,7,4,8]};
+function cellOrder(){ return db.cellOrder==='row'?'row':'col'; }
+function cellSeq(pos, ord){ return CELL_ORDERS[ord||cellOrder()].indexOf(pos)+1; }
+function cellGrid(btn, cls){ let h=`<div class="cg ${cls||''}">`; for(let r=0;r<4;r++) for(let c=0;c<2;c++) h+=btn(c*4+r+1); return h+'</div>'; }
+function orderMini(ord){ return cellGrid(p=>`<span>${cellSeq(p,ord)}</span>`, 'mini'); }
+function orderName(ord){ return (ord||cellOrder())==='row'? '가로로 (왼쪽→오른쪽, 한 줄씩 아래로)' : '세로로 (왼쪽 줄 위→아래, 다음 오른쪽 줄)'; }
+function pickCellOrder(next){
+  modal(`<b>8칸 일지를 어떤 순서로 쓰세요?</b><div class="muted" style="margin:4px 0 10px">한 번만 고르면 기억합니다. 설정에서 언제든 바꿀 수 있어요.</div>
+    <div class="grid2"><button class="btn subtle ordbtn" onclick="setCellOrder('col','${next||''}')"><b>세로로</b>${orderMini('col')}<div class="muted" style="font-size:12px">왼쪽 줄 위→아래<br>다음 오른쪽 줄</div></button>
+      <button class="btn subtle ordbtn" onclick="setCellOrder('row','${next||''}')"><b>가로로</b>${orderMini('row')}<div class="muted" style="font-size:12px">왼쪽→오른쪽<br>한 줄씩 아래로</div></button></div>`);
+}
+function setCellOrder(o, next){
+  db.cellOrder=o; save(); closeModal(); toast(o==='row'?'가로 순서로 기억했어요':'세로 순서로 기억했어요');
+  if(next==='photo') photoFill(); else render();
+}
 function cellBox(im,n){ const w=im.naturalWidth, h=im.naturalHeight, c=CELL_COLS[n<=4?0:1], r=CELL_ROWS[(n-1)%4];
   return [c[0]*w, r[0]*h, (c[1]-c[0])*w, (r[1]-r[0])*h]; }
 function fileImg(file){ return new Promise((ok,no)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=no; im.src=URL.createObjectURL(file); }); }
@@ -2813,7 +2840,10 @@ function vPCheck(){
         <button class="btn subtle" ${ci>=pi.cells.length-1?'disabled style="opacity:.4"':''} onclick="piCurGo(${ci+1})">다음 칸 ›</button></div>
        ${pi.cells.some(x=>x.status==='wait'||x.status==='fail')?`<button class="btn ghost" style="margin-top:10px" onclick="piRun()">못 읽은 칸 ${pi.cells.filter(x=>x.status==='wait'||x.status==='fail').length}개 이어서 읽기</button>`:''}
        <button class="btn" style="margin-top:10px" onclick="piGoFinal()">확인 끝 — 저장하러 가기</button>`;
-  return head+nav+`<div class="pc-wrap"><div class="pc-img" onclick="piZoom(this)"><img src="${c.img}" alt="일지 사진"></div>
+  const oh=today? null : piOrderHint();
+  const hint= oh? `<div class="card" style="border:1px solid var(--warn)"><b>읽은 날짜 순서가 이상해요</b><div class="muted" style="margin:2px 0 8px">칸을 ${oh.alt==='row'?'가로로(왼쪽→오른쪽, 한 줄씩)':'세로로(왼쪽 줄 먼저)'} 쓰셨나요? 바꾸면 날짜가 차례대로 맞아요.</div>
+      <button class="btn subtle" onclick="piApplyOrder('${oh.alt}')">${oh.alt==='row'?'가로':'세로'} 순서로 바꾸기</button></div>` : '';
+  return head+nav+hint+`<div class="pc-wrap"><div class="pc-img" onclick="piZoom(this)"><img src="${c.img}" alt="일지 사진"></div>
     <div>${info}<div class="card">${rows}${add}</div>${foot}</div></div>`;
 }
 function piAddRow(ci){
@@ -2839,6 +2869,7 @@ function piApplyToday(){
   });
   (pi.gone||[]).filter(g=>g.keep).forEach(g=>{ const was=old.find(x=>x.exId===g.exId); if(was&&!next.some(x=>x.exId===g.exId)) next.push(was); });
   draft.entries=next; if(c.cond&&!draft.cond) draft.cond=c.cond;
+  const mm=db.members.find(x=>x.id===pi.memberId); if(mm&&c.cell) mm.lastCell=c.cell;   /* 다음 수업 때 「다음 칸」을 미리 표시 */
   pi=null; dsave(); go({name:'session'});
   toast('오늘 기록에 넣었습니다 — 확인 후 「수업 완료」를 눌러 주세요');
 }
@@ -2856,7 +2887,7 @@ async function openImport(memberId){
 }
 function piStart(memberId){
   const m=db.members.find(x=>x.id===memberId), real=db.logs.filter(l=>l.memberId===memberId&&!l.seed).length;
-  pi={mode:'import', memberId, step:'pick', kind:'8', photos:[], cells:[], cur:0, year:new Date().getFullYear(), startNo:real?(m.sessionsDone||real)+1:1};
+  pi={mode:'import', memberId, step:'pick', kind:'8', order:cellOrder(), photos:[], cells:[], cur:0, year:new Date().getFullYear(), startNo:real?(m.sessionsDone||real)+1:1};
   go({name:'pimp'});
 }
 function piResume(){ if(pi.step==='read'){ pi.step='pick2'; } if(pi.step==='pick'||pi.step==='pick2'){ go({name:'pimp'}); return; } go({name:'pcheck'}); }
@@ -2894,25 +2925,44 @@ function vPImp(){
   }
   const rows=pi.photos.map((p,i)=>`<div class="card" style="padding:10px"><div class="row" style="gap:8px"><img src="${p.full}" style="width:56px; height:76px; object-fit:cover; border-radius:6px" alt=""><div style="flex:1; min-width:0"><b>${i+1}장째</b><div class="muted" style="font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(p.name)}</div></div>
       <span style="flex-shrink:0"><button class="ichip" onclick="piPhotoMove(${i},-1)">↑</button> <button class="ichip" onclick="piPhotoMove(${i},1)">↓</button> <button class="ichip" onclick="piPhotoDel(${i})">빼기</button></span></div>
-      ${pi.kind==='8'?`<div class="pc-cells">${p.cells.map((c,k)=>`<button class="ichip ${c.on?'on-imp':''}" onclick="piCellTog(${i},${k})">${c.n}</button>`).join('')}</div>`:''}</div>`).join('');
+      ${pi.kind==='8'?cellGrid(pos=>{ const k=p.cells.findIndex(c=>c.n===pos), c=p.cells[k]; return `<button class="${c&&c.on?'on':'offc'}" onclick="piCellTog(${i},${k})">${cellSeq(pos,pi.order||'col')}</button>`; }):''}</div>`).join('');
   const n=piOnCount(), q=ocrQuota;
   return head+`<div class="card"><b>회차 순서대로 사진을 올려 주세요</b>
       <div class="muted" style="margin-top:4px; line-height:1.6">앱이 칸마다 읽어 수업 기록을 만들고, 선생님은 틀린 곳만 고칩니다. 사진이 많으면 <b>PC에서 하면 훨씬 빠릅니다.</b></div>
-      <div class="grid2" style="margin-top:10px"><button class="btn ${pi.kind==='8'?'':'subtle'}" onclick="piKind('8')">8칸 일지</button><button class="btn ${pi.kind==='1'?'':'subtle'}" onclick="piKind('1')">한 장에 한 수업</button></div></div>
+      <div class="grid2" style="margin-top:10px"><button class="btn ${pi.kind==='8'?'':'subtle'}" onclick="piKind('8')">8칸 일지</button><button class="btn ${pi.kind==='1'?'':'subtle'}" onclick="piKind('1')">한 장에 한 수업</button></div>
+      ${pi.kind==='8'?`<div class="muted" style="margin-top:10px">칸을 어떤 순서로 썼나요?${pi.cells.length?' (읽은 뒤엔 확인 화면에서 바꿉니다)':''}</div>
+        <div class="grid2" style="margin-top:4px"><button class="btn ordbtn ${(pi.order||'col')==='col'?'':'subtle'}" ${pi.cells.length?'disabled':''} onclick="piSetOrder('col')"><b>세로로</b>${orderMini('col')}</button>
+          <button class="btn ordbtn ${pi.order==='row'?'':'subtle'}" ${pi.cells.length?'disabled':''} onclick="piSetOrder('row')"><b>가로로</b>${orderMini('row')}</button></div>`:''}</div>
     <div class="card"><div class="row"><span>첫 사진의 수업은</span><span><input class="pc-d" style="width:64px" inputmode="numeric" value="${pi.startNo}" onchange="pi.startNo=Math.max(1,parseInt(this.value)||1); piPut()"> 회차</span></div>
       <div class="row" style="margin-top:6px"><span>첫 수업 연도</span><input class="pc-d" style="width:84px" inputmode="numeric" value="${pi.year}" onchange="pi.year=parseInt(this.value)||pi.year; piPut()"></div>
       <div class="muted" style="font-size:12.5px; margin-top:4px">종이에 연도가 없어서 물어봅니다. 해가 바뀌면 앱이 알아서 넘깁니다.</div></div>
-    ${pi.kind==='8'&&pi.photos.length?'<div class="muted" style="font-size:12.5px; margin:0 2px 6px">파란 번호만 읽습니다. 번호는 칸 순서예요(왼쪽 열 위→아래 1~4, 오른쪽 열 5~8). 빈 칸은 눌러서 꺼 주세요.</div>':''}
+    ${pi.kind==='8'&&pi.photos.length?'<div class="muted" style="font-size:12.5px; margin:0 2px 6px">종이 모양 그대로예요. 파란 칸만 읽고, 숫자 순서대로 회차가 매겨집니다. 빈 칸은 눌러서 꺼 주세요.</div>':''}
     ${rows}
     <button class="btn ghost" onclick="piPickFiles()">📷 사진 ${pi.photos.length?'더 ':''}고르기</button>
     ${n?`<button class="btn" onclick="piRun()">${n}칸 읽기 시작</button>`:''}
     ${ocrImportLeft()!=null?`<div class="muted" style="font-size:12.5px; text-align:center; margin-top:4px">${q.trialLeft!=null?'무료 체험':'옛 일지'} 판독 ${ocrImportLeft()}칸 남음</div>`:''}
     ${pi.cells.length?'<button class="btn subtle" onclick="piRun()">남은 칸 이어서 읽기</button>':''}`;
 }
+function piSetOrder(o){ if(pi.cells.length) return; pi.order=o; db.cellOrder=o; save(); piPut(); render(); }
+/* 안전장치: 날짜가 자꾸 거꾸로면 다른 쓰는 순서가 맞는지 시험해 보고 제안한다 */
+function piBackCount(){ return pi.cells.filter(c=>c.back).length; }
+function piReorder(ord){ const seq=CELL_ORDERS[ord]; pi.cells.sort((a,b)=>a.photo-b.photo || seq.indexOf(a.cell)-seq.indexOf(b.cell)); pi.order=ord; piDates(); }
+/* 순서를 잘못 고르면 날짜가 거꾸로 되기보다 연도가 엉뚱하게 넘어간다 — 그래서 「앞뒤 칸 날짜 차이의 합」이 크게 줄어드는지로 본다 */
+function piSpread(){ const A=pi.cells.filter(c=>!c.skip&&c.date&&!c.guess); let t=0; for(let i=1;i<A.length;i++) t+=Math.abs(new Date(A[i].date)-new Date(A[i-1].date))/864e5; return t; }
+function piOrderHint(){
+  if(!pi||pi.mode!=='import'||pi.kind!=='8') return null;
+  const now=piSpread(); if(now<30) return null;
+  const cur=pi.order||'col', alt=cur==='col'?'row':'col', keep=pi.cells.slice();
+  piReorder(alt); const b=piSpread(); pi.cells=keep; pi.order=cur; piDates();
+  return (b<now*0.5 && now-b>=30)? {alt} : null;
+}
+function piApplyOrder(o){ const cc=pi.cells[pi.cur]; piReorder(o); pi.cur=Math.max(0,pi.cells.indexOf(cc)); db.cellOrder=o; save(); piPut(); render(); toast(o==='row'?'가로 순서로 바꿨어요':'세로 순서로 바꿨어요'); }
 function piKind(k){ if(pi.photos.length&&pi.kind!==k){ toast('고른 사진을 빼고 바꿔 주세요'); return; } pi.kind=k; piPut(); render(); }
 async function piRun(){
   if(!pi.cells.length){
-    pi.photos.forEach((p,pIdx)=>p.cells.filter(c=>c.on).forEach(c=>pi.cells.push({photo:pIdx, cell:c.n, img:c.img, status:'wait', rows:[], md:'', cond:''})));
+    const seq=CELL_ORDERS[pi.order||'col'];
+    pi.photos.forEach((p,pIdx)=>p.cells.slice().sort((a,b)=>pi.kind==='8'? seq.indexOf(a.n)-seq.indexOf(b.n) : 0).filter(c=>c.on)
+      .forEach(c=>pi.cells.push({photo:pIdx, cell:c.n, img:c.img, status:'wait', rows:[], md:'', cond:''})));
     pi.photos.forEach(p=>{ p.cells.forEach(c=>{ if(!c.on) c.img=''; }); });
   } else { pi.cells.forEach(c=>{ if(c.status==='fail') c.status='wait'; }); }
   if(!pi.cells.length){ toast('읽을 칸이 없습니다'); return; }
@@ -3078,6 +3128,9 @@ function vSettings(){
       <div class="muted" style="margin:10px 0 6px">또는 파일 내용을 붙여넣기</div>
       <textarea id="import-box" placeholder="가져오기 내용 붙여넣기"></textarea>
       <button class="btn subtle" style="margin-top:8px" onclick="importFromBox()">가져오기</button></div>
+    <div class="card"><b>8칸 일지 쓰는 순서</b><div class="muted" style="margin:2px 0 8px">사진으로 채우기·수업지 인쇄·옛 일지 넣기가 이 순서를 따릅니다. 지금: ${db.cellOrder?orderName():'아직 안 고름'}</div>
+      <div class="grid2"><button class="btn ordbtn ${db.cellOrder==='col'?'':'subtle'}" onclick="setCellOrder('col')"><b>세로로</b>${orderMini('col')}</button>
+        <button class="btn ordbtn ${db.cellOrder==='row'?'':'subtle'}" onclick="setCellOrder('row')"><b>가로로</b>${orderMini('row')}</button></div></div>
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
