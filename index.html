@@ -63,6 +63,27 @@
   .setrow input,.setrow select{text-align:center; padding:9px 6px; font-size:14.5px}
   .setrow .del{background:none; border:none; color:var(--sub); font-size:16px; cursor:pointer; padding:4px}
   .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+  #app.wide{max-width:1180px}
+  .pc-wrap{display:grid; gap:12px}
+  .pc-img{position:sticky; top:0; z-index:5; max-height:36vh; overflow:auto; border-radius:12px; background:var(--card); cursor:zoom-in}
+  .pc-img.big{max-height:78vh}
+  .pc-img img{width:100%; display:block}
+  @media(min-width:900px){ .pc-wrap{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); align-items:start}
+    .pc-img{top:12px; max-height:calc(100vh - 120px)} .pc-img.big{max-height:calc(100vh - 120px)} .pc-img.big img{width:170%} }
+  .pc-row{padding:9px 0; border-bottom:1px solid var(--line)}
+  .pc-row:last-of-type{border-bottom:none}
+  .pc-row.check{border-left:3px solid var(--warn); padding-left:9px}
+  .pc-row.new{border-left:3px solid var(--blue); padding-left:9px}
+  .pc-row.off{opacity:.5}
+  .pc-q{display:flex; flex-wrap:wrap; gap:5px; align-items:center; font-size:13px; margin-top:6px}
+  .pc-in{margin-top:6px; padding:9px 10px; font-size:15.5px}
+  .pc-in.bad,.pc-d.bad{border:1.5px solid var(--bad)}
+  .pc-memo{margin-top:6px; padding:7px 10px; font-size:13px}
+  .pc-d{width:150px; max-width:60%; padding:6px 8px; text-align:center; font-size:14px}
+  .pc-cells{display:grid; grid-template-columns:repeat(8,1fr); gap:4px; margin-top:8px}
+  .pc-cells .ichip{padding:5px 0; margin:0}
+  .sd-nav span.warnc{border-color:var(--warn); color:var(--warn)}
+  .sd-nav span.off{opacity:.35; text-decoration:line-through}
   .sd-row{padding:8px 0; border-bottom:1px solid var(--line)}
   .sd-row:last-child{border-bottom:none}
   .sd-top{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14.5px; font-weight:600}
@@ -165,6 +186,7 @@
 <div id="printsheet"></div>
 <input type="file" id="ocr-file" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="ib-file" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="pi-file" accept="image/*" multiple style="display:none" onchange="const f=this.files; if(f&&f.length) piOnFiles(f).then(()=>{this.value=''});">
 <div class="nav"><div class="in">
   <button id="nav-home" onclick="go({name:'home'})"><span class="ico">👥</span>회원</button>
   <button id="nav-sch" onclick="go({name:'schedule'})"><span class="ico">🗓</span>시간표</button>
@@ -690,9 +712,10 @@ function render(){
   [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
     const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
-    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed,
+    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
     programs:vPrograms, progDetail:vProgDetail, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
+  el.classList.toggle('wide', view.name==='pcheck');
   el.innerHTML=fn();
   if(view.name==='home'||view.name==='settings'){ const b=accessBanner(); if(b) el.insertAdjacentHTML('afterbegin', b); }
   updateSyncBadge();
@@ -1096,6 +1119,7 @@ function vMember(){
     <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
     <button class="btn ghost" onclick="go({name:'inbody', id:'${m.id}'})">⚖️ 인바디${(m.inbody||[]).length?` · ${m.inbody.length}회 측정 (최근 ${fullD(ibSorted(m).slice(-1)[0].date)})`:' — 측정 기록 넣기'}</button>
     <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
+    <button class="btn ghost" onclick="openImport('${m.id}')">📷 옛 일지 사진으로 넣기 — 1회차부터 한 번에</button>
     <button class="btn ghost" onclick="openSeed('${m.id}')">📥 옛 기록 빠르게 넣기${seedN?` · ${seedN}줄 옮김 (고치기)`:' — 최고 기록·최근 한 바퀴만'}</button>
     <div class="grid2">
       <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
@@ -1326,7 +1350,7 @@ function printSheet(memberId, refLogId){
 }
 
 /* ───────────────────── AI 사진 판독 한도 (2026-10-15 대표님 결정) ─────────────────────
-   기록은 평생 무료. AI 사진 판독(수업지·인바디)만 한 달 10장 무료, 그 이상은 멤버십.
+   기록은 평생 무료. AI 사진 판독은 무료 체험 20장, 그다음은 멤버십(하루 20·월 300). 센터 선생님은 대표님 부담 (11-06).
    세는 건 서버(ocr 함수)가 한다 — 앱은 남은 장수를 보여주고, 막히면 안내만. */
 let ocrQuota=null;   /* {used, limit, left, member, admin} */
 /* 변화 리포트 카톡 공유는 멤버십 기능 — 멤버십 판매(토스 카드사 심사 뒤)가 열리면 true 로 바꾼다 */
@@ -1337,7 +1361,7 @@ async function ocrCall(body){
     headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(session?session.access_token:SB_KEY)},
     body:JSON.stringify(body)});
   let out={}; try{ out=await res.json(); }catch(e){}
-  if(out && out._quota){ ocrQuota={...(ocrQuota||{}), used:out._quota.used, limit:out._quota.limit, left:Math.max(0,out._quota.limit-out._quota.used)}; delete out._quota; }
+  if(out && out._quota){ ocrQuota={...(ocrQuota||{}), ...out._quota}; delete out._quota; }
   if(res.status===402 && out && out.error==='limit'){ ocrQuota=out; return {limit:true}; }
   return {res, out};
 }
@@ -1345,19 +1369,31 @@ async function loadOcrQuota(){
   if(!user||!sb) return;
   try{ const r=await ocrCall({mode:'status'}); if(r.res&&r.res.ok&&r.out&&r.out.limit) ocrQuota=r.out; }catch(e){}
 }
-function ocrUnlimited(){ return !!(ocrQuota&&(ocrQuota.member||ocrQuota.admin)); }
+/* 11-06: 관리자만 무제한. 센터·구독자는 하루 20·월 300, 무료는 체험 20칸 */
+function ocrUnlimited(){ return !!(ocrQuota&&ocrQuota.admin); }
 function ocrLeftText(){
   if(!ocrQuota) return '';
-  if(ocrUnlimited()) return ocrQuota.admin? '사진 판독 무제한 (관리자)' : '사진 판독 무제한 (멤버십)';
+  if(ocrUnlimited()) return '사진 판독 무제한 (관리자)';
+  if(ocrQuota.trialLeft!=null) return `무료 체험 사진 판독 <b>${ocrQuota.trialLeft}장</b> 남음 (처음 한 번 ${ocrQuota.trialLimit}장)`;
+  if(ocrQuota.dayLimit) return `${ocrQuota.center?'센터 선생님':'멤버십'} — 오늘 ${ocrQuota.dayUsed||0}/${ocrQuota.dayLimit}장 · 이번 달 ${ocrQuota.used}/${ocrQuota.limit}장`;
   return `이번 달 무료 사진 판독 <b>${ocrQuota.left??Math.max(0,ocrQuota.limit-ocrQuota.used)}장</b> 남음 (한 달 ${ocrQuota.limit}장)`;
 }
 function ocrLimitModal(){
-  modal(`<b>이번 달 무료 사진 판독 ${ocrQuota&&ocrQuota.limit||10}장을 다 쓰셨어요</b>
-    <div class="muted" style="margin:10px 0 0;line-height:1.7">기록은 지금처럼 <b>직접 입력으로 계속 무료</b>입니다. 사진 판독은 다음 달 1일에 다시 ${ocrQuota&&ocrQuota.limit||10}장이 채워져요.<br>
-    ${MEMBERSHIP_OPEN?'사진 판독을 제한 없이 쓰려면 허봇스 멤버십을 이용해 주세요.':'제한 없이 쓰는 허봇스 멤버십은 곧 열립니다.'}</div>
+  const q=ocrQuota||{}, why=q.reason;
+  const msg= why==='day'? `오늘 판독 ${q.dayLimit}장을 다 쓰셨어요. 내일 다시 채워집니다.`
+    : why==='importDay'? '오늘 옛 일지 판독 한도를 다 쓰셨어요. 읽은 칸은 남아 있고, 내일 이어서 읽을 수 있습니다.'
+    : why==='import'? `옛 일지 판독 ${q.importLimit}칸을 다 쓰셨어요. 읽은 칸은 그대로 저장할 수 있습니다.`
+    : why==='importMonth'? `이번 달 옛 일지 판독 ${q.importLimit}칸을 다 쓰셨어요. 읽은 칸은 남아 있고, 다음 달 1일에 이어서 읽을 수 있습니다.`
+    : why==='trial'? `무료 체험 ${q.trialLimit||20}장을 다 쓰셨어요. 사진 판독은 ${MEMBERSHIP_OPEN?'허봇스 멤버십':'곧 열리는 허봇스 멤버십'}에서 하루 20장까지 쓸 수 있습니다.`
+    : `이번 달 사진 판독 ${q.limit||10}장을 다 쓰셨어요. 다음 달 1일에 다시 채워집니다.`;
+  modal(`<b>사진 판독 한도에 닿았어요</b>
+    <div class="muted" style="margin:10px 0 0;line-height:1.7">${msg}<br>기록은 지금처럼 <b>직접 입력으로 계속 무료</b>입니다.</div>
     <button class="btn" style="margin-top:14px" onclick="closeModal()">알겠어요</button>`);
 }
-function ocrBlocked(){ return !!(ocrQuota && !ocrUnlimited() && (ocrQuota.used>=ocrQuota.limit)); }
+function ocrBlocked(){ const q=ocrQuota; if(!q||ocrUnlimited()) return false;
+  if(q.trialLeft!=null){ if(q.trialLeft<=0){ q.reason='trial'; return true; } return false; }
+  if(q.dayLimit&&(q.dayUsed||0)>=q.dayLimit){ q.reason='day'; return true; } if(q.limit!=null&&q.used>=q.limit){ q.reason='month'; return true; } return false; }
+function ocrImportLeft(){ const q=ocrQuota; if(!q||ocrUnlimited()) return null; return q.trialLeft!=null? q.trialLeft : q.importLeft; }
 
 /* ───────────────────── 사진 판독 — 종이 일지를 찍으면 오늘 기록이 채워진다 ─────────────────────
    사진은 서버(Supabase 함수)를 거쳐 무료 AI(Gemini)가 읽는다. 결과는 반드시 확인 후 저장. */
@@ -1379,16 +1415,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(!file||!draft) return;
     modal('<b>🔍 사진을 읽는 중…</b><div class="muted" style="margin-top:8px">10초쯤 걸립니다. 화면을 닫지 마세요.</div>');
     try{
-      const b64=await shrinkImage(file, 1400, .82);
-      const exList=draft.entries.map(en=>({name:exName(en.exId), mode:en.mode}));
-      const r=await ocrCall({image:b64, mime:'image/jpeg', exercises:exList, cell:window.__ocrCell||0,
-          issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS});
+      const im=await fileImg(file), cell=window.__ocrCell||0, W=im.naturalWidth, H=im.naturalHeight;
+      const img=toJpeg(im, cell?cellBox(im,cell):[0,0,W,H], cell?1500:1800, .85);
+      const r=await piAsk(img, draft.memberId, 'today');
       if(r.limit){ ocrLimitModal(); return; }
       const {res,out}=r;
       if(res.status===404){ closeModal(); toast('판독 서버가 아직 설치되지 않았습니다'); return; }
       if(!res.ok||out.error) throw new Error('서버 '+res.status+' '+(out.error||''));
-      applyOcr(out);
-      if(ocrQuota&&!ocrUnlimited()) toast(`이번 달 무료 판독 ${ocrQuota.left}장 남았습니다`);
+      const got=piFromOut(out, draft.memberId);
+      if(!got.rows.length){ closeModal(); toast('읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요'); return; }
+      pi={mode:'today', memberId:draft.memberId, cur:0, cells:[{status:'ok', img, seen:true, ...got}], gone:[]};
+      const has=id=>got.rows.some(x=>x.exId===id||x.sug===id);
+      pi.gone=draft.entries.filter(en=>!has(en.exId)).map(en=>({exId:en.exId, keep:entryHasRecord(en,en.mode)}));
+      closeModal(); go({name:'pcheck'});
+      if(ocrQuota&&ocrQuota.trialLeft!=null) toast(`무료 체험 판독 ${ocrQuota.trialLeft}장 남았습니다`);
     }catch(e){ closeModal(); toast('판독 실패 — 밝은 곳에서 똑바로 다시 찍어보세요'); console.error(e); }
   });
 });
@@ -1405,33 +1445,6 @@ function shrinkImage(file, maxPx, q){
     img.onerror=no; img.src=URL.createObjectURL(file);
   });
 }
-function applyOcr(out){
-  if(!draft){ closeModal(); return; }
-  const KNOWN=ISSUE_SETS.flatMap(g=>g.items);
-  let filled=0;
-  (out.entries||[]).forEach((oe,i)=>{
-    const en=draft.entries[i]; if(!en||!oe) return;
-    if(en.mode==='chk'){ if(oe.chk){ en.chk=true; filled++; } }
-    else{
-      const sets=(oe.sets||[]).map(s=>{
-        if(en.mode==='t') return {sec:String(s.sec??'')};
-        if(en.mode==='lv') return {lv:String(s.lv??''), n:String(s.n??s.r??'')};
-        if(en.mode==='band') return {band:BANDS.includes(s.band)?s.band:BANDS[0], r:String(s.r??'')};
-        return {w:String(s.w??''), r:String(s.r??'')};
-      }).filter(s=> en.mode==='t'? s.sec!=='' : en.mode==='lv'? s.n!=='' : s.r!=='');
-      if(sets.length){ en.sets=sets; filled++; }
-    }
-    const iss=(oe.issues||[]).filter(x=>KNOWN.includes(x));
-    iss.forEach(x=>{ if(!en.issues.includes(x)) en.issues.push(x); });
-    const extra=(oe.issues||[]).filter(x=>!KNOWN.includes(x)).join(', ');
-    const memo=[oe.memo, extra].filter(Boolean).join(', ').trim();
-    if(memo) en.memo=en.memo? en.memo+', '+memo : memo;
-  });
-  if(out.cond && !draft.cond) draft.cond=String(out.cond);
-  dsave(); closeModal(); render();
-  toast(filled? `판독 완료 — ${filled}개 운동을 채웠습니다. 숫자 확인 후 저장하세요` : '읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요');
-}
-
 /* ───────────────────── 한 바퀴 전 자동 기준 · 8칸 수업지 ─────────────────────
    대표님 방식: 30회(또는 10회) 한 바퀴를 돌면, 다음 수업의 기준 = 한 바퀴 전 같은 순번 수업.
    1/1(1회차)…1/30(30회차) 다음 1/31 수업의 기준은 1/1, 그다음은 1/2. 종이는 A4 한 장에 8칸. */
@@ -2628,6 +2641,393 @@ function sdSave(){
   go({name:'peek', id:m.id, k:0});
 }
 
+/* ───────────────────── 📷 사진으로 기록 (2026-11-06 대표님 「둘 다 만들자」) ─────────────────────
+   운동 이름까지 읽어 등록 운동에 잇고, 없는 운동은 저장 전에 확인받고 새로 만든다. 두 갈래가 같은 확인 화면을 쓴다.
+   ① 오늘 수업: 수업 화면 「사진으로 채우기」 → 확인 → 오늘 운동 목록을 사진대로 바꿈(사진에 없는 운동은 기본 빼기, 다음 바퀴엔 안 남김)
+   ② 옛 일지: 회원 화면 「옛 일지 사진으로 넣기」 → 여러 장 → 회차 순서대로 수업 기록 생성
+   8칸 종이는 앱이 칸별로 잘라 읽는다(10월 실측 통째 50.5% → 칸별 60.3%). 1칸 = 판독 1회. 서버는 한 번에 한 칸씩(사용량을 정확히 세려고). */
+let pi=null;
+const CELL_ROWS=[[.105,.335],[.305,.545],[.505,.75],[.71,.96]], CELL_COLS=[[.02,.515],[.475,.985]];
+function cellLabel(n){ return (n<=4?'왼쪽 ':'오른쪽 ')+((n-1)%4+1)+'번'; }
+function cellBox(im,n){ const w=im.naturalWidth, h=im.naturalHeight, c=CELL_COLS[n<=4?0:1], r=CELL_ROWS[(n-1)%4];
+  return [c[0]*w, r[0]*h, (c[1]-c[0])*w, (r[1]-r[0])*h]; }
+function fileImg(file){ return new Promise((ok,no)=>{ const im=new Image(); im.onload=()=>ok(im); im.onerror=no; im.src=URL.createObjectURL(file); }); }
+function toJpeg(im,box,maxPx,q){
+  const [x,y,w,h]=box, sc=Math.min(1,maxPx/Math.max(w,h)), c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w*sc)); c.height=Math.max(1,Math.round(h*sc));
+  c.getContext('2d').drawImage(im,x,y,w,h,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',q);
+}
+/* 빈 칸은 돈 들여 읽지 않는다 — 칸 안쪽의 어두운 점 비율로 본다(인쇄된 수업지는 글자가 있어 안 걸릴 수 있다) */
+function inkRatio(im,box){
+  const [x,y,w,h]=box, W=120, H=70, c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d',{willReadFrequently:true}); g.drawImage(im,x+w*.05,y+h*.28,w*.9,h*.66,0,0,W,H);
+  const d=g.getImageData(0,0,W,H).data; let sum=0; const v=[];
+  for(let i=0;i<d.length;i+=4){ const t=(d[i]+d[i+1]+d[i+2])/3; v.push(t); sum+=t; }
+  const mean=sum/v.length; return v.filter(t=>t<mean-45).length/v.length;
+}
+/* 작성 중인 옛 일지 옮기기는 사진이 커서 IndexedDB 에 둔다 — 창을 닫아도 그 기기에서 이어서 */
+function piDb(){ return new Promise((ok,no)=>{ const r=indexedDB.open('ptlog-photo',1); r.onupgradeneeded=()=>r.result.createObjectStore('s'); r.onsuccess=()=>ok(r.result); r.onerror=()=>no(r.error); }); }
+async function piPut(){ if(!pi||pi.mode!=='import') return; try{ const d=await piDb(); d.transaction('s','readwrite').objectStore('s').put(pi,'m:'+pi.memberId); }catch(e){} }
+async function piLoad(id){ try{ const d=await piDb(); return await new Promise(ok=>{ const r=d.transaction('s').objectStore('s').get('m:'+id); r.onsuccess=()=>ok(r.result||null); r.onerror=()=>ok(null); }); }catch(e){ return null; } }
+async function piDrop(id){ try{ const d=await piDb(); d.transaction('s','readwrite').objectStore('s').delete('m:'+id); }catch(e){} }
+
+/* AI에게 줄 운동 목록 — 그 회원이 쓰는 운동 먼저, 그다음 내 운동, 그다음 나머지. 200개까지(토큰 = 돈) */
+function piLibrary(memberId){
+  const ids=[], add=id=>{ if(exOf(id)&&!ids.includes(id)) ids.push(id); };
+  const m=db.members.find(x=>x.id===memberId);
+  if(draft&&draft.memberId===memberId) draft.entries.forEach(e=>add(e.exId));
+  if(m) sdProgEx(m).forEach(add);
+  db.logs.filter(l=>l.memberId===memberId).slice(-60).forEach(l=>(l.entries||[]).forEach(e=>add(e.exId)));
+  db.exercises.filter(e=>e.custom).forEach(e=>add(e.id));
+  db.exercises.forEach(e=>add(e.id));
+  return ids.slice(0,200).map(id=>({name:exName(id), mode:exMode(id)}));
+}
+async function piAsk(dataUrl, memberId, kind){
+  return ocrCall({mode:'sheet', kind, image:dataUrl.split(',')[1], mime:'image/jpeg', library:piLibrary(memberId),
+    issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS});
+}
+/* 기록 글: 무게 운동 「20x12, 25x12x3」 · 시간 「60초, 60초」 · 레벨 「3x12」 · 밴드 「빨강x12」 */
+function piTxt(mode, raw){
+  const s=raw.sets||[], sec=raw.sec||[]; let p=[];
+  if(mode==='t') p=(sec.length?sec:s.map(a=>a.sec||a.r)).filter(v=>num(v)>0).map(v=>num(v)+'초');
+  else if(mode==='lv') p=s.map(a=>`${num(a.lv??a.w)}x${num(a.n??a.r)}`);
+  else if(mode==='band') p=s.map(a=>`${a.band||BANDS[0]}x${num(a.r)}`);
+  else if(mode==='w') p=s.map(a=>`${num(a.w)}x${num(a.r)}`);
+  const out=[]; p.forEach(v=>{ const l=out[out.length-1]; if(l&&l.v===v) l.n++; else out.push({v,n:1}); });
+  return out.map(o=>o.n>1? (mode==='t'? o.v+'x'+o.n : o.v+'x'+o.n) : o.v).join(', ');
+}
+function piSets(mode, txt){
+  const sets=[]; let bad=false;
+  String(txt||'').replace(/[×*]/g,'x').split(/[,，/]+|\s+(?=[^\sx])/).map(t=>t.trim()).filter(Boolean).forEach(t=>{
+    let m;
+    if(mode==='t'){ m=t.match(/^(\d+(?:\.\d+)?)\s*(?:초|sec)?(?:x(\d+))?$/i); if(!m||!num(m[1])){ bad=true; return; }
+      for(let i=0;i<(+m[2]||1);i++) sets.push({sec:num(m[1])}); return; }
+    if(mode==='band'){ m=t.match(/^([^\dx\s]+)\s*x\s*(\d+)(?:\s*x\s*(\d+))?$/); if(!m||!BANDS.includes(m[1])||!num(m[2])){ bad=true; return; }
+      for(let i=0;i<(+m[3]||1);i++) sets.push({band:m[1], r:num(m[2])}); return; }
+    m=t.match(/^(\d+(?:\.\d+)?)\s*x\s*(\d+)(?:\s*x\s*(\d+))?$/);
+    if(!m||!num(m[2])){ bad=true; return; }
+    for(let i=0;i<(+m[3]||1);i++) sets.push(mode==='lv'? {lv:num(m[1]), n:num(m[2])} : {w:num(m[1]), r:num(m[2])});
+  });
+  return {sets, bad};
+}
+/* 적힌 이름 → 등록 운동. 한 번 정한 이름(db.exAlias)이 먼저, 그다음 AI의 판단, 그다음 비슷한 이름 */
+function piRow(x, scope){
+  const written=String(x.written||x.name||'').trim(), key=sdNorm(written), alias=(db.exAlias||{})[key];
+  const r={written, key, raw:x, exId:null, status:'new', sug:null, txt:'', edited:false, chk:!!x.chk, issues:x.issues||[], memo:String(x.memo||'').trim(), del:false};
+  const byName=n=>{ const k=sdNorm(n); const e=k&&db.exercises.find(e=>sdNorm(e.name)===k); return e?e.id:null; };
+  const direct=(alias&&exOf(alias))? alias : byName(written);
+  if(direct){ r.exId=direct; r.status='ok'; }
+  else{
+    /* 11-06 실측: AI가 다른 이름으로 이은 줄의 일부가 조용히 틀렸다(117줄 중 13줄) — 처음 한 번은 묻고, 고른 건 기억한다 */
+    const ai=x.match? byName(x.match) : null;
+    const s=ai||sdFindEx(written, scope); if(s){ r.sug=s; r.status='check'; }
+  }
+  piRowTxt(r);
+  return r;
+}
+function piRowMode(r){ if(r.exId) return exMode(r.exId); if(r.sug&&r.status==='check') return exMode(r.sug);
+  const n=(r.raw.sec||[]).length&&!(r.raw.sets||[]).length; return n?'t':guessEx(r.written).mode; }
+function piRowTxt(r){ if(!r.edited) r.txt=piTxt(piRowMode(r), r.raw); }
+function piFromOut(out, memberId){
+  const scope=piLibrary(memberId).map(e=>{ const x=db.exercises.find(y=>y.name===e.name); return x&&x.id; }).filter(Boolean).slice(0,40);
+  const rows=(out.exercises||[]).filter(x=>x&&String(x.written||x.name||'').trim()).map(x=>piRow(x,scope));
+  return {md:String(out.date||''), cond:String(out.cond||'').trim(), rows};
+}
+/* 이름 결정은 같은 글씨 전체에 적용하고 기억한다 — 「SQ」를 한 번 고르면 끝 */
+function piAll(key, fn){ (pi.cells||[]).forEach(c=>(c.rows||[]).forEach(r=>{ if(r.key===key) fn(r); })); }
+function piDecide(key, exId){
+  db.exAlias=db.exAlias||{}; if(key) db.exAlias[key]=exId;
+  piAll(key, r=>{ r.exId=exId; r.status='ok'; r.sug=null; piRowTxt(r); });
+}
+function piRowRef(ci,ri){ return pi.cells[ci].rows[ri]; }
+function piYes(ci,ri){ const r=piRowRef(ci,ri); piDecide(r.key, r.sug); piPut(); render(); }
+function piPick(ci,ri){ const r=piRowRef(ci,ri); pickExercise(id=>{ piDecide(r.key, id); piPut(); render(); }); }
+function piMakeNew(ci,ri){ const r=piRowRef(ci,ri); piAll(r.key, x=>{ x.status='new'; x.sug=null; x.exId=null; piRowTxt(x); }); piPut(); render(); }
+function piRowDel(ci,ri){ const r=piRowRef(ci,ri); r.del=!r.del; piPut(); render(); }
+function piRowIn(ci,ri,k,v){ const r=piRowRef(ci,ri); r[k]=v; if(k==='txt') r.edited=true; piPut(); }
+function piRowBlur(ci,ri,el){ const r=piRowRef(ci,ri); el.classList.toggle('bad', piSets(piRowMode(r), r.txt).bad); }
+function piEnter(ev,el){ if(ev.key!=='Enter') return; ev.preventDefault(); const a=[...document.querySelectorAll('.pc-in')], i=a.indexOf(el); if(a[i+1]) a[i+1].focus(); else el.blur(); }
+function piNewEx(key, r){ pi.newEx=pi.newEx||{}; if(!pi.newEx[key]){ const g=guessEx(r.written), t=piRowMode(r); pi.newEx[key]={name:r.written, tag:g.tag, mode:t}; } return pi.newEx[key]; }
+/* 새 운동을 실제로 라이브러리에 넣고 그 글씨의 모든 줄을 잇는다 */
+function piCreateNew(){
+  const seen={}; let made=0;
+  (pi.cells||[]).forEach(c=>{ if(c.skip) return; (c.rows||[]).forEach(r=>{
+    if(r.del||r.status!=='new'||r.exId) return;
+    if(!seen[r.key]){ const n=piNewEx(r.key,r), nm=(n.name||r.written).trim(), k=sdNorm(nm);
+      let e=db.exercises.find(x=>sdNorm(x.name)===k);
+      if(!e){ e={id:uid(), name:nm, tag:n.tag, mode:n.mode, custom:true}; db.exercises.push(e); made++; }
+      seen[r.key]=e.id; db.exAlias=db.exAlias||{}; if(r.key) db.exAlias[r.key]=e.id; }
+    r.exId=seen[r.key]; r.status='ok'; }); });
+  return made;
+}
+function piEntry(r){
+  const mode=exMode(r.exId), {sets}=piSets(mode, r.txt);
+  return {exId:r.exId, sets:mode==='chk'?[]:sets, chk:mode==='chk'? !!r.chk : undefined, issues:r.issues||[], memo:(r.memo||'').trim()};
+}
+function piRowHtml(c,ci,r,ri){
+  const mode=piRowMode(r), name=r.exId? exName(r.exId) : r.sug? exName(r.sug) : r.written;
+  const ask= r.del? '' : r.status==='check'? `<div class="pc-q"><span style="color:var(--warn)">「${esc(r.written)}」 = 「${esc(exName(r.sug))}」 맞나요?</span>
+        <button class="ichip" onclick="piYes(${ci},${ri})">맞아요</button><button class="ichip" onclick="piPick(${ci},${ri})">다른 운동</button><button class="ichip" onclick="piMakeNew(${ci},${ri})">새 운동</button></div>`
+    : r.status==='new'? `<div class="pc-q"><span style="color:var(--blue)">＋ 새 운동으로 추가돼요</span><button class="ichip" onclick="piPick(${ci},${ri})">이미 있는 운동이에요</button></div>` : '';
+  const input= mode==='chk'? `<label class="pc-q"><input type="checkbox" style="width:auto" ${r.chk?'checked':''} onchange="piRowIn(${ci},${ri},'chk',this.checked)"> 했음</label>`
+    : `<input class="pc-in ${piSets(mode,r.txt).bad?'bad':''}" placeholder="${mode==='t'?'60초, 60초':mode==='lv'?'3x12':mode==='band'?'빨강x12':'20x12, 25x12x3 (맨몸은 0x10)'}" value="${esc(r.txt)}" oninput="piRowIn(${ci},${ri},'txt',this.value)" onblur="piRowBlur(${ci},${ri},this)" onkeydown="piEnter(event,this)">`;
+  return `<div class="pc-row ${r.del?'off':r.status}"><div class="sd-top"><span>${esc(name)}${r.written&&sdNorm(r.written)!==sdNorm(name)?` <span class="muted" style="font-weight:400; font-size:12.5px">적힌 글씨 ${esc(r.written)}</span>`:''}</span>
+      <span style="flex-shrink:0">${r.status==='ok'&&!r.del?`<button class="ichip" onclick="piPick(${ci},${ri})">바꾸기</button> `:''}<button class="ichip" onclick="piRowDel(${ci},${ri})">${r.del?'되살리기':'빼기'}</button></span></div>
+    ${ask}${r.del?'':input}
+    ${r.del?'':`<input class="pc-memo" placeholder="메모 (선택)" value="${esc(r.memo)}" oninput="piRowIn(${ci},${ri},'memo',this.value)">`}</div>`;
+}
+function piZoom(el){ el.classList.toggle('big'); }
+function piFull(ci){ const c=pi.cells[ci], f=c.full||(pi.photos&&pi.photos[c.photo]&&pi.photos[c.photo].full); if(!f) return;
+  modal(`<b>종이 전체</b><div style="margin:10px 0; max-height:64vh; overflow:auto"><img src="${f}" style="width:100%; display:block; border-radius:8px"></div><button class="btn subtle" onclick="closeModal()">닫기</button>`); }
+function piSkip(ci){ const c=pi.cells[ci]; c.skip=!c.skip; piDates(); piPut(); render(); }
+function piCurGo(i){ pi.cur=Math.max(0,Math.min(pi.cells.length-1,i)); pi.cells[pi.cur].seen=true; piPut(); render(); window.scrollTo(0,0); }
+function piDateIn(ci,el){ const iso=seedDate(el.value,false); pi.cells[ci].dateUser= iso&&iso.length===10? iso : ''; if(el.value.trim()&&!pi.cells[ci].dateUser) toast('날짜를 못 알아들었어요 — 예: 2025.10.20 / 10.20'); piDates(); piPut(); render(); }
+
+/* ── 사진 판독 결과 확인 (오늘·옛 일지 공용) ── */
+function vPCheck(){
+  if(!pi||!pi.cells||!pi.cells.length){ pi=null; return vHome(); }
+  const today=pi.mode==='today', ci=Math.min(pi.cur||0, pi.cells.length-1), c=pi.cells[ci], m=db.members.find(x=>x.id===pi.memberId);
+  if(!m){ pi=null; return vHome(); }
+  const back= today? `go({name:'session'})` : `go({name:'member', id:'${m.id}'})`;
+  const head=`<div class="top"><button class="back" onclick="${back}">←</button><h1>📷 ${today?'사진 내용 확인':esc(m.name)+' 옛 일지'}</h1><span class="muted num">${today?'':(ci+1)+'/'+pi.cells.length}</span></div>`;
+  const nav= today?'' : `<div class="sd-nav">${pi.cells.map((x,i)=>{ const q=(x.rows||[]).some(r=>!r.del&&r.status==='check'), f=x.status==='fail'||x.status==='wait';
+      return `<span class="${i===ci?'on':x.skip?'off':(q||f)?'warnc':x.seen?'fill':''}" onclick="piCurGo(${i})">${i+1}</span>`; }).join('')}</div>`;
+  const rows=(c.rows||[]).map((r,ri)=>piRowHtml(c,ci,r,ri)).join('')||`<div class="muted">${c.status==='fail'||c.status==='wait'?'이 칸은 아직 못 읽었어요. 다시 읽거나 직접 넣어 주세요.':'읽은 운동이 없어요. 빈 칸이면 빼 주세요.'}</div>`;
+  const add=`<button class="btn subtle" style="margin-top:10px" onclick="piAddRow(${ci})">＋ 운동 추가</button>`;
+  let info='';
+  if(today){
+    const gone=(pi.gone||[]);
+    info= gone.length? `<div class="card"><b>사진에 없는 운동</b><div class="muted" style="margin:2px 0 6px">오늘 안 한 것으로 보고 뺍니다. 했다면 되살려 주세요.</div>
+      ${gone.map((g,i)=>`<div class="row" style="padding:4px 0"><span style="${g.keep?'':'opacity:.55; text-decoration:line-through'}">${esc(exName(g.exId))}</span><button class="ichip" onclick="pi.gone[${i}].keep=!pi.gone[${i}].keep; render()">${g.keep?'빼기':'되살리기'}</button></div>`).join('')}</div>` : '';
+  } else {
+    info=`<div class="card" style="padding:10px 13px"><div class="row"><b>${c.no?c.no+'회차':'빠지는 칸'}</b><input class="pc-d ${c.back?'bad':''}" placeholder="날짜 2025.10.20" value="${esc(fullD(c.date||''))}" onchange="piDateIn(${ci},this)"></div>
+      ${c.guess?'<div style="color:var(--warn); font-size:13px; margin-top:4px">날짜를 못 읽어 앞뒤 칸으로 추정했어요. 확인해 주세요.</div>':''}
+      ${c.back?'<div style="color:var(--bad); font-size:13px; margin-top:4px">앞 칸보다 이른 날짜예요. 확인해 주세요.</div>':''}
+      ${c.dup?'<div style="color:var(--warn); font-size:13px; margin-top:4px">이미 이 날짜 수업 기록이 있어요.</div>':''}
+      <input class="pc-memo" placeholder="컨디션 메모" value="${esc(c.cond||'')}" oninput="pi.cells[${ci}].cond=this.value; piPut()">
+      <div class="grid2" style="margin-top:8px"><button class="btn subtle" onclick="piSkip(${ci})">${c.skip?'이 칸 다시 넣기':'이 칸 빼기'}</button>${c.status==='fail'||c.status==='wait'?`<button class="btn subtle" onclick="piRetry(${ci})">다시 읽기</button>`:`<button class="btn subtle" onclick="piFull(${ci})">종이 전체 보기</button>`}</div></div>`;
+  }
+  const foot= today? `<button class="btn" onclick="piApplyToday()">이대로 오늘 기록에 넣기</button><div class="muted" style="font-size:12.5px; text-align:center">넣은 뒤 수업 화면에서 「수업 완료」를 눌러야 저장됩니다.</div>`
+    : `<div class="grid2"><button class="btn subtle" ${ci<=0?'disabled style="opacity:.4"':''} onclick="piCurGo(${ci-1})">‹ 앞 칸</button>
+        <button class="btn subtle" ${ci>=pi.cells.length-1?'disabled style="opacity:.4"':''} onclick="piCurGo(${ci+1})">다음 칸 ›</button></div>
+       ${pi.cells.some(x=>x.status==='wait'||x.status==='fail')?`<button class="btn ghost" style="margin-top:10px" onclick="piRun()">못 읽은 칸 ${pi.cells.filter(x=>x.status==='wait'||x.status==='fail').length}개 이어서 읽기</button>`:''}
+       <button class="btn" style="margin-top:10px" onclick="piGoFinal()">확인 끝 — 저장하러 가기</button>`;
+  return head+nav+`<div class="pc-wrap"><div class="pc-img" onclick="piZoom(this)"><img src="${c.img}" alt="일지 사진"></div>
+    <div>${info}<div class="card">${rows}${add}</div>${foot}</div></div>`;
+}
+function piAddRow(ci){
+  pickExercise(id=>{ const c=pi.cells[ci]; c.rows=c.rows||[];
+    c.rows.push({written:exName(id), key:sdNorm(exName(id)), raw:{sets:[],sec:[]}, exId:id, status:'ok', sug:null, txt:'', edited:false, chk:false, issues:[], memo:'', del:false});
+    if(c.status==='fail'||c.status==='wait') c.status='ok';
+    piDates(); piPut(); render(); });
+}
+function piUnsure(){ const out=[]; (pi.cells||[]).forEach(c=>{ if(c.skip) return; (c.rows||[]).forEach(r=>{ if(!r.del&&r.status==='check'&&!out.includes(r.key)) out.push(r.key); }); }); return out; }
+function piApplyToday(){
+  if(piUnsure().length){ toast('노란 줄의 운동 이름을 먼저 골라 주세요'); return; }
+  if(!draft){ pi=null; go({name:'home'}); return; }
+  piCreateNew();
+  const c=pi.cells[0], old=draft.entries, next=[];
+  (c.rows||[]).filter(r=>!r.del).forEach(r=>{
+    const e=piEntry(r), mode=exMode(r.exId), strSets=e.sets.map(s=>{ const o={}; for(const k in s) o[k]=k==='band'? s[k] : String(s[k]); return o; });
+    let en=next.find(x=>x.exId===r.exId);
+    if(en){ en.sets=[...en.sets.filter(s=>validSets([s],mode).length), ...strSets]; if(e.chk) en.chk=true; }
+    else{ const was=old.find(x=>x.exId===r.exId);
+      en={exId:r.exId, mode, sets:strSets.length?strSets:(mode==='chk'?[]:[newSet(mode)]), chk:!!e.chk, issues:was?[...was.issues]:[], memo:was?was.memo:'', open:false}; next.push(en); }
+    (e.issues||[]).forEach(x=>{ if(!en.issues.includes(x)) en.issues.push(x); });
+    if(e.memo) en.memo=en.memo? en.memo+', '+e.memo : e.memo;
+  });
+  (pi.gone||[]).filter(g=>g.keep).forEach(g=>{ const was=old.find(x=>x.exId===g.exId); if(was&&!next.some(x=>x.exId===g.exId)) next.push(was); });
+  draft.entries=next; if(c.cond&&!draft.cond) draft.cond=c.cond;
+  pi=null; dsave(); go({name:'session'});
+  toast('오늘 기록에 넣었습니다 — 확인 후 「수업 완료」를 눌러 주세요');
+}
+
+/* ── ② 옛 일지 사진으로 넣기: 고르기 → 읽기 → 칸별 확인 → 저장 ── */
+async function openImport(memberId){
+  if(!user||!sb){ toast('로그인 상태에서만 쓸 수 있습니다'); return; }
+  const saved=await piLoad(memberId);
+  if(saved&&saved.cells&&saved.cells.length){
+    ask('이 회원의 옛 일지 작업이 남아 있어요. 이어서 할까요?\n(「새로 시작」을 고르면 남은 작업은 지워집니다)', '이어서 하기', ()=>{ pi=saved; piResume(); });
+    const box=document.querySelector('#modal .grid2 .subtle'); if(box){ box.textContent='새로 시작'; box.onclick=()=>{ closeModal(); piDrop(memberId); piStart(memberId); }; }
+    return;
+  }
+  piStart(memberId);
+}
+function piStart(memberId){
+  const m=db.members.find(x=>x.id===memberId), real=db.logs.filter(l=>l.memberId===memberId&&!l.seed).length;
+  pi={mode:'import', memberId, step:'pick', kind:'8', photos:[], cells:[], cur:0, year:new Date().getFullYear(), startNo:real?(m.sessionsDone||real)+1:1};
+  go({name:'pimp'});
+}
+function piResume(){ if(pi.step==='read'){ pi.step='pick2'; } if(pi.step==='pick'||pi.step==='pick2'){ go({name:'pimp'}); return; } go({name:'pcheck'}); }
+function piPickFiles(){ const i=document.getElementById('pi-file'); if(i) i.click(); }
+async function piOnFiles(list){
+  const files=[...list].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  modal('<b>사진을 정리하는 중…</b><div class="muted" style="margin-top:8px" id="pi-prep"></div>');
+  for(let i=0;i<files.length;i++){
+    const el=document.getElementById('pi-prep'); if(el) el.textContent=`${i+1}/${files.length}장`;
+    try{
+      const im=await fileImg(files[i]), W=im.naturalWidth, H=im.naturalHeight, full=toJpeg(im,[0,0,W,H],1600,.8);
+      let cells;
+      if(pi.kind==='8') cells=[1,2,3,4,5,6,7,8].map(n=>{ const b=cellBox(im,n); return {n, img:toJpeg(im,b,1500,.85), on:inkRatio(im,b)>=.004}; });
+      else cells=[{n:0, img:toJpeg(im,[0,0,W,H],1800,.85), on:true}];
+      pi.photos.push({name:files[i].name, full, cells});
+      URL.revokeObjectURL(im.src);
+    }catch(e){ toast(files[i].name+' 사진을 열 수 없습니다'); }
+  }
+  closeModal(); piPut(); render();
+}
+function piPhotoMove(i,d){ const a=pi.photos, j=i+d; if(j<0||j>=a.length) return; [a[i],a[j]]=[a[j],a[i]]; piPut(); render(); }
+function piPhotoDel(i){ pi.photos.splice(i,1); piPut(); render(); }
+function piCellTog(i,k){ const c=pi.photos[i].cells[k]; c.on=!c.on; piPut(); render(); }
+function piOnCount(){ return pi.photos.reduce((a,p)=>a+p.cells.filter(c=>c.on).length,0); }
+function vPImp(){
+  if(!pi||pi.mode!=='import'){ pi=null; return vHome(); }
+  const m=db.members.find(x=>x.id===pi.memberId); if(!m){ pi=null; return vHome(); }
+  const head=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>📷 ${esc(m.name)} 옛 일지</h1><span></span></div>`;
+  if(pi.step==='read'){
+    const done=pi.cells.filter(c=>c.status!=='wait').length, n=pi.cells.length;
+    return head+`<div class="card"><b>일지를 읽는 중… ${done}/${n}칸</b>
+      <div class="prog" style="margin-top:8px"><i style="width:${n?done/n*100:0}%"></i></div>
+      <div class="muted" style="margin-top:8px; line-height:1.6">한 칸에 몇 초 걸립니다. 이 화면을 켜 둔 채로 기다려 주세요. 멈춰도 읽은 칸은 남고 이어서 할 수 있어요.</div></div>
+      <button class="btn subtle" onclick="pi._stop=true">잠시 멈추기</button>`;
+  }
+  const rows=pi.photos.map((p,i)=>`<div class="card" style="padding:10px"><div class="row" style="gap:8px"><img src="${p.full}" style="width:56px; height:76px; object-fit:cover; border-radius:6px" alt=""><div style="flex:1; min-width:0"><b>${i+1}장째</b><div class="muted" style="font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(p.name)}</div></div>
+      <span style="flex-shrink:0"><button class="ichip" onclick="piPhotoMove(${i},-1)">↑</button> <button class="ichip" onclick="piPhotoMove(${i},1)">↓</button> <button class="ichip" onclick="piPhotoDel(${i})">빼기</button></span></div>
+      ${pi.kind==='8'?`<div class="pc-cells">${p.cells.map((c,k)=>`<button class="ichip ${c.on?'on-imp':''}" onclick="piCellTog(${i},${k})">${c.n}</button>`).join('')}</div>`:''}</div>`).join('');
+  const n=piOnCount(), q=ocrQuota;
+  return head+`<div class="card"><b>회차 순서대로 사진을 올려 주세요</b>
+      <div class="muted" style="margin-top:4px; line-height:1.6">앱이 칸마다 읽어 수업 기록을 만들고, 선생님은 틀린 곳만 고칩니다. 사진이 많으면 <b>PC에서 하면 훨씬 빠릅니다.</b></div>
+      <div class="grid2" style="margin-top:10px"><button class="btn ${pi.kind==='8'?'':'subtle'}" onclick="piKind('8')">8칸 일지</button><button class="btn ${pi.kind==='1'?'':'subtle'}" onclick="piKind('1')">한 장에 한 수업</button></div></div>
+    <div class="card"><div class="row"><span>첫 사진의 수업은</span><span><input class="pc-d" style="width:64px" inputmode="numeric" value="${pi.startNo}" onchange="pi.startNo=Math.max(1,parseInt(this.value)||1); piPut()"> 회차</span></div>
+      <div class="row" style="margin-top:6px"><span>첫 수업 연도</span><input class="pc-d" style="width:84px" inputmode="numeric" value="${pi.year}" onchange="pi.year=parseInt(this.value)||pi.year; piPut()"></div>
+      <div class="muted" style="font-size:12.5px; margin-top:4px">종이에 연도가 없어서 물어봅니다. 해가 바뀌면 앱이 알아서 넘깁니다.</div></div>
+    ${pi.kind==='8'&&pi.photos.length?'<div class="muted" style="font-size:12.5px; margin:0 2px 6px">파란 번호만 읽습니다. 번호는 칸 순서예요(왼쪽 열 위→아래 1~4, 오른쪽 열 5~8). 빈 칸은 눌러서 꺼 주세요.</div>':''}
+    ${rows}
+    <button class="btn ghost" onclick="piPickFiles()">📷 사진 ${pi.photos.length?'더 ':''}고르기</button>
+    ${n?`<button class="btn" onclick="piRun()">${n}칸 읽기 시작</button>`:''}
+    ${ocrImportLeft()!=null?`<div class="muted" style="font-size:12.5px; text-align:center; margin-top:4px">${q.trialLeft!=null?'무료 체험':'옛 일지'} 판독 ${ocrImportLeft()}칸 남음</div>`:''}
+    ${pi.cells.length?'<button class="btn subtle" onclick="piRun()">남은 칸 이어서 읽기</button>':''}`;
+}
+function piKind(k){ if(pi.photos.length&&pi.kind!==k){ toast('고른 사진을 빼고 바꿔 주세요'); return; } pi.kind=k; piPut(); render(); }
+async function piRun(){
+  if(!pi.cells.length){
+    pi.photos.forEach((p,pIdx)=>p.cells.filter(c=>c.on).forEach(c=>pi.cells.push({photo:pIdx, cell:c.n, img:c.img, status:'wait', rows:[], md:'', cond:''})));
+    pi.photos.forEach(p=>{ p.cells.forEach(c=>{ if(!c.on) c.img=''; }); });
+  } else { pi.cells.forEach(c=>{ if(c.status==='fail') c.status='wait'; }); }
+  if(!pi.cells.length){ toast('읽을 칸이 없습니다'); return; }
+  const L=ocrImportLeft(), left=pi.cells.filter(c=>c.status==='wait').length;
+  if(L!=null&&left>L) toast(`판독이 ${L}칸 남아 그만큼만 읽힙니다`);
+  pi.step='read'; pi._stop=false; go({name:'pimp'});
+  let fails=0;
+  for(const c of pi.cells){
+    if(c.status!=='wait') continue;
+    if(pi._stop||!pi||view.name!=='pimp') break;
+    try{
+      const r=await piAsk(c.img, pi.memberId, 'import');
+      if(r.limit){ pi._limit=true; break; }
+      if(!r.res.ok||r.out.error) throw new Error('서버 '+r.res.status);
+      Object.assign(c, piFromOut(r.out, pi.memberId));
+      c.status= c.rows.length? 'ok' : 'empty';
+      if(c.status==='empty') c.skip=true;
+      fails=0;
+    }catch(e){ c.status='fail'; fails++; console.error(e); if(fails>=3){ toast('연결이 불안정해 멈췄습니다 — 나중에 이어서 읽어 주세요'); break; } }
+    piPut(); if(view.name==='pimp') render();
+  }
+  if(!pi) return;
+  const lim=pi._limit; pi._limit=false;
+  if(lim) ocrLimitModal();
+  const waiting=pi.cells.some(c=>c.status==='wait');
+  if(waiting&&!pi.cells.some(c=>c.status==='ok')){ pi.step='pick2'; piPut(); render(); return; }
+  pi.step='check'; piDates(); pi.cur=pi.cells.findIndex(c=>!c.skip); if(pi.cur<0) pi.cur=0; pi.cells[pi.cur].seen=true; piPut();
+  if(waiting) toast('못 읽은 칸은 노란 번호로 남아 있어요');
+  go({name:'pcheck'});
+}
+async function piRetry(ci){
+  const c=pi.cells[ci]; toast('다시 읽는 중…');
+  try{ const r=await piAsk(c.img, pi.memberId, 'import');
+    if(r.limit){ ocrLimitModal(); return; }
+    if(!r.res.ok||r.out.error) throw new Error('서버');
+    Object.assign(c, piFromOut(r.out, pi.memberId)); c.status=c.rows.length?'ok':'empty'; piDates(); piPut(); render();
+  }catch(e){ toast('다시 읽지 못했습니다 — 잠시 뒤 해 주세요'); }
+}
+/* 날짜: 종이의 월·일 + 첫 수업 연도(달이 크게 줄면 해를 넘김). 못 읽은 칸은 앞뒤로 추정하고 표시한다. 회차 번호도 여기서 매긴다 */
+function piDateAdd(iso,days){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+days); return dfmt(d); }
+function piDates(){
+  const have=new Set(db.logs.filter(l=>l.memberId===pi.memberId&&!l.seed).map(l=>l.date));
+  const A=pi.cells.filter(c=>!c.skip&&c.status!=='empty');
+  let y=+pi.year||new Date().getFullYear(), pm=0;
+  A.forEach(c=>{ c.guess=false; c.date='';
+    if(c.dateUser){ c.date=c.dateUser; y=+c.date.slice(0,4); pm=+c.date.slice(5,7); return; }
+    const mm=String(c.md||'').match(/(\d{1,2})\D+(\d{1,2})/);
+    if(!mm||+mm[1]<1||+mm[1]>12||+mm[2]<1||+mm[2]>31) return;
+    /* 해 넘김은 연말→연초일 때만 — 날짜 하나를 잘못 읽어도(8월을 1월로) 뒤 칸 연도가 전부 밀리지 않게. 어긋난 칸은 빨갛게 표시만 한다 */
+    const mo=+mm[1], rolled=pm>=10&&mo<=3; if(rolled) y++;
+    if(rolled||mo>=pm-5) pm=mo;
+    c.date=`${y}-${String(mo).padStart(2,'0')}-${String(+mm[2]).padStart(2,'0')}`;
+  });
+  A.forEach((c,i)=>{ if(c.date) return;
+    let a=i-1; while(a>=0&&!A[a].date) a--;
+    let b=i+1; while(b<A.length&&!A[b].date) b++;
+    const P=a>=0?A[a].date:null, N=b<A.length?A[b].date:null;
+    if(P&&N){ const gap=Math.max(1,Math.round((new Date(N)-new Date(P))/864e5/(b-a))); c.date=piDateAdd(P,gap); }
+    else if(P) c.date=piDateAdd(P,3); else if(N) c.date=piDateAdd(N,-3*(b-i)); else c.date=today();
+    c.guess=true;
+  });
+  pi.cells.forEach(c=>{ c.no=0; c.back=false; c.dup=false; });
+  A.forEach((c,i)=>{ c.no=(+pi.startNo||1)+i; c.dup=have.has(c.date); c.back= i>0&&c.date<A[i-1].date; });
+}
+function piGoFinal(){ piDates(); piPut(); go({name:'pfinal'}); }
+let _piGroups=[];
+function vPFinal(){
+  if(!pi||pi.mode!=='import'){ pi=null; return vHome(); }
+  const m=db.members.find(x=>x.id===pi.memberId); if(!m){ pi=null; return vHome(); }
+  const A=pi.cells.filter(c=>!c.skip&&c.status==='ok');
+  const groups={}; _piGroups=[];
+  A.forEach((c)=>(c.rows||[]).forEach((r,ri)=>{ if(r.del||r.exId&&r.status==='ok') return;
+    const g=groups[r.key]||(groups[r.key]={key:r.key, written:r.written, status:r.status, sug:r.sug, n:0, ci:pi.cells.indexOf(c), ri}); g.n++; }));
+  _piGroups=Object.values(groups);
+  const qs=_piGroups.filter(g=>g.status==='check'), ns=_piGroups.filter(g=>g.status==='new');
+  const qHtml=qs.map(g=>`<div class="pc-row check"><b>「${esc(g.written)}」</b> <span class="muted">${g.n}곳</span> = 「${esc(exName(g.sug))}」 맞나요?
+      <div class="pc-q"><button class="ichip" onclick="piYes(${g.ci},${g.ri})">맞아요</button><button class="ichip" onclick="piPick(${g.ci},${g.ri})">다른 운동</button><button class="ichip" onclick="piMakeNew(${g.ci},${g.ri})">새 운동</button></div></div>`).join('');
+  const nHtml=ns.map(g=>{ const r=pi.cells[g.ci].rows[g.ri], n=piNewEx(g.key,r), i=_piGroups.indexOf(g); return `<div class="pc-row new"><div class="sd-top"><span>「${esc(g.written)}」 <span class="muted" style="font-weight:400">${g.n}곳</span></span><button class="ichip" onclick="piPick(${g.ci},${g.ri})">이미 있는 운동이에요</button></div>
+      <input class="pc-memo" value="${esc(n.name)}" placeholder="운동 이름" oninput="piNewSet(${i},'name',this.value)">
+      <div class="grid2" style="margin-top:6px"><select onchange="piNewSet(${i},'tag',this.value)">${EX_TAGS.map(t=>`<option ${t===n.tag?'selected':''}>${t}</option>`).join('')}</select>
+        <select onchange="piNewSet(${i},'mode',this.value)">${Object.entries(MODES).map(([k,v])=>`<option value="${k}" ${k===n.mode?'selected':''}>${v}</option>`).join('')}</select></div></div>`; }).join('');
+  const lines=A.reduce((a,c)=>a+(c.rows||[]).filter(r=>!r.del).length,0);
+  const bad=A.reduce((a,c)=>a+(c.rows||[]).filter(r=>!r.del&&(r.exId||r.sug)&&exMode(r.exId||r.sug)!=='chk'&&piSets(exMode(r.exId||r.sug),r.txt).bad).length,0);
+  const guess=A.filter(c=>c.guess).length, back=A.filter(c=>c.back).length, dup=A.filter(c=>c.dup).length, wait=pi.cells.filter(c=>c.status==='wait'||c.status==='fail').length;
+  const pr=memberProgress(m);
+  return `<div class="top"><button class="back" onclick="go({name:'pcheck'})">←</button><h1>📷 저장 전 확인</h1><span></span></div>
+    <div class="card"><b>수업 <span class="num">${A.length}</span>회 · 운동 <span class="num">${lines}</span>줄을 저장합니다</b>
+      <div class="muted" style="margin-top:6px; line-height:1.8">${A.length?`${A[0].no}회차(${fullD(A[0].date)}) ~ ${A[A.length-1].no}회차(${fullD(A[A.length-1].date)})`:''}${pr&&A.length?`<br>저장하면 다음 수업은 ${A[A.length-1].no+1}회차입니다`:''}
+      ${guess?`<br><span style="color:var(--warn)">날짜를 추정한 칸 ${guess}개</span>`:''}${back?`<br><span style="color:var(--bad)">날짜 순서가 앞뒤로 어긋난 칸 ${back}개</span>`:''}${dup?`<br><span style="color:var(--warn)">이미 같은 날짜 기록이 있는 칸 ${dup}개 — 빼거나 날짜를 고쳐 주세요</span>`:''}${bad?`<br><span style="color:var(--bad)">숫자를 못 알아듣는 줄 ${bad}개 — 저장 안 됩니다</span>`:''}${wait?`<br><span style="color:var(--bad)">못 읽은 칸 ${wait}개 — 저장에서 빠집니다</span>`:''}</div></div>
+    ${qs.length?`<div class="card"><b>이름을 확인해 주세요 ${qs.length}개</b>${qHtml}</div>`:''}
+    ${ns.length?`<div class="card"><b>새로 추가될 운동 ${ns.length}개</b><div class="muted" style="margin:2px 0 4px">글씨를 잘못 읽어 생기는 운동이 없는지 봐 주세요. 같은 운동이 둘로 갈라지면 최고 기록도 갈라집니다.</div>${nHtml}</div>`:''}
+    <button class="btn" onclick="piSave()">${A.length}회 저장</button>
+    <button class="btn subtle" onclick="go({name:'pcheck'})">← 칸 다시 보기</button>`;
+}
+function piNewSet(i,k,v){ const g=_piGroups[i]; if(!g) return; pi.newEx=pi.newEx||{}; const r=pi.cells[g.ci].rows[g.ri], n=piNewEx(g.key,r); n[k]=v; piPut(); }
+function piSave(){
+  if(piUnsure().length){ toast('이름을 확인할 운동을 먼저 골라 주세요'); return; }
+  const m=db.members.find(x=>x.id===pi.memberId); if(!m) return;
+  piDates(); const made=piCreateNew(); const pr=memberProgress(m);
+  const A=pi.cells.filter(c=>!c.skip&&c.status==='ok'); if(!A.length){ toast('저장할 칸이 없습니다'); return; }
+  A.forEach(c=>{
+    const entries=[];
+    (c.rows||[]).filter(r=>!r.del&&r.exId).forEach(r=>{ const e=piEntry(r), was=entries.find(x=>x.exId===e.exId);
+      if(was){ was.sets.push(...e.sets); if(e.memo) was.memo=[was.memo,e.memo].filter(Boolean).join(', '); (e.issues||[]).forEach(i=>{ if(!was.issues.includes(i)) was.issues.push(i); }); }
+      else entries.push(e); });
+    const log={id:uid(), memberId:m.id, date:c.date, cond:String(c.cond||'').trim(), imported:true, entries};
+    if(pr){ const i=c.no-1; log.dayIdx=i%pr.total+1; log.lap=Math.floor(i/pr.total)+1; log.progId=m.programId; }
+    else{ log.dayIdx=0; log.lap=0; log.progId='import'; }
+    db.logs.push(log);
+  });
+  if(pr) m.sessionsDone=Math.max(m.sessionsDone||0, A[A.length-1].no);
+  const n=A.length, id=m.id; save(); piDrop(id); pi=null;
+  go({name:'member', id}); toast(`수업 ${n}회를 넣었습니다${made?` · 새 운동 ${made}개 추가`:''}`);
+}
+
 let _pickCb=null;
 function pickExercise(cb){
   _pickCb=cb;
@@ -2681,7 +3081,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.4 — 📋 오늘 수업 보기 · 기록 평생 무료 · AI 사진 판독 월 10장 무료 · 🖨 8칸 수업지</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.8 — 📷 사진으로 운동까지 자동 입력 · 옛 일지 1회차부터 한 번에 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
