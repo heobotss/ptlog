@@ -672,7 +672,11 @@ function memberProgress(m){
   if(!p) return null;
   const total=p.total, done=m.sessionsDone||0;
   const nextDay=done%total+1, lap=Math.floor(done/total)+1;
-  return {p, total, done, nextDay, lap, remaining: total-(done%total), rebadge: (done%total)>=total-3};
+  const base={p, total, done, remaining: total-(done%total), rebadge: (done%total)>=total-3};
+  /* 「오늘은 다음 회차 먼저」(11-07, ATC 시퀀스 전자책: "다음 수업 때 이어질 운동 프로그램을 오늘 먼저") —
+     당겨 한 회차는 이미 셌고, 미룬 회차(m.swap)를 다음에 한 뒤 원래 순서로 돌아간다 */
+  if(m.swap && m.swap.day>=1 && m.swap.day<=total) return {...base, nextDay:m.swap.day, lap:m.swap.lap, swapped:true, after:{day:nextDay%total+1, lap:lap+(nextDay===total?1:0)}};
+  return {...base, nextDay, lap, ahead:{day:nextDay%total+1, lap:lap+(nextDay===total?1:0)}};
 }
 function prevRecord(memberId, exId, dayIdx, lap, progId){
   const mode=exMode(exId);
@@ -1122,7 +1126,9 @@ function vMember(){
     ${draft&&draft.memberId===m.id
       ?`<button class="btn" onclick="go({name:'session'})">▶ ${draft.dayIdx}회차 수업 이어하기 (자동 저장됨)</button>
         <button class="btn subtle" onclick="discardDraft()">진행 중 입력 버리기</button>`
-      :`<button class="btn" onclick="startSession('${m.id}')">${pr.nextDay}회차 수업 시작</button>`}
+      :`<button class="btn" onclick="startSession('${m.id}')">${pr.nextDay}회차 수업 시작</button>
+        ${pr.swapped? `<div class="muted" style="margin:-4px 0 10px; font-size:13px">지난번에 미룬 ${pr.nextDay}회차 차례예요 — 이걸 하면 ${pr.after.day}회차부터 원래 순서로 이어집니다</div>`
+          : `<button class="btn subtle" onclick="startAhead('${m.id}')">오늘은 ${pr.ahead.day}회차 먼저 하기 <span class="muted" style="font-weight:400">(${pr.nextDay}회차는 다음에)</span></button>`}`}
     <button class="btn ghost" onclick="go({name:'peek', id:'${m.id}', k:0})">📋 오늘 수업 보기 — 종이에 옮겨 적기용</button>
     <button class="btn ghost" onclick="printSheet8('${m.id}')">🖨 다음 8회 수업지 인쇄 — 종이로 수업하기</button>`
     :cycleCard(m)}
@@ -1155,7 +1161,11 @@ function newSet(mode, prevSet){
   if(mode==='band') return {band:prevSet?prevSet.band:BANDS[0], r:''};
   return {w:prevSet?prevSet.w:'', r:''};
 }
-function startSession(memberId){
+function startAhead(memberId){
+  const m=db.members.find(x=>x.id===memberId), pr=memberProgress(m); if(!pr||!pr.ahead) return;
+  ask(`오늘 ${pr.ahead.day}회차를 먼저 하고,\n${pr.nextDay}회차는 다음 수업으로 미룰까요?`, `${pr.ahead.day}회차 먼저 하기`, ()=>startSession(memberId, true));
+}
+function startSession(memberId, ahead){
   const m=db.members.find(x=>x.id===memberId); const pr=memberProgress(m);
   /* 임시 저장된 수업이 있으면 이어가기 */
   if(draft && draft.memberId===memberId){ go({name:'session'}); toast('임시 저장된 수업을 이어갑니다'); return; }
@@ -1165,9 +1175,11 @@ function startSession(memberId){
       ()=>{ draft=null; dsave(); startSession(memberId); });
     return;
   }
-  const day=pr.p.days[pr.nextDay-1]||{items:[]};
-  const adds=((m.dayAdds||{})[pr.nextDay]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
-  draft={memberId, dayIdx:pr.nextDay, lap:pr.lap, cond:'', progId:m.programId,
+  const go1= ahead&&pr.ahead? pr.ahead : {day:pr.nextDay, lap:pr.lap};
+  const day=pr.p.days[go1.day-1]||{items:[]};
+  const adds=((m.dayAdds||{})[go1.day]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
+  draft={memberId, dayIdx:go1.day, lap:go1.lap, cond:'', progId:m.programId,
+    ...(ahead&&pr.ahead? {swapFrom:{day:pr.nextDay, lap:pr.lap}} : pr.swapped? {swapBack:true} : {}),
     entries: [...day.items, ...adds].map(exId=>{
       const mode=exMode(exId);
       return {exId, mode, sets: mode==='chk'? []:[newSet(mode)], chk:false, issues:[], memo:'', open:false};
@@ -1245,10 +1257,16 @@ function vSession(){
   return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
     <h1>${editing?'기록 수정':esc(m.name)}${draft.dayIdx?' · '+draft.dayIdx+'회차':''}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
     ${editing?`<div class="muted" style="margin:-8px 0 10px">${esc(m.name)} · ${fmtD(draft.editDate)} 수업을 수정하는 중</div>`
+      : draft.swapFrom?`<div class="muted" style="margin:-8px 0 10px">오늘 먼저 하는 회차예요 — ${draft.swapFrom.day}회차는 다음 수업에 합니다</div>`
+      : draft.swapBack?`<div class="muted" style="margin:-8px 0 10px">지난번에 미룬 회차예요${draft.lap>1?` · ${draft.lap}바퀴째`:''}</div>`
       : draft.lap>1?`<div class="muted" style="margin:-8px 0 10px">${draft.lap}바퀴째 — 지난 바퀴 기록과 비교하며 진행</div>`:''}
     ${draft.refLogId?`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📌 기준 수업 ${esc((l=>l?logDate(l):fullD(draft.refDate))(db.logs.find(x=>x.id===draft.refLogId)))}</b><div class="muted">운동마다 그날 기록이 옆에 붙습니다 — 오늘 숫자를 적으면 변화가 바로 계산됩니다</div></div>`:''}
+    ${!editing&&(hw=>hw?`<div class="card" style="border-color:var(--good); padding:9px 13px"><b>📝 지난 숙제</b> <span class="muted">${fmtD(hw.date)}</span><div style="margin-top:2px">${esc(hw.homework)}</div><div class="muted" style="font-size:12.5px; margin-top:2px">하셨어요? 확인하고 칭찬 한마디</div></div>`:'')(lastHomework(draft.memberId))}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
+    <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 카톡 요약에 들어가요)</span>
+      <input type="text" id="hw-in" style="margin-top:6px" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
+      <div class="chips" style="margin-top:6px">${[...new Set(draft.entries.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
     <div class="grid2">
       <button class="btn ghost" onclick="photoFill()">📷 사진으로 채우기</button>
       <button class="btn ghost" onclick="addExerciseToday()">＋ 퍼스널 운동</button></div>
@@ -1284,6 +1302,16 @@ function removeFromDay(i){
     if(m.dayAdds&&m.dayAdds[draft.dayIdx]) m.dayAdds[draft.dayIdx]=m.dayAdds[draft.dayIdx].filter(id=>id!==en.exId);
     draft.entries.splice(i,1); dsave(); render(); toast('뺐습니다'); });
 }
+/* ── 숙제 (11-07 대표님, ATC 시퀀스 전자책 「마무리 or 숙제 동작」) — 수업마다 log.homework 한 줄.
+   카톡 요약에 들어가고, 다음 수업 화면·오늘 수업 보기에 「지난 숙제 — 하셨어요?」로 다시 보인다 ── */
+function lastHomework(memberId, exceptId){
+  /* 바로 지난 수업의 숙제만 — 그 수업에 숙제가 없었으면 더 옛날 숙제를 꺼내지 않는다 */
+  const L=db.logs.filter(l=>l.memberId===memberId && !l.seed && !l.imported && l.id!==exceptId)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(db.logs.indexOf(b)-db.logs.indexOf(a)));
+  return L[0]&&(L[0].homework||'').trim()? L[0] : null;
+}
+function hwAdd(name){ const el=document.getElementById('hw-in'); const cur=(draft.homework||'').trim();
+  draft.homework= cur? cur+', '+name : name; if(el){ el.value=draft.homework; el.focus(); } dsave(); }
 function leaveSession(){ const id=draft.memberId; go({name:'member', id}); toast('입력 내용은 자동 저장돼 있습니다'); }
 function finishSession(){
   const entries=draft.entries.map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
@@ -1296,15 +1324,18 @@ function finishSession(){
   /* 지난 기록 수정 모드 — 기존 로그를 덮어쓰고 끝 */
   if(draft.editLogId){
     const log=db.logs.find(l=>l.id===draft.editLogId);
-    if(log){ log.entries=entries; log.cond=draft.cond.trim(); }
+    if(log){ log.entries=entries; log.cond=draft.cond.trim(); const hw=(draft.homework||'').trim(); if(hw) log.homework=hw; else delete log.homework; }
     const mid=draft.memberId; draft=null; db.draft=null; save();
     go({name:'logs', id:mid}); toast('수정됐습니다'); return;
   }
   const log={id:uid(), memberId:draft.memberId, dayIdx:draft.dayIdx, lap:draft.lap, date:today(),
     cond:draft.cond.trim(), progId:m.programId, entries};
+  if((draft.homework||'').trim()) log.homework=draft.homework.trim();
   if(draft.refLogId){ log.refLogId=draft.refLogId; log.refDate=draft.refDate; }
   db.logs.push(log);
   m.sessionsDone=(m.sessionsDone||0)+1;
+  if(draft.swapFrom) m.swap={...draft.swapFrom};   /* 미룬 회차를 다음 차례로 */
+  else if(draft.swapBack) delete m.swap;           /* 미룬 회차를 했으니 원래 순서로 */
   /* 오늘 이 회원의 예약이 있으면 자동으로 「완료」 표시 */
   const bk=db.bookings.find(b=>b.memberId===m.id && b.date===today() && !b.status);
   if(bk) bk.status='done';
@@ -1617,8 +1648,11 @@ function nextCells(m, startRefId){
     const j=L.findIndex(l=>l.id===startRefId);
     for(let i=0;i<8 && j+i<L.length;i++){ const r=L[j+i]; cells.push({ref:r, items:[...new Set((r.entries||[]).map(e=>e.exId))].filter(id=>exOf(id)), ctx:{memberId, refLogId:r.id}}); }
   } else if(pr){
+    const seq=[]; let k=pr.swapped? pr.after.day : pr.nextDay, kl=pr.swapped? pr.after.lap : pr.lap;
+    if(pr.swapped) seq.push([pr.nextDay, pr.lap]);
+    while(seq.length<8){ seq.push([k,kl]); k++; if(k>pr.total){ k=1; kl++; } }
     for(let i=0;i<8;i++){
-      const d=((pr.nextDay-1+i)%pr.total)+1, lap=pr.lap+Math.floor((pr.nextDay-1+i)/pr.total);
+      const [d, lap]=seq[i];
       const day=pr.p.days[d-1]||{items:[]};
       const adds=((m.dayAdds||{})[d]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
       cells.push({label:d+'회차', items:[...day.items,...adds], ctx:{memberId, dayIdx:d, lap, progId:m.programId}});
@@ -1705,6 +1739,7 @@ function vPeek(){
       <div style="margin-top:4px">${label}</div>
       ${(()=>{ const cd=(c.ref&&c.ref.cond||'').replace(/\[[^\]]*\]/g,'').replace(/📌\s*기준\s*[\d.\-]+/g,'').replace(/\s{2,}/g,' ').trim();
         return cd?`<div class="muted" style="margin-top:4px">그날 컨디션: ${esc(cd)}</div>`:''; })()}
+      ${k===0?(hw=>hw?`<div style="margin-top:6px; font-size:14px">📝 <b>지난 숙제</b> ${esc(hw.homework)} <span class="muted">(${fmtD(hw.date)}) — 하셨는지 확인</span></div>`:'')(lastHomework(m.id)):''}
       <div class="muted" style="font-size:12.5px; margin-top:6px">파란 숫자 = 기준일 기록 · 🏆 = 전체 기록 중 최고와 그 날짜 · 🕘 = 마지막으로 한 날 · ⚠ = 통증·주의</div></div>
     <div class="card">${rows||'<div class="muted">운동이 없습니다</div>'}</div>
     ${nav}
@@ -1920,7 +1955,7 @@ function startEditLog(logId){
   const log=db.logs.find(l=>l.id===logId); if(!log) return;
   if(draft && !draft.editLogId){ toast('진행 중인 수업이 있어 수정할 수 없습니다 — 먼저 완료하거나 버리세요'); return; }
   draft={memberId:log.memberId, dayIdx:log.dayIdx, lap:log.lap, progId:log.progId, cond:log.cond||'',
-    editLogId:logId, editDate:log.date,
+    editLogId:logId, editDate:log.date, homework:log.homework||'',
     entries:(log.entries||[]).map(e=>{ const mode=exMode(e.exId);
       return {exId:e.exId, mode, sets: mode==='chk'? []:(e.sets&&e.sets.length? e.sets.map(s=>({...s})):[newSet(mode)]),
         chk:!!e.chk, issues:[...(e.issues||[])], memo:e.memo||'', open:false}; })};
@@ -1974,6 +2009,7 @@ function vSummary(){
     <div class="card"><b>${esc(m.name)}님, 오늘 운동 요약</b>
       ${log.cond?`<div class="muted">🩺 ${esc(log.cond)}</div>`:''}
       <div class="divider"></div>${list}
+      ${log.homework?`<div class="divider"></div><div style="font-size:13.5px">📝 <b>오늘 숙제</b> ${esc(log.homework)}</div>`:''}
       <div class="divider"></div>
       <div class="grid2">
         <div class="stat"><div class="muted">총 볼륨</div><div class="v num">${vol.toLocaleString()}kg</div></div>
@@ -1985,7 +2021,7 @@ function vSummary(){
 function shareText(log){
   const {m, rows, vol}=summaryData(log);
   const lines=rows.filter(r=>plainStr(r.en,r.mode)).map(r=>`· ${r.name} ${plainStr(r.en,r.mode)}`+(r.delta!==null?` (${log.refDate?(log.refDate.slice(0,4)===today().slice(0,4)?fmtD(log.refDate):fullD(log.refDate))+' 대비':'지난번 대비'} ${r.delta>=0?'+':''}${r.delta}%)`:''));
-  return `[${m.name.replace(' (예시)','')}님 오늘 운동 – ${fmtD(log.date)}${log.dayIdx?' · '+log.dayIdx+'회차':''}]\n${lines.join('\n')}\n총 볼륨 ${vol.toLocaleString()}kg\n오늘도 고생하셨습니다 💪`;
+  return `[${m.name.replace(' (예시)','')}님 오늘 운동 – ${fmtD(log.date)}${log.dayIdx?' · '+log.dayIdx+'회차':''}]\n${lines.join('\n')}\n총 볼륨 ${vol.toLocaleString()}kg${log.homework?`\n📝 오늘 숙제: ${log.homework}`:''}\n오늘도 고생하셨습니다 💪`;
 }
 async function shareSummary(logId){
   const log=db.logs.find(l=>l.id===logId);
@@ -2505,7 +2541,7 @@ function applyProgChange(memberId, progId){
   const m=db.members.find(x=>x.id===memberId); const p=db.programs.find(p=>p.id===progId);
   closeModal();
   ask(`${p.name} (${p.total}회)으로 ${m.programId?'변경':'배정'}할까요?`, m.programId?'변경':'배정', ()=>{
-    m.programId=progId; m.sessionsDone=0; m.dayAdds={};
+    m.programId=progId; m.sessionsDone=0; m.dayAdds={}; delete m.swap;
     save(); render(); toast('완료 — 1회차부터 시작합니다'); });
 }
 
@@ -2790,7 +2826,7 @@ function sdSave(){
     Object.keys(sd.days).forEach(k=>{ const day=sd.days[k], entries=day.rows.map(r=>sdEntry(r,true)).filter(Boolean);
       if(!entries.length) return;
       db.logs.push({id:uid(), memberId:m.id, seed:'lap', date:seedDate(day.date,false), dayIdx:+k, lap:0, progId:m.programId, cond:'', entries}); lapN++; });
-    if(pr && sd.next && sd.next!==pr.nextDay) m.sessionsDone=(pr.lap-1)*pr.total+(sd.next-1);
+    if(pr && sd.next && sd.next!==pr.nextDay){ m.sessionsDone=(pr.lap-1)*pr.total+(sd.next-1); delete m.swap; }
   } else {
     sd.sess.forEach((s,i)=>{
       const entries=s.rows.map(r=>sdEntry(r,true)||{exId:r.exId, sets:[], chk:false, issues:[], memo:''});
@@ -3224,7 +3260,7 @@ function piSave(){
     else{ log.dayIdx=0; log.lap=0; log.progId='import'; }
     db.logs.push(log);
   });
-  if(pr) m.sessionsDone=Math.max(m.sessionsDone||0, A[A.length-1].no);
+  if(pr){ m.sessionsDone=Math.max(m.sessionsDone||0, A[A.length-1].no); delete m.swap; }
   const n=A.length, id=m.id; save(); piDrop(id); pi=null;
   go({name:'member', id}); toast(`수업 ${n}회를 넣었습니다${made?` · 새 운동 ${made}개 추가`:''}`);
 }
