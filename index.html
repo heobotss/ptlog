@@ -727,7 +727,7 @@ function render(){
   [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
     const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
-    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
+    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, mkprog:vMkProg, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
     programs:vPrograms, progDetail:vProgDetail, progDay:vProgDay, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
   el.classList.toggle('wide', view.name==='pcheck');
@@ -1082,15 +1082,20 @@ function vMemberNew(){
         <button class="btn subtle" id="sex-f" onclick="pickSex('여')">여성</button></div></div>
     <label class="fld"><span class="muted">주의사항 (나이·목표·부상 이력)</span><input type="text" id="m-note" placeholder="예: 35세 · 허리 디스크 이력"></label>
     <label class="fld"><span class="muted">프로그램 배정</span><select id="m-prog">${opts}</select></label>
+    <label class="fld"><span class="muted">몇 회차부터 시작 (비우면 1회차 · 다른 곳에서 하던 회원이면 이어서)</span><input type="number" inputmode="numeric" id="m-start" min="1" placeholder="1"></label>
     <button class="btn" onclick="addMember()">등록</button>`;
 }
 function addMember(){
   const name=document.getElementById('m-name').value.trim();
   if(!name){ toast('이름을 입력하세요'); return; }
+  const progId=document.getElementById('m-prog').value, prog=db.programs.find(x=>x.id===progId);
+  /* 11-09 선생님 요청: 모든 회원을 1회차부터 하지 않는다 — 시작 회차를 받으면 그 앞까지 한 것으로 센다 */
+  const st=parseInt((document.getElementById('m-start')||{}).value)||1;
+  if(prog && (st<1||st>prog.total)){ toast(`시작 회차는 1~${prog.total} 사이로 넣어 주세요`); return; }
   const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(),
-    programId:document.getElementById('m-prog').value, sessionsDone:0, dayAdds:{}};
+    programId:progId, sessionsDone:Math.max(0,st-1), dayAdds:{}};
   db.members.push(m); save(); _newSex='';
-  go({name:'home'}); toast(`${name} 회원이 등록됐습니다`);
+  go({name:'home'}); toast(`${name} 회원이 등록됐습니다${st>1?` — ${st}회차부터 시작합니다`:''}`);
 }
 function openSexModal(memberId){
   modal(`<b>성별 설정</b>
@@ -1137,6 +1142,7 @@ function vMember(){
     <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
     <button class="btn ghost" onclick="go({name:'inbody', id:'${m.id}'})">⚖️ 인바디${(m.inbody||[]).length?` · ${m.inbody.length}회 측정 (최근 ${fullD(ibSorted(m).slice(-1)[0].date)})`:' — 측정 기록 넣기'}</button>
     <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
+    ${db.logs.some(l=>l.memberId===m.id&&!l.seed)?`<button class="btn ghost" onclick="openMkProg('${m.id}')">📋 이 회원 수업으로 프로그램 만들기</button>`:''}
     <button class="btn ghost" onclick="openImport('${m.id}')">📷 옛 일지 사진으로 넣기 — 1회차부터 한 번에</button>
     <button class="btn ghost" onclick="openSeed('${m.id}')">📥 옛 기록 빠르게 넣기${seedN?` · ${seedN}줄 옮김 (고치기)`:' — 최고 기록·최근 한 바퀴만'}</button>
     <div class="grid2">
@@ -1261,9 +1267,12 @@ function vSession(){
       : draft.swapBack?`<div class="muted" style="margin:-8px 0 10px">지난번에 미룬 회차예요${draft.lap>1?` · ${draft.lap}바퀴째`:''}</div>`
       : draft.lap>1?`<div class="muted" style="margin:-8px 0 10px">${draft.lap}바퀴째 — 지난 바퀴 기록과 비교하며 진행</div>`:''}
     ${draft.refLogId?`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📌 기준 수업 ${esc((l=>l?logDate(l):fullD(draft.refDate))(db.logs.find(x=>x.id===draft.refLogId)))}</b><div class="muted">운동마다 그날 기록이 옆에 붙습니다 — 오늘 숫자를 적으면 변화가 바로 계산됩니다</div></div>`:''}
+    ${!editing&&(l=>l&&(l.note||'').trim()?`<div class="card" style="padding:9px 13px"><b>🗒 지난 수업 메모</b> <span class="muted">${fmtD(l.date)}</span><div style="margin-top:2px; white-space:pre-line; font-size:13.5px">${esc(l.note)}</div></div>`:'')(lastLogOf(draft.memberId))}
     ${!editing&&(hw=>hw?`<div class="card" style="border-color:var(--good); padding:9px 13px"><b>📝 지난 숙제</b> <span class="muted">${fmtD(hw.date)}</span><div style="margin-top:2px">${esc(hw.homework)}</div><div class="muted" style="font-size:12.5px; margin-top:2px">하셨어요? 확인하고 칭찬 한마디</div></div>`:'')(lastHomework(draft.memberId))}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
+    <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
+      <textarea id="note-in" rows="3" style="margin-top:6px" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea></div>
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 카톡 요약에 들어가요)</span>
       <input type="text" id="hw-in" style="margin-top:6px" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
       <div class="chips" style="margin-top:6px">${[...new Set(draft.entries.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
@@ -1304,6 +1313,12 @@ function removeFromDay(i){
 }
 /* ── 숙제 (11-07 대표님, ATC 시퀀스 전자책 「마무리 or 숙제 동작」) — 수업마다 log.homework 한 줄.
    카톡 요약에 들어가고, 다음 수업 화면·오늘 수업 보기에 「지난 숙제 — 하셨어요?」로 다시 보인다 ── */
+/* 바로 지난 수업 (숙제·수업 메모가 같이 쓴다) */
+function lastLogOf(memberId, exceptId){
+  const L=db.logs.filter(l=>l.memberId===memberId && !l.seed && !l.imported && l.id!==exceptId)
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(db.logs.indexOf(b)-db.logs.indexOf(a)));
+  return L[0]||null;
+}
 function lastHomework(memberId, exceptId){
   /* 바로 지난 수업의 숙제만 — 그 수업에 숙제가 없었으면 더 옛날 숙제를 꺼내지 않는다 */
   const L=db.logs.filter(l=>l.memberId===memberId && !l.seed && !l.imported && l.id!==exceptId)
@@ -1324,13 +1339,15 @@ function finishSession(){
   /* 지난 기록 수정 모드 — 기존 로그를 덮어쓰고 끝 */
   if(draft.editLogId){
     const log=db.logs.find(l=>l.id===draft.editLogId);
-    if(log){ log.entries=entries; log.cond=draft.cond.trim(); const hw=(draft.homework||'').trim(); if(hw) log.homework=hw; else delete log.homework; }
+    if(log){ log.entries=entries; log.cond=draft.cond.trim(); const hw=(draft.homework||'').trim(); if(hw) log.homework=hw; else delete log.homework;
+      const nt=(draft.note||'').trim(); if(nt) log.note=nt; else delete log.note; }
     const mid=draft.memberId; draft=null; db.draft=null; save();
     go({name:'logs', id:mid}); toast('수정됐습니다'); return;
   }
   const log={id:uid(), memberId:draft.memberId, dayIdx:draft.dayIdx, lap:draft.lap, date:today(),
     cond:draft.cond.trim(), progId:m.programId, entries};
   if((draft.homework||'').trim()) log.homework=draft.homework.trim();
+  if((draft.note||'').trim()) log.note=draft.note.trim();
   if(draft.refLogId){ log.refLogId=draft.refLogId; log.refDate=draft.refDate; }
   db.logs.push(log);
   m.sessionsDone=(m.sessionsDone||0)+1;
@@ -1947,7 +1964,8 @@ function vLogs(){
     const p=db.programs.find(p=>p.id===l.progId);
     return `<div class="card tap" onclick="startEditLog('${l.id}')">
       <div class="row"><div><b class="num">${l.imported?(l.date||'').replace(/-/g,'.'):fmtD(l.date)}</b> <span class="muted">${l.imported?'📥 종이 일지':l.dayIdx?`${l.dayIdx}회차 · ${l.lap}바퀴${p?' · '+esc(p.name):''}`:'수업'}${l.refDate?' · 📌 기준 '+fmtD(l.refDate):''}</span>
-        <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div></div><span class="muted">수정 ›</span></div></div>`; }).join('');
+        <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div>
+        ${l.note?`<div style="font-size:12.5px; margin-top:3px; white-space:pre-line">🗒 ${esc(l.note.length>80?l.note.slice(0,80)+'…':l.note)}</div>`:''}</div><span class="muted">수정 ›</span></div></div>`; }).join('');
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 수업 기록</h1><span class="muted num">${logs.length}회</span></div>
     ${list||'<div class="empty">아직 수업 기록이 없습니다</div>'}`;
 }
@@ -1955,7 +1973,7 @@ function startEditLog(logId){
   const log=db.logs.find(l=>l.id===logId); if(!log) return;
   if(draft && !draft.editLogId){ toast('진행 중인 수업이 있어 수정할 수 없습니다 — 먼저 완료하거나 버리세요'); return; }
   draft={memberId:log.memberId, dayIdx:log.dayIdx, lap:log.lap, progId:log.progId, cond:log.cond||'',
-    editLogId:logId, editDate:log.date, homework:log.homework||'',
+    editLogId:logId, editDate:log.date, homework:log.homework||'', note:log.note||'',
     entries:(log.entries||[]).map(e=>{ const mode=exMode(e.exId);
       return {exId:e.exId, mode, sets: mode==='chk'? []:(e.sets&&e.sets.length? e.sets.map(s=>({...s})):[newSet(mode)]),
         chk:!!e.chk, issues:[...(e.issues||[])], memo:e.memo||'', open:false}; })};
@@ -2009,6 +2027,7 @@ function vSummary(){
     <div class="card"><b>${esc(m.name)}님, 오늘 운동 요약</b>
       ${log.cond?`<div class="muted">🩺 ${esc(log.cond)}</div>`:''}
       <div class="divider"></div>${list}
+      ${log.note?`<div class="divider"></div><div style="font-size:13px; white-space:pre-line"><span class="muted">🗒 수업 메모 (카톡엔 안 나가요)</span><br>${esc(log.note)}</div>`:''}
       ${log.homework?`<div class="divider"></div><div style="font-size:13.5px">📝 <b>오늘 숙제</b> ${esc(log.homework)}</div>`:''}
       <div class="divider"></div>
       <div class="grid2">
@@ -2196,6 +2215,7 @@ function vProgDetail(){
       <button class="btn" onclick="copyBuiltin('${p.id}')">복사해서 내 프로그램으로</button></div>`
       :`<div class="muted" style="margin-bottom:8px">회차를 누르면 운동을 넣고 빼고 순서를 바꿀 수 있어요. 지난 수업 기록은 바뀌지 않습니다.</div>`}
     ${days}
+    ${p.madeFrom?`<button class="btn subtle" onclick="undoMkProg('${p.id}')">수업으로 만들기 전으로 되돌리기</button>`:''}
     ${p.builtin?'':`<button class="btn subtle" onclick="copyAsNew('${p.id}')">이 프로그램 복사해서 새로 만들기</button>
       <button class="btn danger" onclick="delProgram('${p.id}')">프로그램 삭제</button>`}`;
 }
@@ -3250,12 +3270,14 @@ function piSave(){
   const m=db.members.find(x=>x.id===pi.memberId); if(!m) return;
   piDates(); const made=piCreateNew(); const pr=memberProgress(m);
   const A=pi.cells.filter(c=>!c.skip&&c.status==='ok'); if(!A.length){ toast('저장할 칸이 없습니다'); return; }
+  const newIds=[];
   A.forEach(c=>{
     const entries=[];
     (c.rows||[]).filter(r=>!r.del&&r.exId).forEach(r=>{ const e=piEntry(r), was=entries.find(x=>x.exId===e.exId);
       if(was){ was.sets.push(...e.sets); if(e.memo) was.memo=[was.memo,e.memo].filter(Boolean).join(', '); (e.issues||[]).forEach(i=>{ if(!was.issues.includes(i)) was.issues.push(i); }); }
       else entries.push(e); });
     const log={id:uid(), memberId:m.id, date:c.date, cond:String(c.cond||'').trim(), imported:true, entries};
+    newIds.push(log.id);
     if(pr){ const i=c.no-1; log.dayIdx=i%pr.total+1; log.lap=Math.floor(i/pr.total)+1; log.progId=m.programId; }
     else{ log.dayIdx=0; log.lap=0; log.progId='import'; }
     db.logs.push(log);
@@ -3263,6 +3285,71 @@ function piSave(){
   if(pr){ m.sessionsDone=Math.max(m.sessionsDone||0, A[A.length-1].no); delete m.swap; }
   const n=A.length, id=m.id; save(); piDrop(id); pi=null;
   go({name:'member', id}); toast(`수업 ${n}회를 넣었습니다${made?` · 새 운동 ${made}개 추가`:''}`);
+  setTimeout(()=>ask(`방금 넣은 수업 ${n}회로 프로그램도 만들까요?\n운동 종목과 순서만 프로그램이 되고, 기록은 다음 바퀴에 그대로 비교돼요.`, '프로그램 만들기', ()=>openMkProg(id, newIds)), 400);
+}
+
+/* ───────── 수업하면서 짠 것을 프로그램으로 (11-09 대표님) ─────────
+   특이한 회원은 수업을 하면서 시퀀스를 짠다 → 한 바퀴 끝나면 실제로 한 수업을 그대로 프로그램(1~N회차)으로.
+   운동 종목·순서만 가져오고, 기록(무게·횟수)은 일지에 남아 다음 바퀴 같은 회차 비교·최고 기록으로 그대로 따라온다.
+   「이 회원을 옮기기」를 고르면 그 수업들에 1~N회차 꼬리표를 붙인다(원래 꼬리표는 l.orig 에 보관 → 되돌리기). */
+let mk=null;
+function mkLogs(memberId){ const m=db.members.find(x=>x.id===memberId); return m? memberLogs(m).filter(l=>!l.seed) : []; }
+function openMkProg(memberId, ids){
+  if(draft&&draft.memberId===memberId){ toast('진행 중인 수업을 먼저 완료하거나 버려 주세요'); return; }
+  const L=mkLogs(memberId); if(!L.length){ toast('수업 기록이 없습니다'); return; }
+  const m=db.members.find(x=>x.id===memberId);
+  let a=0, b=L.length-1;
+  if(ids&&ids.length){ const ix=L.map((l,i)=>ids.includes(l.id)?i:-1).filter(i=>i>=0); if(ix.length){ a=Math.min(...ix); b=Math.max(...ix); } }
+  mk={memberId, a, b, name:`${m.name} 시퀀스`, goal:'기타', move:true};
+  go({name:'mkprog'});
+}
+function mkDays(L){ return L.map(l=>({items:[...new Set((l.entries||[]).map(e=>e.exId))].filter(id=>exOf(id))})).filter(d=>d.items.length); }
+function vMkProg(){
+  if(!mk) return vHome();
+  const m=db.members.find(x=>x.id===mk.memberId); if(!m){ mk=null; return vHome(); }
+  const L=mkLogs(m.id), sel=L.slice(mk.a, mk.b+1), days=mkDays(sel), last=mk.b===L.length-1;
+  const opt=(v,cur)=>L.map((l,i)=>`<option value="${i}" ${i===cur?'selected':''}>${i+1}번째 · ${logDate(l)}</option>`).join('');
+  const prev=sel.map((l,i)=>`<div class="pd-row"><span class="num muted">${i+1}회차</span><b style="font-weight:500; font-size:13.5px">${(l.entries||[]).map(e=>esc(exName(e.exId))).join(' · ')||'<span class="muted">운동 없음 — 빠집니다</span>'}</b><span class="muted num" style="font-size:12px">${fmtD(l.date)}</span></div>`).join('');
+  const pr=memberProgress(m);
+  return `<div class="top"><button class="back" onclick="mk=null; go({name:'member', id:'${m.id}'})">←</button><h1>📋 수업으로 프로그램</h1><span></span></div>
+    <div class="card"><div class="muted" style="line-height:1.6">${esc(m.name)} 회원과 실제로 한 수업을 그대로 프로그램으로 만듭니다. <b>운동 종목과 순서만</b> 가져오고, 무게·횟수는 일지에 그대로 남아 다음 바퀴에 비교됩니다.</div></div>
+    <div class="card"><div class="row"><span>처음 수업</span><select style="max-width:62%" onchange="mk.a=Math.min(+this.value,mk.b); render()">${opt('a',mk.a)}</select></div>
+      <div class="row" style="margin-top:6px"><span>마지막 수업</span><select style="max-width:62%" onchange="mk.b=Math.max(+this.value,mk.a); render()">${opt('b',mk.b)}</select></div>
+      <div style="margin-top:8px"><b>${days.length}회 프로그램</b>이 됩니다</div></div>
+    <label class="fld"><span class="muted">프로그램 이름</span><input type="text" value="${esc(mk.name)}" oninput="mk.name=this.value"></label>
+    <label class="fld"><span class="muted">목적</span><select onchange="mk.goal=this.value">${['근력','다이어트','기능재활','기타'].map(g=>`<option ${g===mk.goal?'selected':''}>${g}</option>`).join('')}</select></label>
+    <div class="card">${last?`<label style="display:flex; gap:8px; align-items:flex-start"><input type="checkbox" style="width:auto; margin-top:3px" ${mk.move?'checked':''} onchange="mk.move=this.checked">
+        <span><b>${esc(m.name)} 회원을 이 프로그램으로 옮기기</b><br><span class="muted" style="font-size:13px">고른 수업들이 1~${days.length}회차가 되고, 다음 수업은 <b>2바퀴째 1회차</b>입니다. 1바퀴 때 그 회차의 무게·횟수와 최고 기록이 그대로 비교돼요.${pr?` (지금 프로그램 「${esc(pr.p.name)}」에서 옮겨 갑니다)`:''}</span></span></label>`
+      :`<div class="muted" style="font-size:13px">마지막 수업을 가장 최근 수업까지 고르면 이 회원을 이 프로그램으로 옮길 수도 있어요. 지금은 프로그램만 만듭니다.</div>`}</div>
+    <div class="card"><div class="muted" style="margin-bottom:4px">미리 보기</div>${prev}</div>
+    <button class="btn" onclick="mkSave()">프로그램 만들기</button>`;
+}
+function mkSave(){
+  const m=db.members.find(x=>x.id===mk.memberId); if(!m) return;
+  if(!mk.name.trim()){ toast('프로그램 이름을 넣어 주세요'); return; }
+  const L=mkLogs(m.id), sel=L.slice(mk.a, mk.b+1).filter(l=>(l.entries||[]).some(e=>exOf(e.exId))), days=mkDays(sel);
+  if(!days.length){ toast('운동이 담긴 수업이 없습니다'); return; }
+  const p={id:uid(), name:mk.name.trim(), goal:mk.goal, total:days.length, days, builtin:false};
+  const move= mk.move && mk.b===L.length-1;
+  if(move){
+    p.madeFrom={memberId:m.id, logIds:sel.map(l=>l.id), prev:{programId:m.programId||null, sessionsDone:m.sessionsDone||0, dayAdds:m.dayAdds||{}, swap:m.swap||null, cycle:m.cycle||null}};
+    sel.forEach((l,i)=>{ if(!l.orig) l.orig={dayIdx:l.dayIdx, lap:l.lap, progId:l.progId}; l.dayIdx=i+1; l.lap=1; l.progId=p.id; });
+    m.programId=p.id; m.sessionsDone=sel.length; m.dayAdds={}; delete m.swap;
+  }
+  db.programs.push(p); save(); mk=null;
+  go(move? {name:'member', id:m.id} : {name:'progDetail', id:p.id});
+  toast(move? `「${p.name}」 ${days.length}회 프로그램을 만들고 옮겼어요 — 다음은 2바퀴째 1회차입니다` : `「${p.name}」 ${days.length}회 프로그램을 만들었어요`);
+}
+function undoMkProg(pid){
+  const p=db.programs.find(x=>x.id===pid); if(!p||!p.madeFrom) return;
+  const f=p.madeFrom, m=db.members.find(x=>x.id===f.memberId);
+  ask('이 프로그램을 만들기 전으로 되돌릴까요?\n수업 기록의 회차 꼬리표와 회원의 원래 프로그램·진도가 돌아가고, 이 프로그램은 지워집니다.', '되돌리기', ()=>{
+    db.logs.forEach(l=>{ if(f.logIds.includes(l.id)&&l.orig){ l.dayIdx=l.orig.dayIdx; l.lap=l.orig.lap; l.progId=l.orig.progId; delete l.orig; } });
+    if(m&&m.programId===p.id){ m.programId=f.prev.programId; m.sessionsDone=f.prev.sessionsDone; m.dayAdds=f.prev.dayAdds||{}; if(f.prev.swap) m.swap=f.prev.swap; else delete m.swap; if(f.prev.cycle) m.cycle=f.prev.cycle; }
+    if(db.members.some(x=>x.programId===p.id)){ delete p.madeFrom; toast('기록은 되돌렸어요 — 다른 회원이 쓰고 있어 프로그램은 남겨 둡니다'); }
+    else { db.programs=db.programs.filter(x=>x.id!==p.id); toast('만들기 전으로 되돌렸어요'); }
+    save(); go(m?{name:'member', id:m.id}:{name:'programs'});
+  });
 }
 
 let _pickCb=null;
