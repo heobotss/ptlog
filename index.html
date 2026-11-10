@@ -1217,8 +1217,10 @@ function setInputRow(en,i,s,si){
 function vSession(){
   if(!draft) return vHome();
   const m=db.members.find(x=>x.id===draft.memberId);
-  const doneCnt=draft.entries.filter(en=>entryHasRecord(en,en.mode)).length;
+  const live=draft.entries.filter(en=>!en.skip);
+  const doneCnt=live.filter(en=>entryHasRecord(en,en.mode)).length;
   const cards=draft.entries.map((en,i)=>{
+    if(en.skip) return '';
     const mode=en.mode;
     const prev=cmpPrev(draft, en.exId);
     const done=entryHasRecord(en,mode);
@@ -1253,15 +1255,20 @@ function vSession(){
       body=`${prevHtml}${inputArea}
         <div class="chips">${chips}</div>
         <input type="text" style="margin-top:9px" placeholder="특이사항 메모 (선택)" value="${esc(en.memo)}" onchange="draft.entries[${i}].memo=this.value; dsave()">
-        ${isAdd?`<button class="btn subtle" style="margin-top:9px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
+        <button class="btn subtle" style="margin-top:9px" onclick="skipToday(${i})">오늘은 안 함 — 이번 수업 목록에서만 빼기</button>
+        ${isAdd?`<button class="btn subtle" style="margin-top:6px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
     }
     const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
     return `<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
       <div class="exhead" onclick="togOpen(${i})"><span><b>${esc(exName(en.exId))}</b>${isAddH?' <span class="pill">퍼스널</span>':''}</span>${peek}</div>${body}</div>`;
   }).join('');
+  /* 오늘 안 한 운동 — 프로그램엔 그대로 두고 이번 수업 화면에서만 숨긴다. 잘못 눌렀으면 되살리기 */
+  const skipped=draft.entries.map((en,i)=>en.skip?i:-1).filter(i=>i>=0);
+  const skipHtml=skipped.length? `<div class="card" style="padding:9px 13px"><span class="muted">오늘 안 한 운동 ${skipped.length}개 — 기록에 남지 않아요 · 다음 바퀴엔 다시 나와요</span>
+      <div class="chips" style="margin-top:6px">${skipped.map(i=>`<button class="ichip" onclick="unskipToday(${i})">↺ ${esc(exName(draft.entries[i].exId))}</button>`).join('')}</div></div>` : '';
   const editing=!!draft.editLogId;
   return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
-    <h1>${editing?'기록 수정':esc(m.name)}${draft.dayIdx?' · '+draft.dayIdx+'회차':''}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+draft.entries.length}</span></div>
+    <h1>${editing?'기록 수정':esc(m.name)}${draft.dayIdx?' · '+draft.dayIdx+'회차':''}</h1><span class="muted num">${editing?fmtD(draft.editDate):doneCnt+'/'+live.length}</span></div>
     ${editing?`<div class="muted" style="margin:-8px 0 10px">${esc(m.name)} · ${fmtD(draft.editDate)} 수업을 수정하는 중</div>`
       : draft.swapFrom?`<div class="muted" style="margin:-8px 0 10px">오늘 먼저 하는 회차예요 — ${draft.swapFrom.day}회차는 다음 수업에 합니다</div>`
       : draft.swapBack?`<div class="muted" style="margin:-8px 0 10px">지난번에 미룬 회차예요${draft.lap>1?` · ${draft.lap}바퀴째`:''}</div>`
@@ -1271,11 +1278,12 @@ function vSession(){
     ${!editing&&(hw=>hw?`<div class="card" style="border-color:var(--good); padding:9px 13px"><b>📝 지난 숙제</b> <span class="muted">${fmtD(hw.date)}</span><div style="margin-top:2px">${esc(hw.homework)}</div><div class="muted" style="font-size:12.5px; margin-top:2px">하셨어요? 확인하고 칭찬 한마디</div></div>`:'')(lastHomework(draft.memberId))}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
+    ${skipHtml}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       <textarea id="note-in" rows="3" style="margin-top:6px" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea></div>
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 카톡 요약에 들어가요)</span>
       <input type="text" id="hw-in" style="margin-top:6px" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
-      <div class="chips" style="margin-top:6px">${[...new Set(draft.entries.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
+      <div class="chips" style="margin-top:6px">${[...new Set(live.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
     <div class="grid2">
       <button class="btn ghost" onclick="photoFill()">📷 사진으로 채우기</button>
       <button class="btn ghost" onclick="addExerciseToday()">＋ 퍼스널 운동</button></div>
@@ -1296,6 +1304,8 @@ function loadPrev(i){
 }
 function addExerciseToday(){
   pickExercise(exId=>{
+    const sk=draft.entries.find(e=>e.exId===exId&&e.skip);
+    if(sk){ delete sk.skip; sk.open=true; dsave(); render(); toast('오늘 안 함으로 뺐던 운동을 되살렸습니다'); return; }
     if(draft.entries.some(e=>e.exId===exId)){ toast('이미 목록에 있는 운동입니다'); return; }
     const mode=exMode(exId);
     draft.entries.push({exId, mode, sets:mode==='chk'?[]:[newSet(mode)], chk:false, issues:[], memo:'', open:true});
@@ -1311,6 +1321,13 @@ function removeFromDay(i){
     if(m.dayAdds&&m.dayAdds[draft.dayIdx]) m.dayAdds[draft.dayIdx]=m.dayAdds[draft.dayIdx].filter(id=>id!==en.exId);
     draft.entries.splice(i,1); dsave(); render(); toast('뺐습니다'); });
 }
+/* 「오늘은 안 함」(11-10 박상빈 팀장 요청) — 짜여 있지만 오늘 안 한 운동을 이번 수업 목록에서만 뺀다.
+   프로그램·다음 바퀴는 그대로. 적어 둔 숫자가 있어도 저장 때 빠진다 */
+function skipToday(i){
+  const en=draft.entries[i];
+  en.skip=true; en.open=false; dsave(); render(); toast(exName(en.exId)+' — 오늘은 안 함 (아래에서 되살릴 수 있어요)');
+}
+function unskipToday(i){ const en=draft.entries[i]; if(!en) return; delete en.skip; en.open=true; dsave(); render(); }
 /* ── 숙제 (11-07 대표님, ATC 시퀀스 전자책 「마무리 or 숙제 동작」) — 수업마다 log.homework 한 줄.
    카톡 요약에 들어가고, 다음 수업 화면·오늘 수업 보기에 「지난 숙제 — 하셨어요?」로 다시 보인다 ── */
 /* 바로 지난 수업 (숙제·수업 메모가 같이 쓴다) */
@@ -1329,7 +1346,7 @@ function hwAdd(name){ const el=document.getElementById('hw-in'); const cur=(draf
   draft.homework= cur? cur+', '+name : name; if(el){ el.value=draft.homework; el.focus(); } dsave(); }
 function leaveSession(){ const id=draft.memberId; go({name:'member', id}); toast('입력 내용은 자동 저장돼 있습니다'); }
 function finishSession(){
-  const entries=draft.entries.map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
+  const entries=draft.entries.filter(en=>!en.skip).map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
     sets:en.mode==='chk'?[]:validSets(en.sets,en.mode).map(s=>{
       const o={}; for(const k in s){ o[k]= (k==='band')? s[k] : num(s[k]); } return o; }),
     issues:en.issues, memo:en.memo.trim()}))
@@ -1490,7 +1507,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       if(!got.rows.length){ closeModal(); toast('읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요'); return; }
       pi={mode:'today', memberId:draft.memberId, cur:0, cells:[{status:'ok', img, seen:true, cell, ...got}], gone:[]};
       const has=id=>got.rows.some(x=>x.exId===id||x.sug===id);
-      pi.gone=draft.entries.filter(en=>!has(en.exId)).map(en=>({exId:en.exId, keep:entryHasRecord(en,en.mode)}));
+      pi.gone=draft.entries.filter(en=>!en.skip&&!has(en.exId)).map(en=>({exId:en.exId, keep:entryHasRecord(en,en.mode)}));
       closeModal(); go({name:'pcheck'});
       if(ocrQuota&&ocrQuota.trialLeft!=null) toast(`무료 체험 판독 ${ocrQuota.trialLeft}장 남았습니다`);
     }catch(e){ closeModal(); toast('판독 실패 — 밝은 곳에서 똑바로 다시 찍어보세요'); console.error(e); }
