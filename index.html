@@ -1255,8 +1255,10 @@ function vSession(){
       body=`${prevHtml}${inputArea}
         <div class="chips">${chips}</div>
         <input type="text" style="margin-top:9px" placeholder="특이사항 메모 (선택)" value="${esc(en.memo)}" onchange="draft.entries[${i}].memo=this.value; dsave()">
-        <button class="btn subtle" style="margin-top:9px" onclick="skipToday(${i})">오늘은 안 함 — 이번 수업 목록에서만 빼기</button>
-        ${isAdd?`<button class="btn subtle" style="margin-top:6px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
+        <div class="grid2" style="margin-top:9px">
+          <button class="btn subtle" onclick="swapExercise(${i})">⇄ 운동 바꾸기</button>
+          <button class="btn subtle" onclick="skipToday(${i})">${draft.editLogId?'이 기록에서 빼기':'오늘은 안 함'}</button></div>
+        ${isAdd&&!draft.editLogId?`<button class="btn subtle" style="margin-top:6px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
     }
     const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
     return `<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
@@ -1309,6 +1311,8 @@ function addExerciseToday(){
     if(draft.entries.some(e=>e.exId===exId)){ toast('이미 목록에 있는 운동입니다'); return; }
     const mode=exMode(exId);
     draft.entries.push({exId, mode, sets:mode==='chk'?[]:[newSet(mode)], chk:false, issues:[], memo:'', open:true});
+    /* 지난 기록 수정 중이면 그 기록에만 — 회원 프로그램(다음 바퀴)은 건드리지 않는다 */
+    if(draft.editLogId){ dsave(); render(); toast('이 기록에 운동을 넣었습니다'); return; }
     const m=db.members.find(x=>x.id===draft.memberId);
     m.dayAdds=m.dayAdds||{}; const a=m.dayAdds[draft.dayIdx]=m.dayAdds[draft.dayIdx]||[];
     if(!a.includes(exId)) a.push(exId);
@@ -1328,6 +1332,21 @@ function skipToday(i){
   en.skip=true; en.open=false; dsave(); render(); toast(exName(en.exId)+' — 오늘은 안 함 (아래에서 되살릴 수 있어요)');
 }
 function unskipToday(i){ const en=draft.entries[i]; if(!en) return; delete en.skip; en.open=true; dsave(); render(); }
+/* 「운동 바꾸기」(11-10 박상빈 팀장 요청) — 사진 판독이 운동 이름을 잘못 골랐을 때, 저장한 뒤에도 이름만 바꾼다.
+   적은 숫자·특이사항·메모는 그대로. 기록 방식(무게·초·레벨·밴드·체크)이 다르면 숫자 칸만 비운다. 프로그램은 안 바뀐다 */
+function swapExercise(i){
+  const en=draft.entries[i]; if(!en) return;
+  pickExercise(exId=>{
+    if(exId===en.exId) return;
+    const other=draft.entries.find(e=>e.exId===exId);
+    if(other&&!other.skip){ toast('이미 목록에 있는 운동입니다'); return; }
+    if(other) draft.entries.splice(draft.entries.indexOf(other),1);   /* 「안 함」으로 뺀 같은 운동은 지우고 이 칸으로 */
+    const was=exName(en.exId), mode=exMode(exId), same=mode===en.mode;
+    if(!same){ en.sets=mode==='chk'?[]:[newSet(mode)]; en.chk=false; }
+    en.exId=exId; en.mode=mode; en.open=true;
+    dsave(); render(); toast(was+' → '+exName(exId)+(same?' — 숫자는 그대로예요':' — 기록 방식이 달라 숫자 칸을 비웠어요'));
+  });
+}
 /* ── 숙제 (11-07 대표님, ATC 시퀀스 전자책 「마무리 or 숙제 동작」) — 수업마다 log.homework 한 줄.
    카톡 요약에 들어가고, 다음 수업 화면·오늘 수업 보기에 「지난 숙제 — 하셨어요?」로 다시 보인다 ── */
 /* 바로 지난 수업 (숙제·수업 메모가 같이 쓴다) */
