@@ -2778,7 +2778,7 @@ function vSeed(){
       const p=memberProgress(m).p, total=p.days.length, k=sd.cur+1, day=sd.days[k];
       const nav=`<div class="sd-nav">${p.days.map((_,i)=>`<span class="${i===sd.cur?'on':has(sd.days[i+1].rows)?'fill':''}" onclick="sdCur(${i})">${i+1}회차</span>`).join('')}</div>`;
       return head+`<div class="card"><b>2단계 · 최근 한 바퀴</b>
-          <div class="muted" style="margin-top:4px; line-height:1.6">${esc(p.name)} — 칸마다 그 날짜(A-몇)를 마지막으로 한 날의 기록. 비워 둔 칸은 수업 화면에서 최고 기록으로 보여 줘요.</div></div>
+          <div class="muted" style="margin-top:4px; line-height:1.6">${esc(p.name)} — 칸마다 몇 회차를 마지막으로 한 날의 기록. 비워 둔 칸은 수업 화면에서 최고 기록으로 보여 줘요.</div></div>
         ${nav}
         <div class="card"><div class="row"><b>${k}회차</b><input class="d" style="max-width:55%; text-align:center" placeholder="한 날 10.20 · 모르면 비움" value="${esc(day.date)}" onchange="sdDateIn('day',0,this)"></div>
           ${rows(day.rows)}
@@ -3408,7 +3408,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.8 — 📷 사진으로 운동까지 자동 입력 · 옛 일지 1회차부터 한 번에 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.10 — 📷 사진으로 운동까지 자동 입력 · 옛 일지 1회차부터 한 번에 · 수업으로 프로그램 만들기 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
