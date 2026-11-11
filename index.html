@@ -1073,7 +1073,8 @@ function pickSex(s){
 }
 function vMemberNew(){
   _newSex='';
-  const opts=db.programs.map(p=>`<option value="${p.id}">${esc(p.name)} · ${p.total}회</option>`).join('');
+  const opts=db.programs.map(p=>`<option value="${p.id}">${esc(p.name)} · ${p.total}회</option>`).join('')
+    +`<option value="__new">＋ 이 회원용 새 프로그램 만들기</option>`;
   return `<div class="top"><button class="back" onclick="go({name:'home'})">← 회원</button><h1>회원 등록</h1><span></span></div>
     <label class="fld"><span class="muted">이름</span><input type="text" id="m-name" placeholder="회원 이름"></label>
     <div class="fld"><span class="muted" style="display:block; margin-bottom:5px">성별</span>
@@ -1092,10 +1093,62 @@ function addMember(){
   /* 11-09 선생님 요청: 모든 회원을 1회차부터 하지 않는다 — 시작 회차를 받으면 그 앞까지 한 것으로 센다 */
   const st=parseInt((document.getElementById('m-start')||{}).value)||1;
   if(prog && (st<1||st>prog.total)){ toast(`시작 회차는 1~${prog.total} 사이로 넣어 주세요`); return; }
+  /* 「이 회원용 새 프로그램」(11-10 박상빈 팀장 요청) — 프로그램 없이 등록하고 새 프로그램 화면으로.
+     다 만들면 createProgram 이 이 회원에게 배정하고 시작 회차를 맞춘다 */
+  if(progId==='__new'){
+    const go2=()=>{
+      const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(), programId:'', sessionsDone:0, dayAdds:{}};
+      db.members.push(m); _newSex='';
+      pdraft={name:name+' 회원 전용', goal:'근력', total:30, patterns:[[]], cur:0, q:'', mode:'rotate', forMember:m.id, start:Math.max(1,st)};
+      psave(); go({name:'progNew'}); toast(`${name} 회원 등록 — 이제 프로그램을 짜 주세요`);
+    };
+    const pd=db.progDraft||pdraft;
+    if(pd && (pd.patterns||[]).some(x=>x.length)) ask('만들던 새 프로그램이 있어요.\n버리고 이 회원용으로 새로 만들까요?','새로 만들기',go2);
+    else go2();
+    return;
+  }
   const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(),
     programId:progId, sessionsDone:Math.max(0,st-1), dayAdds:{}};
   db.members.push(m); save(); _newSex='';
   go({name:'home'}); toast(`${name} 회원이 등록됐습니다${st>1?` — ${st}회차부터 시작합니다`:''}`);
+}
+/* 회원 정보 수정 (11-10 박상빈 팀장 요청) — 이름·성별·주의사항, 프로그램 회원은 다음 회차까지 */
+let _editSex='';
+function pickEditSex(s){
+  _editSex = (_editSex===s)? '' : s;
+  const bm=document.getElementById('me-sex-m'), bf=document.getElementById('me-sex-f');
+  if(bm) bm.className='btn '+(_editSex==='남'?'':'subtle');
+  if(bf) bf.className='btn '+(_editSex==='여'?'':'subtle');
+}
+function openMemberEdit(memberId){
+  const m=db.members.find(x=>x.id===memberId); if(!m) return;
+  _editSex=m.sex||'';
+  const pr=memberProgress(m), going=draft&&draft.memberId===m.id;
+  const cur=pr? (m.sessionsDone||0)%pr.total+1 : 0;
+  modal(`<b>회원 정보 수정</b>
+    <label class="fld" style="margin-top:10px"><span class="muted">이름</span><input type="text" id="me-name" value="${esc(m.name)}"></label>
+    <div class="fld"><span class="muted" style="display:block; margin-bottom:5px">성별</span>
+      <div class="grid2">
+        <button class="btn ${m.sex==='남'?'':'subtle'}" id="me-sex-m" onclick="pickEditSex('남')">남성</button>
+        <button class="btn ${m.sex==='여'?'':'subtle'}" id="me-sex-f" onclick="pickEditSex('여')">여성</button></div></div>
+    <label class="fld"><span class="muted">주의사항 (나이·목표·부상 이력)</span><input type="text" id="me-note" value="${esc(m.note||'')}"></label>
+    ${pr&&!going?`<label class="fld"><span class="muted">다음 수업 회차 (1~${pr.total} · 지금 ${pr.nextDay}회차)</span><input type="number" inputmode="numeric" id="me-next" min="1" max="${pr.total}" value="${cur}"></label>`:''}
+    ${pr&&going?`<div class="muted" style="font-size:12.5px; margin-bottom:8px">진행 중인 수업이 있어 회차는 수업을 마친 뒤에 고칠 수 있어요</div>`:''}
+    <button class="btn" onclick="saveMemberEdit('${m.id}')">저장</button>`);
+}
+function saveMemberEdit(memberId){
+  const m=db.members.find(x=>x.id===memberId); if(!m) return;
+  const name=document.getElementById('me-name').value.trim();
+  if(!name){ toast('이름을 입력하세요'); return; }
+  const pr=memberProgress(m), el=document.getElementById('me-next');
+  let moved=false;
+  if(pr && el){
+    const nx=parseInt(el.value), cur=(m.sessionsDone||0)%pr.total+1;
+    if(!(nx>=1 && nx<=pr.total)){ toast(`회차는 1~${pr.total} 사이로 넣어 주세요`); return; }
+    if(nx!==cur){ const lap=Math.floor((m.sessionsDone||0)/pr.total); m.sessionsDone=lap*pr.total+nx-1; delete m.swap; moved=true; }
+  }
+  m.name=name; m.sex=_editSex; m.note=document.getElementById('me-note').value.trim();
+  save(); closeModal(); render(); toast(moved? `저장했습니다 — 다음은 ${(m.sessionsDone%pr.total)+1}회차` : '저장했습니다');
 }
 function openSexModal(memberId){
   modal(`<b>성별 설정</b>
@@ -1148,6 +1201,7 @@ function vMember(){
     <div class="grid2">
       <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
       <button class="btn subtle" onclick="openRereg('${m.id}')">🔁 재등록 처리</button></div>
+    <button class="btn subtle" onclick="openMemberEdit('${m.id}')">✏️ 회원 정보 수정</button>
     ${notes.length?`<div class="card"><div class="muted" style="margin-bottom:6px">최근 컨디션·특이사항</div>
       <div style="font-size:13px">${notes.slice(0,6).join('<br>')}</div></div>`:''}
     <button class="btn danger" onclick="delMember('${m.id}')">회원 삭제</button>`;
@@ -2372,8 +2426,10 @@ function vProgNew(){
       <button class="btn subtle" onclick="pdraft.patterns.push([]); pdraft.cur=pdraft.patterns.length-1; psave(); render()">＋ 빈 루틴 추가</button>`;
   }
   const lib=progLibHtml();
-  return `<div class="top"><button class="back" onclick="go({name:'programs'})">←</button><h1>새 프로그램</h1>
+  const fm=pdraft.forMember&&db.members.find(x=>x.id===pdraft.forMember&&!x.programId);
+  return `<div class="top"><button class="back" onclick="go(${fm?`{name:'member', id:'${fm.id}'}`:`{name:'programs'}`})">←</button><h1>새 프로그램</h1>
     <span class="muted" style="font-size:11.5px">자동 저장됨</span></div>
+    ${fm?`<div class="card" style="border-color:var(--blue); padding:9px 13px"><b>${esc(fm.name)} 회원용</b><div class="muted">다 만들면 이 회원에게 바로 배정됩니다${(pdraft.start||1)>1?` — ${pdraft.start}회차부터`:''}</div></div>`:''}
     <label class="fld"><span class="muted">이름</span><input type="text" placeholder="예: 다이어트 B" value="${esc(pdraft.name)}" onchange="pdraft.name=this.value; psave()"></label>
     <div class="grid2" style="margin-bottom:12px">
       <label class="fld" style="margin:0"><span class="muted">목적</span><select onchange="pdraft.goal=this.value; psave()">
@@ -2485,8 +2541,18 @@ function createProgram(){
     if(empty&&!pdraft._fill){ ask(`빈 회차가 ${empty}개 있어요.\n앞 회차 운동으로 채워서 만들까요?`,'채우고 만들기',()=>{ pdraft._fill=true; createProgram(); }); return; }
     let last=pats[0]; days=pdraft.patterns.map(x=>{ if(x.length) last=x; return {items:[...last]}; });
   } else { for(let i=0;i<pdraft.total;i++) days.push({items:[...pats[i%pats.length]]}); }
-  db.programs.push({id:uid(), name:pdraft.name.trim(), goal:pdraft.goal, total:days.length, days, builtin:false});
+  const np={id:uid(), name:pdraft.name.trim(), goal:pdraft.goal, total:days.length, days, builtin:false};
+  db.programs.push(np);
+  /* 회원 등록에서 「이 회원용 새 프로그램」으로 왔으면 그 회원에게 바로 배정 */
+  const fm=pdraft.forMember&&db.members.find(x=>x.id===pdraft.forMember);
+  const st=pdraft.start||1;
   pdraft=null; db.progDraft=null;
+  if(fm && !fm.programId){
+    const s=st<=np.total? st : 1;
+    fm.programId=np.id; fm.sessionsDone=s-1; fm.dayAdds={}; delete fm.swap;
+    save(); go({name:'member', id:fm.id}); toast(`${fm.name} 회원에게 배정했습니다 — ${s}회차부터${st>np.total?` (시작 회차 ${st}가 ${np.total}회보다 커서 1회차로)`:''}`);
+    return;
+  }
   save(); go({name:'programs'}); toast('프로그램이 생성됐습니다');
 }
 
@@ -2587,18 +2653,25 @@ function openProgChange(memberId){
   if(draft&&draft.memberId===memberId){ toast('진행 중 수업이 있어 변경할 수 없습니다 — 먼저 완료하거나 버리세요'); return; }
   const m=db.members.find(x=>x.id===memberId);
   const opts=db.programs.filter(p=>p.id!==m.programId);
+  /* 11-10 박상빈 팀장 요청: 중간에 바꿔도 회차를 이어 간다 — 기본값은 지금 회차, 1을 넣으면 처음부터 */
+  const pr=memberProgress(m), cur=pr? (m.sessionsDone||0)%pr.total+1 : 1;
   modal(`<b>프로그램 ${m.programId?'변경':'배정'}</b>
-    <div class="muted" style="margin:4px 0 10px">운동별 기록·특이사항은 그대로 유지되고, 새 프로그램은 1회차부터 시작합니다.</div>
+    <div class="muted" style="margin:4px 0 8px">운동별 기록·특이사항은 그대로 유지됩니다.</div>
+    <label class="fld" style="margin-bottom:10px"><span class="muted">새 프로그램을 몇 회차부터 (${pr?`지금 ${cur}회차 차례 · 처음부터는 1`:'비우면 1회차'})</span>
+      <input type="number" inputmode="numeric" id="pc-start" min="1" value="${cur}"></label>
+    <div class="muted" style="margin-bottom:6px">바꿀 프로그램을 누르세요</div>
     <div class="exlist" style="max-height:40vh">${opts.map(p=>
       `<div class="opt" onclick="applyProgChange('${memberId}','${p.id}')"><span>${esc(p.name)}</span><span class="t">${esc(p.goal)} · ${p.total}회</span></div>`).join('')
       ||'<div class="empty">다른 프로그램이 없습니다 — 프로그램 탭에서 먼저 만드세요</div>'}</div>`);
 }
 function applyProgChange(memberId, progId){
   const m=db.members.find(x=>x.id===memberId); const p=db.programs.find(p=>p.id===progId);
+  const st=parseInt((document.getElementById('pc-start')||{}).value)||1;
+  if(st<1||st>p.total){ toast(`${p.name}은 ${p.total}회까지라 1~${p.total} 사이로 넣어 주세요`); return; }
   closeModal();
-  ask(`${p.name} (${p.total}회)으로 ${m.programId?'변경':'배정'}할까요?`, m.programId?'변경':'배정', ()=>{
-    m.programId=progId; m.sessionsDone=0; m.dayAdds={}; delete m.swap;
-    save(); render(); toast('완료 — 1회차부터 시작합니다'); });
+  ask(`${p.name} (${p.total}회)으로 ${m.programId?'변경':'배정'}할까요?\n${st}회차부터 시작합니다`, m.programId?'변경':'배정', ()=>{
+    m.programId=progId; m.sessionsDone=st-1; m.dayAdds={}; delete m.swap;
+    save(); render(); toast(`완료 — ${st}회차부터 시작합니다`); });
 }
 
 /* ───────────────────── 화면: 📥 옛 기록 빠르게 넣기 (2026-10-27 대표님) ─────────────────────
