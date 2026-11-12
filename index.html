@@ -116,6 +116,9 @@
   .pk-warn{font-size:14.5px; color:var(--bad); font-weight:600; margin-top:3px}
   .pk-note{font-size:14px; color:var(--sub); margin-top:2px}
   .ichip{font-size:12px; padding:6px 11px; border-radius:100px; border:1px solid var(--line); color:var(--sub); background:none; font-family:inherit; cursor:pointer}
+  .pp{border-top:1px dashed var(--line); margin-top:12px; padding-top:10px}
+  .pp-h{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:7px}
+  .pp-h b{color:var(--blue); font-size:15px} .pp.b .pp-h b{color:var(--good)}
   .dtabs{display:flex; gap:6px; overflow-x:auto; margin:0 0 10px; padding-bottom:3px; -webkit-overflow-scrolling:touch}
   .dtabs .ichip{flex-shrink:0; white-space:nowrap}
   .drow{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0 0; margin-top:9px; border-top:1px solid var(--line); cursor:pointer}
@@ -370,6 +373,35 @@ function draftOf(memberId){ return drafts().find(d=>d.memberId===memberId&&!d.ed
 function bindDraft(){ draft=drafts().find(d=>d.id===curDraftId)||null; if(!draft) curDraftId=null; }
 function addDraft(d){ d.id=uid(); d.at=Date.now(); drafts().push(d); curDraftId=d.id; draft=d; return d; }
 function dropDraft(d){ if(!d) return; db.drafts=drafts().filter(x=>x.id!==d.id); if(curDraftId===d.id){ curDraftId=null; draft=null; } }
+/* 2대1 수업 (11-12 회의) — 짝은 회원에 고정(m.pairId, 서로 가리킨다).
+   작성 중 수업은 사람마다 따로 두고 pairKey 로 묶어 한 화면에 그린다. 저장(기록)도 회원마다 따로 */
+function pairOf(m){ if(!m||!m.pairId) return null; const o=db.members.find(x=>x.id===m.pairId); return o&&o.pairId===m.id? o : null; }
+function tName(m){ const o=pairOf(m); if(!o) return m.name; return m.pairLead? m.name+' · '+o.name : o.name+' · '+m.name; }   /* 2대1은 「김가나 · 박다라」 */
+function pairHidden(m){ return !!pairOf(m)&&!m.pairLead; }          /* 목록에는 2대1 한 건이 한 줄 — 둘째 사람은 숨긴다 */
+function teamDraft(memberId){ const m=db.members.find(x=>x.id===memberId), o=m&&pairOf(m); return draftOf(memberId)||(o&&draftOf(o.id))||null; }
+/* 2대1은 프로그램·회차·재등록이 한 벌이다. 두 사람 값이 달라지면 「방금 바뀐 쪽」 값을 짝에게 옮긴다.
+   save() 때마다 돌기 때문에 프로그램 변경·재등록·회차 수정·수업 완료 어디서 바뀌어도 따라온다 */
+function pairSync(){
+  if(!db||!Array.isArray(db.members)) return;
+  const key=m=>JSON.stringify([m.programId||'', m.sessionsDone||0, m.swap||null, m.rereg||0, +m.cycle||0]);
+  db.members.forEach(a=>{
+    const b=pairOf(a);
+    if(!b){ if(a.pairId) delete a.pairId; delete a.pairLead; delete a.pairSnap; return; }
+    if(db.members.indexOf(a)>db.members.indexOf(b)) return;                   /* 짝마다 한 번만 */
+    if(!!a.pairLead===!!b.pairLead){ a.pairLead=true; delete b.pairLead; }    /* 첫째 사람은 한 명 */
+    const L=a.pairLead?a:b, F=L===a?b:a, kl=key(L), kf=key(F);
+    if(kl!==kf){ const from=(L.pairSnap!==undefined&&kl===L.pairSnap)? F : L, to=from===L?F:L;
+      to.programId=from.programId; to.sessionsDone=from.sessionsDone||0; to.rereg=from.rereg||0;
+      if(from.swap) to.swap={...from.swap}; else delete to.swap;
+      if(from.cycle) to.cycle=from.cycle; else delete to.cycle; }
+    L.pairSnap=key(L); delete F.pairSnap;
+  });
+}
+function pairLink(da, d2){ if(!(da.pairKey&&da.pairKey===d2.pairKey)){ const key=uid(); da.pairKey=key; da.pairOrder=0; d2.pairKey=key; d2.pairOrder=1; } if(da.date) d2.date=da.date; }
+function pairMate(d){ return d&&d.pairKey&&!d.editLogId? (drafts().find(x=>x.pairKey===d.pairKey&&x.id!==d.id&&!x.editLogId)||null) : null; }
+function pairDrafts(d){ const o=pairMate(d); return o? [d,o].sort((a,b)=>(a.pairOrder||0)-(b.pairOrder||0)) : [d]; }
+function useDraft(id){ if(curDraftId!==id){ curDraftId=id; bindDraft(); } }          /* 2대1 화면에서 누른 칸의 주인을 「지금 열린 수업」으로 */
+function withDraft(d, fn){ const keep=draft; draft=d; try{ return fn(); } finally{ draft=keep; } }
 function openDraft(id){ curDraftId=id; bindDraft(); if(!draft){ toast('이미 끝냈거나 지운 수업입니다'); render(); return; } go({name:'session'}); }
 let sync={dirty:false, timer:null, serverAt:null, offline:false};
 /* 수업일지는 전부 무료, 기간 없음 (2026-10-01 결정 · 10-15 「평생 무료」 공지). 서버 판정(app_access_of)도 항상 열림이다.
@@ -427,6 +459,7 @@ function loadLegacy(){ try{ const s=localStorage.getItem(LS); return s?JSON.pars
 /* 저장 = 이 기기(즉시) + 서버(1.5초 뒤 자동 전송) */
 function save(){
   if(locked()){ blockEdit(); return; }
+  pairSync();
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   if(user&&sb){ sync.dirty=true; clearTimeout(sync.timer); sync.timer=setTimeout(pushNow, 1500); }
 }
@@ -723,9 +756,12 @@ function bdayHtml(){
 /* ── 노쇼 기록 (11-12 회의) — 회차는 넘기지 않고 「언제, 몇 회차 차례에」만 남긴다.
    시간표 예약에서 누른 노쇼(bookings.status)와 회원 화면에서 직접 적은 것(m.noshows)을 합쳐 본다 ── */
 function memberNoshows(m){
+  /* 2대1은 노쇼도 두 사람 공통 — 어느 쪽 화면에서 적었든 한 벌로 본다 */
+  const mt=pairOf(m), ids=[m.id, ...(mt?[mt.id]:[])];
   const a=(m.noshows||[]).map(n=>({...n, src:'m'}));
+  if(mt) (mt.noshows||[]).forEach(n=>{ if(!a.some(x=>x.date===n.date)) a.push({...n, src:'m'}); });
   /* 같은 날을 시간표와 회원 화면 양쪽에 적었으면 한 번만 센다 */
-  db.bookings.filter(b=>b.memberId===m.id && b.status==='noshow' && !a.some(n=>n.date===b.date)).forEach(b=>a.push({id:b.id, date:b.date, day:b.nsDay, src:'b'}));
+  db.bookings.filter(b=>ids.includes(b.memberId) && b.status==='noshow' && !a.some(n=>n.date===b.date)).forEach(b=>a.push({id:b.id, date:b.date, day:b.nsDay, src:'b'}));
   return a.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
 }
 function allNoshows(d){
@@ -758,7 +794,9 @@ function addNoshow(memberId){
 }
 function delNoshow(memberId, id){
   const m=db.members.find(x=>x.id===memberId); if(!m) return;
-  m.noshows=(m.noshows||[]).filter(n=>n.id!==id); save(); render(); openNoshow(memberId);
+  m.noshows=(m.noshows||[]).filter(n=>n.id!==id);
+  const mt=pairOf(m); if(mt) mt.noshows=(mt.noshows||[]).filter(n=>n.id!==id);
+  save(); render(); openNoshow(memberId);
 }
 
 function memberProgress(m){
@@ -840,15 +878,16 @@ function briefData(){
   const prevMon=new Date(mon); prevMon.setDate(mon.getDate()-14);
   const lm=dfmt(lastMon), pm=dfmt(prevMon);
   const inR=(s,a,b)=> s>=a && s<b;
-  const lastCnt=db.logs.filter(l=>!l.seed && inR(l.date||'',lm,tm)).length;
-  const prevCnt=db.logs.filter(l=>!l.seed && inR(l.date||'',pm,lm)).length;
+  const lastCnt=db.logs.filter(l=>!l.seed && !l.duo2 && inR(l.date||'',lm,tm)).length;
+  const prevCnt=db.logs.filter(l=>!l.seed && !l.duo2 && inR(l.date||'',pm,lm)).length;
   const noshows=allNoshows().filter(b=>inR(b.date,lm,tm));
   const nsNames=[...new Set(noshows.map(b=>{ const m=db.members.find(x=>x.id===b.memberId); return m?m.name:null; }).filter(Boolean))];
-  const rebadge=db.members.filter(m=>!m.demo).filter(m=>{ const p=memberProgress(m); return p&&p.rebadge; }).map(m=>m.name);
+  const rebadge=db.members.filter(m=>!m.demo&&!pairHidden(m)).filter(m=>{ const p=memberProgress(m); return p&&p.rebadge; }).map(m=>tName(m));
   const cut=new Date(); cut.setDate(cut.getDate()-14); const cutoff=dfmt(cut);
-  const idle=db.members.filter(m=>!m.demo).map(m=>{
-    const ds=db.logs.filter(l=>l.memberId===m.id && !l.imported && !l.seed).map(l=>l.date||'').sort();
-    return {name:m.name, last:ds[ds.length-1]};
+  const idle=db.members.filter(m=>!m.demo&&!pairHidden(m)).map(m=>{
+    const ids=[m.id, ...(pairOf(m)?[m.pairId]:[])];
+    const ds=db.logs.filter(l=>ids.includes(l.memberId) && !l.imported && !l.seed).map(l=>l.date||'').sort();
+    return {name:tName(m), last:ds[ds.length-1]};
   }).filter(x=>x.last && x.last<cutoff);
   return {lastCnt, diff:lastCnt-prevCnt, noshowCnt:noshows.length, nsNames, rebadge, idle};
 }
@@ -870,40 +909,40 @@ function briefHtml(){
 /* ───────────────────── 화면: 회원 ───────────────────── */
 /* 작성 중 수업 목록 — 첫 화면 맨 위 카드와 수업 화면 위쪽 이름표 */
 function draftFilled(d){ return (d.entries||[]).filter(en=>!en.skip&&entryHasRecord(en,en.mode)).length; }
-function draftLabel(d){ return d.editLogId? fmtD(d.editDate)+' 기록 수정' : (d.dayIdx? d.dayIdx+'회차':'수업')+(d.date&&d.date!==today()?' · '+fmtD(d.date):''); }
+function draftLabel(d){ return d.editLogId? fmtD(d.editDate)+' 기록 수정' : (pairMate(d)?'👥 2대1 · ':'')+(d.dayIdx? d.dayIdx+'회차':'수업')+(d.date&&d.date!==today()?' · '+fmtD(d.date):''); }
 function draftList(){ return drafts().filter(d=>db.members.some(m=>m.id===d.memberId)).slice().sort((a,b)=>(b.at||0)-(a.at||0)); }
 function draftsHtml(){
-  const L=draftList(); if(!L.length) return '';
+  const L=draftList().filter(d=>!(pairMate(d)&&d.pairOrder===1)); if(!L.length) return '';   /* 2대1은 한 줄 */
   return `<div class="card" style="border-color:var(--blue)">
     <div class="row"><b>✍️ 작성 중 수업 ${L.length}건</b><span class="pill">자동 저장됨</span></div>
     ${L.map(d=>{ const m=db.members.find(x=>x.id===d.memberId), n=draftFilled(d), tot=(d.entries||[]).filter(en=>!en.skip).length;
       return `<div class="drow" onclick="openDraft('${d.id}')">
-        <span><b>${esc(m.name)}</b> <span class="muted">${draftLabel(d)} · ${n?`운동 ${n}/${tot}개 적음`:'아직 안 적음'}</span></span>
+        <span><b>${esc(pairMate(d)? tName(m) : m.name)}</b> <span class="muted">${draftLabel(d)} · ${n?`운동 ${n}/${tot}개 적음`:'아직 안 적음'}</span></span>
         <span class="muted" style="flex-shrink:0">이어 쓰기 ›</span></div>`; }).join('')}</div>`;
 }
 function draftTabs(){
-  const L=draftList().filter(d=>!draft||d.id!==draft.id);
+  const L=draftList().filter(d=>!draft||(d.id!==draft.id&&!(draft.pairKey&&d.pairKey===draft.pairKey)));
   return `<div class="dtabs">${L.map(d=>{ const m=db.members.find(x=>x.id===d.memberId);
       return `<button class="ichip" onclick="openDraft('${d.id}')">✍️ ${esc(m.name)} ${d.editLogId?'수정':d.dayIdx?d.dayIdx+'회차':''}</button>`; }).join('')}
     <button class="ichip on-imp" onclick="openDraftPicker()">＋ 다른 회원 수업</button></div>`;
 }
 function openDraftPicker(){
   const tIds=db.bookings.filter(b=>b.date===today()).sort((a,b)=>a.t.localeCompare(b.t)).map(b=>b.memberId);
-  const L=db.members.filter(m=>!draftOf(m.id)).sort((a,b)=>{ const x=tIds.indexOf(a.id), y=tIds.indexOf(b.id); return (x<0?999:x)-(y<0?999:y); });
+  const L=db.members.filter(m=>!pairHidden(m)&&!teamDraft(m.id)).sort((a,b)=>{ const x=tIds.indexOf(a.id), y=tIds.indexOf(b.id); return (x<0?999:x)-(y<0?999:y); });
   modal(`<b>다른 회원 수업 쓰기</b>
     <div class="muted" style="margin:4px 0 10px">지금 쓰던 수업은 그대로 저장돼 있어요. 수업 화면 위쪽 이름표를 눌러 오가며 쓸 수 있습니다</div>
     <div class="exlist">${L.map(m=>{ const pr=memberProgress(m), ref=pr?null:autoRef(m,0);
-      const act= pr? `startSession('${m.id}')` : ref? `startRefSession('${m.id}','${ref.id}')` : `go({name:'member', id:'${m.id}'})`;
-      return `<div class="opt" onclick="closeModal(); ${act}"><span>${esc(m.name)}${tIds.includes(m.id)?' <span class="pill">오늘 수업</span>':''}</span><span class="t">${pr? pr.nextDay+'회차' : ref? '기준 수업으로':'회원 화면에서 시작'}</span></div>`; }).join('')||'<div class="muted">회원 모두 작성 중인 수업이 있습니다</div>'}</div>
+      const act= pairOf(m)? `startPair('${m.id}')` : pr? `startSession('${m.id}')` : ref? `startRefSession('${m.id}','${ref.id}')` : `go({name:'member', id:'${m.id}'})`;
+      return `<div class="opt" onclick="closeModal(); ${act}"><span>${esc(tName(m))}${tIds.includes(m.id)?' <span class="pill">오늘 수업</span>':''}</span><span class="t">${pairOf(m)? '👥 2대1'+(pr?' · '+pr.nextDay+'회차':'') : pr? pr.nextDay+'회차' : ref? '기준 수업으로':'회원 화면에서 시작'}</span></div>`; }).join('')||'<div class="muted">회원 모두 작성 중인 수업이 있습니다</div>'}</div>
     <button class="btn subtle" style="margin-top:10px" onclick="closeModal()">닫기</button>`);
 }
 function vHome(){
-  const list=db.members.map(m=>{
+  const list=db.members.filter(m=>!pairHidden(m)).map(m=>{
     const pr=memberProgress(m);
     const sub = pr? `${esc(pr.p.name)} · <span class="num">${pr.done%pr.total}/${pr.total}</span>회${pr.lap>1?` · ${pr.lap}바퀴째`:''}` : '프로그램 미배정';
     const badge = pr ? (pr.rebadge? `<span class="pill warn">재등록 타이밍</span>` : `<span class="pill">${pr.nextDay}회차</span>`) : '';
     return `<div class="card tap" onclick="go({name:'member',id:'${m.id}'})">
-      <div class="row"><div><b>${esc(m.name)}</b>${m.sex?`<span class="muted"> (${m.sex})</span>`:''}${m.rereg?` <span class="pill good">재등록 ${m.rereg}</span>`:''}${draftOf(m.id)?' <span class="pill warn">작성 중</span>':''}<div class="muted">${sub}</div></div>${badge}</div>
+      <div class="row"><div><b>${esc(tName(m))}</b>${pairOf(m)?' <span class="pill">👥 2대1</span>':m.sex?`<span class="muted"> (${m.sex})</span>`:''}${m.rereg?` <span class="pill good">재등록 ${m.rereg}</span>`:''}${teamDraft(m.id)?' <span class="pill warn">작성 중</span>':''}<div class="muted">${sub}</div></div>${badge}</div>
       ${pr?`<div class="prog"><i style="width:${(pr.done%pr.total)/pr.total*100}%"></i></div>`:''}
     </div>`; }).join('');
   const resume = draftsHtml();
@@ -915,7 +954,7 @@ function vHome(){
   const todayHtml= todayRows.length? `<div class="card"><div class="muted" style="margin-bottom:6px">오늘 수업 · ${DAYS[wd]}요일 ${todayRows.length}건</div>
     ${todayRows.map(r=>{ const p2=memberProgress(r.m);
       return `<div class="row" style="padding:5px 0">
-      <span style="cursor:pointer" onclick="go({name:'member',id:'${r.m.id}'})"><b class="num">${r.t}</b> ${esc(r.m.name)} <span class="muted">${p2?p2.nextDay+'회차':''}</span></span>
+      <span style="cursor:pointer" onclick="go({name:'member',id:'${r.m.id}'})"><b class="num">${r.t}</b> ${esc(tName(r.m))} <span class="muted">${p2?p2.nextDay+'회차':''}</span></span>
       <button class="ichip" onclick="go({name:'peek', id:'${r.m.id}', k:0})">📋 오늘 수업 보기</button></div>`; }).join('')}</div>`:'';
   /* 백업 리마인더 — 마지막 백업 이후 수업 10회 */
   const due=db.logs.length-(db.lastBackupCount||0);
@@ -1038,7 +1077,7 @@ function calcTrainer(row){
   const d=row.data||{};
   const demoIds=(d.members||[]).filter(m=>m.demo).map(m=>m.id);
   const members=(d.members||[]).filter(m=>!m.demo);
-  const logs=(d.logs||[]).filter(l=>!l.seed && !demoIds.includes(l.memberId));
+  const logs=(d.logs||[]).filter(l=>!l.seed && !l.duo2 && !demoIds.includes(l.memberId));
   const ym=today().slice(0,7);
   const monthCnt=logs.filter(l=>(l.date||'').slice(0,7)===ym).length;
   const rebadge=[];
@@ -1155,7 +1194,7 @@ function vSchedule(){
           const st=BK_STATUS[b.status];
           return `<span class="ichip" onclick="openBookingModal('${b.id}')"
             style="color:${b.status==='cancel'?'var(--sub)':'var(--ink)'}; ${st?`border-color:${st[1]};`:''} ${b.status==='cancel'?'text-decoration:line-through;':''}">
-            ${st?`<span style="color:${st[1]}">${st[0]}</span> `:''}${b.t.slice(3)==='30'?'<span class=num>'+b.t+'</span> ':''}${esc(bm?bm.name:'?')}</span>`; }).join('')}</span>
+            ${st?`<span style="color:${st[1]}">${st[0]}</span> `:''}${b.t.slice(3)==='30'?'<span class=num>'+b.t+'</span> ':''}${esc(bm?tName(bm):'?')}</span>`; }).join('')}</span>
         <button class="ichip" onclick="openBookModal('${selDay}','${hh}')">＋</button></div>`);
     }
     const wd2=new Date(y,mo-1,parseInt(selDay.slice(8))).getDay();
@@ -1165,7 +1204,7 @@ function vSchedule(){
   }
   /* 월별 통계: 예약 + 완료 수업 + 노쇼 */
   const bkCnt=Object.values(cntByDate).reduce((a,b)=>a+b,0);
-  const logCnt=db.logs.filter(l=>!l.seed && (l.date||'').slice(0,7)===ym).length;
+  const logCnt=db.logs.filter(l=>!l.seed && !l.duo2 && (l.date||'').slice(0,7)===ym).length;
   const nsCnt=allNoshows().filter(b=>b.date.slice(0,7)===ym).length;
   const byMonth={};
   db.logs.forEach(l=>{ const k=(l.date||'').slice(0,7); if(k && !l.seed) byMonth[k]=(byMonth[k]||0)+1; });
@@ -1192,10 +1231,14 @@ function pickSex(s){
   if(bf) bf.className='btn '+(_newSex==='여'?'':'subtle');
 }
 function vMemberNew(){
-  _newSex='';
+  _newSex=''; _newSex2=''; _newDuo=false;
   const opts=db.programs.map(p=>`<option value="${p.id}">${esc(p.name)} · ${p.total}회</option>`).join('')
     +`<option value="__new">＋ 이 회원용 새 프로그램 만들기</option>`;
   return `<div class="top"><button class="back" onclick="go({name:'home'})">← 회원</button><h1>회원 등록</h1><span></span></div>
+    <div class="grid2" style="margin-bottom:12px">
+      <button class="btn" id="duo-1" onclick="pickDuo(false)">1대1 회원</button>
+      <button class="btn subtle" id="duo-2" onclick="pickDuo(true)">👥 2대1 (두 명 같이)</button></div>
+    <div id="duo-h1" style="display:none; margin:0 0 6px"><b style="color:var(--blue)">첫 번째 회원</b></div>
     <label class="fld"><span class="muted">이름</span><input type="text" id="m-name" placeholder="회원 이름"></label>
     <div class="fld"><span class="muted" style="display:block; margin-bottom:5px">성별</span>
       <div class="grid2">
@@ -1203,15 +1246,54 @@ function vMemberNew(){
         <button class="btn subtle" id="sex-f" onclick="pickSex('여')">여성</button></div></div>
     <label class="fld"><span class="muted">생년월일 (선택 · 나이가 자동으로 계산되고 생일을 알려 드려요)</span><input type="text" inputmode="numeric" id="m-birth" placeholder="예: 900514 · 연도만 알면 1990"></label>
     <label class="fld"><span class="muted">주의사항 (목표·부상 이력)</span><input type="text" id="m-note" placeholder="예: 다이어트 · 허리 디스크 이력"></label>
+    <div id="duo-box" style="display:none">
+      <div style="margin:14px 0 6px"><b style="color:var(--good)">두 번째 회원</b></div>
+      <label class="fld"><span class="muted">이름</span><input type="text" id="m2-name" placeholder="같이 수업하는 회원 이름"></label>
+      <div class="fld"><span class="muted" style="display:block; margin-bottom:5px">성별</span>
+        <div class="grid2">
+          <button class="btn subtle" id="sex2-m" onclick="pickSex2('남')">남성</button>
+          <button class="btn subtle" id="sex2-f" onclick="pickSex2('여')">여성</button></div></div>
+      <label class="fld"><span class="muted">생년월일 (선택)</span><input type="text" inputmode="numeric" id="m2-birth" placeholder="예: 900514 · 연도만 알면 1990"></label>
+      <label class="fld"><span class="muted">주의사항 (목표·부상 이력)</span><input type="text" id="m2-note" placeholder="예: 체력 향상 · 어깨 수술 이력"></label>
+      <div class="muted" style="font-size:12.5px; margin:0 0 12px">아래 프로그램·회차는 두 사람 공통이에요. 재등록·노쇼도 한 벌로 가고, 운동 기록·리포트·인바디는 사람별로 남습니다</div>
+    </div>
     <label class="fld"><span class="muted">프로그램 배정</span><select id="m-prog">${opts}</select></label>
     <label class="fld"><span class="muted">몇 회차부터 시작 (비우면 1회차 · 다른 곳에서 하던 회원이면 이어서)</span><input type="number" inputmode="numeric" id="m-start" min="1" placeholder="1"></label>
     <button class="btn" onclick="addMember()">등록</button>`;
+}
+let _newDuo=false, _newSex2='';
+function pickDuo(v){
+  _newDuo=!!v;
+  const b1=document.getElementById('duo-1'), b2=document.getElementById('duo-2'), box=document.getElementById('duo-box'), h1=document.getElementById('duo-h1');
+  if(b1) b1.className='btn '+(v?'subtle':''); if(b2) b2.className='btn '+(v?'':'subtle');
+  if(box) box.style.display=v?'':'none'; if(h1) h1.style.display=v?'':'none';
+}
+function pickSex2(s){
+  _newSex2 = (_newSex2===s)? '' : s;
+  const bm=document.getElementById('sex2-m'), bf=document.getElementById('sex2-f');
+  if(bm) bm.className='btn '+(_newSex2==='남'?'':'subtle');
+  if(bf) bf.className='btn '+(_newSex2==='여'?'':'subtle');
+}
+/* 2대1 등록 — 둘째 사람을 같은 프로그램·같은 회차로 만들어 첫째 사람에게 붙인다 */
+function duoAttach(m, p2){
+  if(!p2) return;
+  const m2={id:uid(), name:p2.name, sex:p2.sex, note:p2.note, programId:m.programId, sessionsDone:m.sessionsDone||0, dayAdds:{}, ...(p2.birth?{birth:p2.birth}:{}), pairId:m.id};
+  m.pairId=m2.id; m.pairLead=true; db.members.push(m2);
 }
 function addMember(){
   const name=document.getElementById('m-name').value.trim();
   if(!name){ toast('이름을 입력하세요'); return; }
   const bRaw=((document.getElementById('m-birth')||{}).value||'').trim(), birth=bRaw? parseBirth(bRaw) : '';
   if(bRaw && !birth){ toast('생년월일은 900514 · 19900514 · 1990 처럼 넣어 주세요'); return; }
+  let p2=null;
+  if(_newDuo){
+    const n2=((document.getElementById('m2-name')||{}).value||'').trim();
+    if(!n2){ toast('두 번째 회원 이름을 입력하세요'); return; }
+    const b2Raw=((document.getElementById('m2-birth')||{}).value||'').trim(), b2=b2Raw? parseBirth(b2Raw) : '';
+    if(b2Raw && !b2){ toast('두 번째 회원 생년월일은 900514 · 19900514 · 1990 처럼 넣어 주세요'); return; }
+    p2={name:n2, sex:_newSex2, note:((document.getElementById('m2-note')||{}).value||'').trim(), birth:b2};
+  }
+  const who= p2? name+' · '+p2.name : name;
   const progId=document.getElementById('m-prog').value, prog=db.programs.find(x=>x.id===progId);
   /* 11-09 선생님 요청: 모든 회원을 1회차부터 하지 않는다 — 시작 회차를 받으면 그 앞까지 한 것으로 센다 */
   const st=parseInt((document.getElementById('m-start')||{}).value)||1;
@@ -1221,9 +1303,9 @@ function addMember(){
   if(progId==='__new'){
     const go2=()=>{
       const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(), programId:'', sessionsDone:0, dayAdds:{}, ...(birth?{birth}:{})};
-      db.members.push(m); _newSex='';
-      pdraft={name:name+' 회원 전용', goal:'근력', total:30, patterns:[[]], cur:0, q:'', mode:'rotate', forMember:m.id, start:Math.max(1,st)};
-      psave(); go({name:'progNew'}); toast(`${name} 회원 등록 — 이제 프로그램을 짜 주세요`);
+      db.members.push(m); duoAttach(m, p2); _newSex=''; _newSex2=''; _newDuo=false;
+      pdraft={name:who+' 회원 전용', goal:'근력', total:30, patterns:[[]], cur:0, q:'', mode:'rotate', forMember:m.id, start:Math.max(1,st)};
+      psave(); go({name:'progNew'}); toast(`${who} 회원 등록 — 이제 프로그램을 짜 주세요`);
     };
     const pd=db.progDraft||pdraft;
     if(pd && (pd.patterns||[]).some(x=>x.length)) ask('만들던 새 프로그램이 있어요.\n버리고 이 회원용으로 새로 만들까요?','새로 만들기',go2);
@@ -1232,8 +1314,8 @@ function addMember(){
   }
   const m={id:uid(), name, sex:_newSex, note:document.getElementById('m-note').value.trim(),
     programId:progId, sessionsDone:Math.max(0,st-1), dayAdds:{}, ...(birth?{birth}:{})};
-  db.members.push(m); save(); _newSex='';
-  go({name:'home'}); toast(`${name} 회원이 등록됐습니다${st>1?` — ${st}회차부터 시작합니다`:''}`);
+  db.members.push(m); duoAttach(m, p2); save(); _newSex=''; _newSex2=''; _newDuo=false;
+  go({name:'home'}); toast(`${who} 회원이 등록됐습니다${st>1?` — ${st}회차부터 시작합니다`:''}`);
 }
 /* 회원 정보 수정 (11-10 박상빈 팀장 요청) — 이름·성별·주의사항, 프로그램 회원은 다음 회차까지 */
 let _editSex='';
@@ -1246,7 +1328,7 @@ function pickEditSex(s){
 function openMemberEdit(memberId){
   const m=db.members.find(x=>x.id===memberId); if(!m) return;
   _editSex=m.sex||'';
-  const pr=memberProgress(m), going=!!draftOf(m.id);
+  const pr=memberProgress(m), going=!!teamDraft(m.id);
   const cur=pr? (m.sessionsDone||0)%pr.total+1 : 0;
   modal(`<b>회원 정보 수정</b>
     <label class="fld" style="margin-top:10px"><span class="muted">이름</span><input type="text" id="me-name" value="${esc(m.name)}"></label>
@@ -1256,7 +1338,7 @@ function openMemberEdit(memberId){
         <button class="btn ${m.sex==='여'?'':'subtle'}" id="me-sex-f" onclick="pickEditSex('여')">여성</button></div></div>
     <label class="fld"><span class="muted">생년월일 (선택 · 예: 900514 · 연도만 알면 1990)</span><input type="text" inputmode="numeric" id="me-birth" value="${esc((m.birth||'').replace(/-/g,''))}" placeholder="900514"></label>
     <label class="fld"><span class="muted">주의사항 (목표·부상 이력)</span><input type="text" id="me-note" value="${esc(m.note||'')}"></label>
-    ${pr&&!going?`<label class="fld"><span class="muted">다음 수업 회차 (1~${pr.total} · 지금 ${pr.nextDay}회차)</span><input type="number" inputmode="numeric" id="me-next" min="1" max="${pr.total}" value="${cur}"></label>`:''}
+    ${pr&&!going?`<label class="fld"><span class="muted">다음 수업 회차 (1~${pr.total} · 지금 ${pr.nextDay}회차${pairOf(m)?' · 2대1은 두 사람 같이 바뀌어요':''})</span><input type="number" inputmode="numeric" id="me-next" min="1" max="${pr.total}" value="${cur}"></label>`:''}
     ${pr&&going?`<div class="muted" style="font-size:12.5px; margin-bottom:8px">진행 중인 수업이 있어 회차는 수업을 마친 뒤에 고칠 수 있어요</div>`:''}
     <button class="btn" onclick="saveMemberEdit('${m.id}')">저장</button>`);
 }
@@ -1276,6 +1358,36 @@ function saveMemberEdit(memberId){
   m.name=name; m.sex=_editSex; m.note=document.getElementById('me-note').value.trim();
   if(birth) m.birth=birth; else delete m.birth;
   save(); closeModal(); render(); toast(moved? `저장했습니다 — 다음은 ${(m.sessionsDone%pr.total)+1}회차` : '저장했습니다');
+}
+/* 따로 등록돼 있던 두 회원을 2대1 한 건으로 합치기 (드문 경우) — 지금 보고 있는 회원의 프로그램·회차를 따라간다 */
+function openPairMerge(aId){
+  const a=db.members.find(x=>x.id===aId); if(!a||pairOf(a)) return;
+  if(draftOf(a.id)){ toast('작성 중인 수업을 먼저 끝내거나 지워 주세요'); return; }
+  const L=db.members.filter(x=>x.id!==a.id&&!pairOf(x)&&!draftOf(x.id));
+  modal(`<b>${esc(a.name)} 회원과 2대1로 합칠 회원</b>
+    <div class="muted" style="margin:4px 0 10px">고른 회원은 ${esc(a.name)} 회원의 프로그램·회차를 따라갑니다. 지난 기록은 사람별로 그대로 남아요</div>
+    <div class="exlist">${L.map(x=>`<div class="opt" onclick="pairMerge('${a.id}','${x.id}')"><span>${esc(x.name)}</span><span class="t">${(r=>r? r.nextDay+'회차':'')(memberProgress(x))}</span></div>`).join('')||'<div class="muted">합칠 수 있는 회원이 없습니다</div>'}</div>
+    <button class="btn subtle" style="margin-top:10px" onclick="closeModal()">닫기</button>`);
+}
+function pairMerge(aId, bId){
+  const a=db.members.find(x=>x.id===aId), b=db.members.find(x=>x.id===bId); if(!a||!b||pairOf(a)||pairOf(b)) return;
+  const pa=memberProgress(a);
+  ask(`${a.name} · ${b.name} 회원을 2대1 한 건으로 합칠까요?\n${b.name} 회원의 프로그램·회차·재등록 횟수는 ${a.name} 회원${pa?`(${pa.nextDay}회차)`:''}을 따라갑니다`, '합치기', ()=>{
+    a.pairId=b.id; b.pairId=a.id; a.pairLead=true; delete b.pairLead; delete a.pairSnap; delete b.pairSnap;
+    save(); closeModal(); go({name:'member', id:a.id}); toast('2대1로 합쳤습니다 — 회원 목록에 한 줄로 나옵니다'); });
+}
+function pairSplit(aId){
+  const a=db.members.find(x=>x.id===aId), b=a&&pairOf(a); if(!b) return;
+  if(teamDraft(a.id)){ toast('작성 중인 수업을 먼저 끝내거나 지워 주세요'); return; }
+  ask(`${tName(a)} 2대1을 풀까요?\n두 사람이 각자 1대1 회원이 되고, 프로그램·회차는 지금 그대로 이어집니다`, '2대1 풀기', ()=>{
+    [a,b].forEach(x=>{ delete x.pairId; delete x.pairLead; delete x.pairSnap; });
+    save(); render(); toast('각자 1대1 회원으로 나눴습니다'); });
+}
+function pairSwitchHtml(m){
+  const o=pairOf(m), P=m.pairLead?[m,o]:[o,m];
+  return `<div class="card" style="padding:10px 13px; border-color:var(--blue)">
+    <div class="muted" style="font-size:12.5px; margin-bottom:7px">👥 2대1 회원 — 프로그램·회차·재등록·노쇼는 두 사람 공통, 기록·리포트·인바디는 사람별</div>
+    <div class="grid2">${P.map(x=>`<button class="btn ${x.id===m.id?'':'subtle'}" style="margin:0" ${x.id===m.id?'':`onclick="go({name:'member', id:'${x.id}'})"`}>${esc(x.name)}${x.id===m.id?' (보는 중)':' 보기'}</button>`).join('')}</div></div>`;
 }
 function openSexModal(memberId){
   modal(`<b>성별 설정</b>
@@ -1304,6 +1416,7 @@ function vMember(){
     <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openMemberEdit('${m.id}')"> ${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')?`(${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')})`:'(성별·생년월일 입력)'}</span></h1>
     <button class="ichip" onclick="openMemberEdit('${m.id}')">✏️ 수정</button></div>
     <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${totalCnt}회</span>${nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${nsCnt}회</span>`:''}</div>
+    ${pairOf(m)?pairSwitchHtml(m):''}
     ${m.note?`<div class="muted" style="margin:0 0 12px">${esc(m.note)}</div>`:''}
     ${pr?`<div class="card">
       <div class="row"><b>${esc(pr.p.name)}</b>${pr.lap>1?`<span class="pill good">${pr.lap}바퀴째</span>`:''}</div>
@@ -1314,7 +1427,7 @@ function vMember(){
     ${draftOf(m.id)
       ?`<button class="btn" onclick="openDraft('${draftOf(m.id).id}')">▶ ${draftOf(m.id).dayIdx}회차 수업 이어 쓰기 (자동 저장됨)</button>
         <button class="btn subtle" onclick="discardDraft('${draftOf(m.id).id}')">작성 중인 수업 지우기</button>`
-      :`<button class="btn" onclick="startSession('${m.id}')">${pr.nextDay}회차 수업 시작</button>
+      :`<button class="btn" onclick="startSession('${m.id}')">${pairOf(m)?'👥 2대1 · ':''}${pr.nextDay}회차 수업 시작</button>
         ${pr.swapped? `<div class="muted" style="margin:-4px 0 10px; font-size:13px">지난번에 미룬 ${pr.nextDay}회차 차례예요 — 이걸 하면 ${pr.after.day}회차부터 원래 순서로 이어집니다</div>`
           : `<button class="btn subtle" onclick="startAhead('${m.id}')">오늘은 ${pr.ahead.day}회차 먼저 하기 <span class="muted" style="font-weight:400">(${pr.nextDay}회차는 다음에)</span></button>`}`}
     <button class="btn ghost" onclick="go({name:'peek', id:'${m.id}', k:0})">📋 오늘 수업 보기 — 종이에 옮겨 적기용</button>
@@ -1334,14 +1447,17 @@ function vMember(){
     <button class="btn subtle" onclick="openNoshow('${m.id}')">🚫 노쇼 기록${nsCnt?` · ${nsCnt}회`:''}</button>
     ${notes.length?`<div class="card"><div class="muted" style="margin-bottom:6px">최근 컨디션·특이사항</div>
       <div style="font-size:13px">${notes.slice(0,6).join('<br>')}</div></div>`:''}
+    ${pairOf(m)?`<button class="btn subtle" onclick="pairSplit('${m.id}')">👥 2대1 풀기 — 각자 1대1 회원으로</button>`
+      :`<button class="btn subtle" onclick="openPairMerge('${m.id}')">👥 다른 회원과 2대1로 합치기</button>`}
     <button class="btn danger" onclick="delMember('${m.id}')">회원 삭제</button>`;
 }
 function delMember(id){
   const m=db.members.find(x=>x.id===id);
-  ask(`${m.name} 회원과 모든 기록을 삭제할까요?`, '삭제', ()=>{
+  ask(`${m.name} 회원과 모든 기록을 삭제할까요?${pairOf(m)?`\n(${pairOf(m).name} 회원은 1대1 회원으로 남습니다)`:''}`, '삭제', ()=>{
     db.members=db.members.filter(x=>x.id!==id);
     db.logs=db.logs.filter(l=>l.memberId!==id);
     db.drafts=drafts().filter(d=>d.memberId!==id); bindDraft();
+    db.members.forEach(x=>{ if(x.pairId===id) delete x.pairId; });
     save(); go({name:'home'}); });
 }
 
@@ -1361,6 +1477,7 @@ function startSession(memberId, ahead){
   /* 이 회원의 작성 중 수업이 있으면 이어 쓰기. 다른 회원 것은 그대로 두고 새로 시작한다 (11-12 회의 — 버리지 않는다) */
   const d0=draftOf(memberId);
   if(d0){ openDraft(d0.id); toast('작성 중이던 수업을 이어 씁니다'); return; }
+  if(pairOf(m)){ startPair(memberId, ahead); return; }
   if(!pr){ go({name:'member', id:memberId}); return; }
   const go1= ahead&&pr.ahead? pr.ahead : {day:pr.nextDay, lap:pr.lap};
   const day=pr.p.days[go1.day-1]||{items:[]};
@@ -1373,6 +1490,59 @@ function startSession(memberId, ahead){
     })});
   dsave();
   go({name:'session'});
+}
+/* 짝 수업용 새 작성 중 수업 — 프로그램이 있으면 다음 회차, 없으면 자동 기준 수업, 그것도 없으면 빈 수업 */
+function newDraftFor(m, ahead){
+  const pr=memberProgress(m), mk=exId=>{ const mode=exMode(exId); return {exId, mode, sets:mode==='chk'?[]:[newSet(mode)], chk:false, issues:[], memo:'', open:false}; };
+  if(pr){ const go1= ahead&&pr.ahead? pr.ahead : {day:pr.nextDay, lap:pr.lap};
+    const day=pr.p.days[go1.day-1]||{items:[]};
+    const adds=((m.dayAdds||{})[go1.day]||[]).filter(id=>!day.items.includes(id)&&exOf(id));
+    return addDraft({memberId:m.id, dayIdx:go1.day, lap:go1.lap, cond:'', progId:m.programId,
+      ...(ahead&&pr.ahead? {swapFrom:{day:pr.nextDay, lap:pr.lap}} : pr.swapped? {swapBack:true} : {}), entries:[...day.items, ...adds].map(mk)}); }
+  const ref=autoRef(m,0);
+  if(ref) return addDraft({memberId:m.id, dayIdx:0, lap:0, cond:'', progId:null, refLogId:ref.id, refDate:ref.date,
+    entries:[...new Set((ref.entries||[]).map(e=>e.exId))].filter(id=>exOf(id)).map(mk)});
+  return addDraft({memberId:m.id, dayIdx:0, lap:0, cond:'', progId:null, entries:[]});
+}
+function startPair(memberId, ahead){
+  pairSync();
+  const a=db.members.find(x=>x.id===memberId); if(!a) return;
+  const b=pairOf(a); if(!b){ startSession(memberId, ahead); return; }
+  const L=a.pairLead?a:b, F=L===a?b:a;                 /* 화면 순서는 늘 등록 순서 — 첫째 사람이 위 */
+  const dl=draftOf(L.id)||newDraftFor(L, ahead), df=draftOf(F.id)||newDraftFor(F, ahead);
+  pairLink(dl, df);
+  curDraftId=dl.id; bindDraft(); dsave(); go({name:'session'});
+}
+function pairTog(exId){
+  const ens=pairDrafts(draft).map(d=>d.entries.find(en=>en.exId===exId&&!en.skip)).filter(Boolean);
+  const open=ens.some(en=>en.open); ens.forEach(en=>{ en.open=!open; }); save(); render();
+}
+/* 지금 누른 사람 칸에 짝의 기록을 그대로 넣는다 — 다른 숫자만 고치면 된다 */
+function pairCopy(exId){
+  const mt=pairMate(draft); if(!mt) return;
+  const en=draft.entries.find(e=>e.exId===exId&&!e.skip), from=mt.entries.find(e=>e.exId===exId&&!e.skip);
+  const sm=db.members.find(x=>x.id===mt.memberId);
+  if(!en||!from||!entryHasRecord(from,from.mode)){ toast(`${sm?sm.name:'짝'} 회원 기록이 아직 없습니다 — 먼저 적어 주세요`); return; }
+  if(en.mode==='chk') en.chk=!!from.chk; else en.sets=validSets(from.sets,from.mode).map(s=>({...s}));
+  dsave(); render(); toast('같게 넣었습니다 — 다른 숫자만 고치세요');
+}
+function pairPutEx(d, exId, keep){
+  const had=d.entries.find(e=>e.exId===exId);
+  if(had){ delete had.skip; had.open=true; }
+  else{ const mode=exMode(exId); d.entries.push({exId, mode, sets:mode==='chk'?[]:[newSet(mode)], chk:false, issues:[], memo:'', open:true}); }
+  if(keep&&d.dayIdx){ const m=db.members.find(x=>x.id===d.memberId); m.dayAdds=m.dayAdds||{}; const a=m.dayAdds[d.dayIdx]=m.dayAdds[d.dayIdx]||[]; if(!a.includes(exId)) a.push(exId); }
+}
+function pairAddEx(exId){ pairPutEx(draft, exId, false); dsave(); render(); }
+function pairAddBoth(){
+  pickExercise(exId=>{ pairDrafts(draft).forEach(d=>pairPutEx(d, exId, true)); dsave(); render(); toast('두 사람 모두에게 넣었습니다 — 다음 바퀴 이 회차에도 나옵니다'); });
+}
+function pairHwSame(){ const P=pairDrafts(draft); if(P.length<2) return; P[1].homework=P[0].homework||''; dsave(); render(); toast('숙제를 같게 넣었습니다'); }
+function pairDropOne(id){
+  const d=drafts().find(x=>x.id===id); if(!d) return;
+  const m=db.members.find(x=>x.id===d.memberId), mt=pairMate(d), o=mt&&db.members.find(x=>x.id===mt.memberId);
+  ask(`${m.name} 회원은 오늘 빠졌나요?\n${m.name} 회원 칸에 적은 내용은 지워지고${o?`, ${o.name} 회원 혼자 수업으로 바뀝니다`:''}`, '빠짐으로 바꾸기', ()=>{
+    dropDraft(d); if(mt){ delete mt.pairKey; delete mt.pairOrder; curDraftId=mt.id; bindDraft(); }
+    save(); render(); toast(o? `${o.name} 회원 혼자 수업으로 바꿨습니다` : '지웠습니다'); });
 }
 function discardDraft(id){
   const d=drafts().find(x=>x.id===id)||draft; if(!d) return;
@@ -1405,13 +1575,11 @@ function setInputRow(en,i,s,si){
     <input type="number" inputmode="numeric" placeholder="횟수" value="${s.r}" onchange="draft.entries[${i}].sets[${si}].r=this.value; dsave()">
     <button class="del" onclick="delSet(${i},${si})">✕</button></div>`;
 }
-function vSession(){
-  if(!draft) return vHome();
-  const m=db.members.find(x=>x.id===draft.memberId);
-  const live=draft.entries.filter(en=>!en.skip);
-  const doneCnt=live.filter(en=>entryHasRecord(en,en.mode)).length;
-  const cards=draft.entries.map((en,i)=>{
-    if(en.skip) return '';
+/* 운동 한 칸 — 접힌 줄(peek)과 펼친 내용(body). 「지금 열린 수업」(draft) 기준으로 그린다.
+   2대1 화면은 사람마다 draft 를 잠깐 바꿔 가며 이 함수를 불러 쓴다 */
+function entryParts(en,i,forceOpen){
+    const m=db.members.find(x=>x.id===draft.memberId);
+    if(en.skip) return null;
     const mode=en.mode;
     const prev=cmpPrev(draft, en.exId);
     const done=entryHasRecord(en,mode);
@@ -1422,7 +1590,7 @@ function vSession(){
       : prev? `<span class="peek">${prev.isRef?'📌':'지난'} ${mode==='chk'?'✓ '+(prev.label.split(' · ')[1]||prev.label) : compactStr(prev.e,mode)}${bestPeek}</span>`
       : best&&best.kind!=='last'? `<span class="peek">🏆${best.rec}</span>` : `<span class="peek">첫 기록</span>`;
     let body='';
-    if(en.open){
+    if(en.open||forceOpen){
       let prevHtml='';
       if(prev){
         const iss=(prev.e.issues||[]).map(issueSpan).join(', ');
@@ -1453,9 +1621,69 @@ function vSession(){
         ${isAdd&&!draft.editLogId?`<button class="btn subtle" style="margin-top:6px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
     }
     const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
-    return `<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
-      <div class="exhead" onclick="togOpen(${i})"><span><b>${esc(exName(en.exId))}</b>${isAddH?' <span class="pill">퍼스널</span>':''}</span>${peek}</div>${body}</div>`;
+    return {peek, body, done, card:`<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
+      <div class="exhead" onclick="togOpen(${i})"><span><b>${esc(exName(en.exId))}</b>${isAddH?' <span class="pill">퍼스널</span>':''}</span>${peek}</div>${body}</div>`};
+}
+/* 2대1 수업 화면 — 운동 카드 하나에 사람별 칸 두 개. 기록은 회원마다 따로 저장된다 */
+function vPairSession(){
+  const P=pairDrafts(draft), M=P.map(d=>db.members.find(x=>x.id===d.memberId));
+  /* 사람별 칸 안의 단추·입력은 누르는 순간 그 사람 수업을 「지금 열린 수업」으로 바꾼 뒤 움직인다 */
+  const hook=(d,html)=>html.replace(/ on(click|change|input)="/g, ` on$1="useDraft('${d.id}'); `);
+  const ids=[]; P.forEach(d=>d.entries.forEach(en=>{ if(!en.skip&&!ids.includes(en.exId)) ids.push(en.exId); }));
+  let doneCnt=0;
+  const cards=ids.map(exId=>{
+    const idx=P.map(d=>d.entries.findIndex(en=>en.exId===exId&&!en.skip));
+    const ens=idx.map((i,k)=>i<0?null:P[k].entries[i]);
+    const open=ens.some(en=>en&&en.open);
+    if(ens.every(en=>!en||entryHasRecord(en,en.mode))) doneCnt++;
+    const marks=ens.map((en,k)=>`${esc(M[k].name)} ${!en?'안 함':entryHasRecord(en,en.mode)?'<span style="color:var(--good)">✓</span>':'·'}`).join(' &nbsp;/&nbsp; ');
+    let body='';
+    if(open) body=[0,1].map(k=>{
+      const en=ens[k], o=1-k, cls=k?'pp b':'pp';
+      if(!en) return `<div class="${cls}"><div class="pp-h"><b>${esc(M[k].name)}</b><span class="muted">오늘 이 운동 안 함</span></div>
+        <button class="btn subtle" onclick="useDraft('${P[k].id}'); pairAddEx('${exId}')">＋ ${esc(M[k].name)} 회원도 이 운동 넣기</button></div>`;
+      const parts=withDraft(P[k], ()=>entryParts(en, idx[k], true));
+      return `<div class="${cls}"><div class="pp-h"><b>${esc(M[k].name)}</b>${ens[o]?`<button class="ichip on-imp" onclick="useDraft('${P[k].id}'); pairCopy('${exId}')">⇆ ${esc(M[o].name)}와 같게</button>`:''}</div>${hook(P[k], parts.body)}</div>`;
+    }).join('');
+    return `<div class="card" ${open?'style="border-color:var(--blue)"':''}>
+      <div class="exhead" onclick="pairTog('${exId}')"><span><b>${esc(exName(exId))}</b></span><span class="peek">${marks}</span></div>${body}</div>`;
   }).join('');
+  const skipHtml=P.map((d,k)=>{ const sk=d.entries.map((en,i)=>en.skip?i:-1).filter(i=>i>=0); if(!sk.length) return '';
+    return `<div class="card" style="padding:9px 13px"><span class="muted">${esc(M[k].name)} — 오늘 안 한 운동 ${sk.length}개 · 기록에 남지 않아요</span>
+      <div class="chips" style="margin-top:6px">${sk.map(i=>`<button class="ichip" onclick="useDraft('${d.id}'); unskipToday(${i})">↺ ${esc(exName(d.entries[i].exId))}</button>`).join('')}</div></div>`; }).join('');
+  const lastHtml=P.map((d,k)=>{ const l=lastLogOf(d.memberId), hw=lastHomework(d.memberId);
+    const a=l&&(l.note||'').trim()? `<div style="margin-top:2px; white-space:pre-line; font-size:13.5px"><span class="muted">🗒 지난 수업 메모 ${fmtD(l.date)}</span><br>${esc(l.note)}</div>`:'';
+    const b=hw? `<div style="margin-top:2px; font-size:13.5px"><span class="muted">📝 지난 숙제 ${fmtD(hw.date)}</span> ${esc(hw.homework)}</div>`:'';
+    return a||b? `<div class="card" style="padding:9px 13px"><b>${esc(M[k].name)}</b>${a}${b}</div>`:''; }).join('');
+  return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
+    <h1>👥 ${esc(M[0].name)} · ${esc(M[1].name)}</h1><span class="muted num">${doneCnt}/${ids.length}</span></div>
+    <div class="muted" style="margin:-8px 0 10px">2대1 수업 · ${P.map((d,k)=>`${esc(M[k].name)} ${d.dayIdx?d.dayIdx+'회차':'수업'}`).join(' · ')} — 기록은 회원마다 따로 저장돼요</div>
+    ${draftTabs()}
+    <div class="row" style="margin:0 0 8px; gap:10px"><span class="muted" style="font-size:13px; flex-shrink:0">📅 수업 날짜</span>
+      <input type="date" style="flex:1; width:auto" value="${P[0].date||today()}" max="${today()}" onchange="setSessDate(this.value)"></div>
+    ${lastHtml}
+    ${P.map((d,k)=>`<input class="cond" type="text" placeholder="🩺 ${esc(M[k].name)} 오늘 컨디션" value="${esc(d.cond)}" onchange="useDraft('${d.id}'); draft.cond=this.value; dsave()">`).join('')}
+    ${cards||'<div class="empty">운동이 없습니다 — 아래 「운동 추가」로 넣어 주세요</div>'}
+    ${skipHtml}
+    <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
+      ${P.map((d,k)=>`<textarea rows="2" style="margin-top:6px" placeholder="${esc(M[k].name)} — 상담 내용, 다음에 챙길 것 등" oninput="useDraft('${d.id}'); draft.note=this.value; dsave()">${esc(d.note||'')}</textarea>`).join('')}</div>
+    <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 각자 카톡 요약에 들어가요)</span>
+      ${P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} 숙제" value="${esc(d.homework||'')}" oninput="useDraft('${d.id}'); draft.homework=this.value; dsave()">`).join('')}
+      <div class="chips" style="margin-top:6px"><button class="ichip" onclick="pairHwSame()">⇆ ${esc(M[1].name)} 숙제를 ${esc(M[0].name)}와 같게</button></div></div>
+    <div class="grid2">
+      <button class="btn ghost" onclick="photoFill()">📷 사진으로 채우기</button>
+      <button class="btn ghost" onclick="pairAddBoth()">＋ 운동 추가 (둘 다)</button></div>
+    <button class="btn" onclick="finishPair()">두 사람 수업 완료</button>
+    <div class="grid2" style="margin-top:14px">
+      ${P.map((d,k)=>`<button class="btn subtle" onclick="pairDropOne('${d.id}')">${esc(M[k].name)} 오늘 빠짐</button>`).join('')}</div>`;
+}
+function vSession(){
+  if(!draft) return vHome();
+  if(pairMate(draft)) return vPairSession();
+  const m=db.members.find(x=>x.id===draft.memberId);
+  const live=draft.entries.filter(en=>!en.skip);
+  const doneCnt=live.filter(en=>entryHasRecord(en,en.mode)).length;
+  const cards=draft.entries.map((en,i)=>{ const p=entryParts(en,i); return p?p.card:''; }).join('');
   /* 오늘 안 한 운동 — 프로그램엔 그대로 두고 이번 수업 화면에서만 숨긴다. 잘못 눌렀으면 되살리기 */
   const skipped=draft.entries.map((en,i)=>en.skip?i:-1).filter(i=>i>=0);
   const skipHtml=skipped.length? `<div class="card" style="padding:9px 13px"><span class="muted">오늘 안 한 운동 ${skipped.length}개 — 기록에 남지 않아요 · 다음 바퀴엔 다시 나와요</span>
@@ -1492,7 +1720,7 @@ function vSession(){
 /* 수업 날짜 (11-12 회의) — 어제 한 수업을 오늘 적을 수 있게. 지난 기록 수정에서는 그 기록의 날짜를 고친다 */
 function setSessDate(v){
   if(!v || v>today()){ toast('오늘까지의 날짜만 고를 수 있어요'); render(); return; }
-  if(draft.editLogId) draft.editDate=v; else draft.date=v;
+  if(draft.editLogId) draft.editDate=v; else{ draft.date=v; const mt=pairMate(draft); if(mt) mt.date=v; }
   dsave(); render(); if(v!==today()&&!draft.editLogId) toast(fmtD(v)+' 수업으로 저장됩니다');
 }
 function addSet(i){ const en=draft.entries[i]; en.sets.push(newSet(en.mode, en.sets[en.sets.length-1])); dsave(); render(); }
@@ -1567,12 +1795,47 @@ function lastHomework(memberId, exceptId){
 function hwAdd(name){ const el=document.getElementById('hw-in'); const cur=(draft.homework||'').trim();
   draft.homework= cur? cur+', '+name : name; if(el){ el.value=draft.homework; el.focus(); } dsave(); }
 function leaveSession(){ const id=draft.memberId; go({name:'member', id}); toast('입력 내용은 자동 저장돼 있습니다'); }
-function finishSession(){
-  const entries=draft.entries.filter(en=>!en.skip).map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
+function draftOut(d){
+  return d.entries.filter(en=>!en.skip).map(en=>({exId:en.exId, chk:en.mode==='chk'?en.chk:undefined,
     sets:en.mode==='chk'?[]:validSets(en.sets,en.mode).map(s=>{
       const o={}; for(const k in s){ o[k]= (k==='band')? s[k] : num(s[k]); } return o; }),
-    issues:en.issues, memo:en.memo.trim()}))
+    issues:en.issues, memo:(en.memo||'').trim()}))
     .filter(en=>en.sets.length||en.chk||en.issues.length||en.memo);
+}
+/* 작성 중 수업 하나를 기록으로 저장 — 회차 +1, 예약 완료 표시까지. 화면 이동은 부르는 쪽에서 */
+function commitDraft(d, entries, pairMemberId, second){
+  const m=db.members.find(x=>x.id===d.memberId);
+  const log={id:uid(), memberId:d.memberId, dayIdx:d.dayIdx, lap:d.lap, date:(d.date&&d.date<=today())?d.date:today(),
+    cond:(d.cond||'').trim(), progId:m.programId, entries};
+  if((d.homework||'').trim()) log.homework=d.homework.trim();
+  if((d.note||'').trim()) log.note=d.note.trim();
+  if(d.refLogId){ log.refLogId=d.refLogId; log.refDate=d.refDate; }
+  if(pairMemberId) log.pair=pairMemberId;            /* 2대1로 한 수업 — 같이 한 회원 */
+  if(second) log.duo2=true;                          /* 2대1의 둘째 사람 기록 — 수업 횟수 통계에는 한 번만 센다 */
+  db.logs.push(log);
+  /* 2대1은 회차가 한 벌 — 한 번만 올리고, save() 의 pairSync 가 짝에게 옮긴다. 한 명만 온 날도 똑같이 1회 차감 */
+  if(!second){
+    m.sessionsDone=(m.sessionsDone||0)+1;
+    if(d.swapFrom) m.swap={...d.swapFrom};   /* 미룬 회차를 다음 차례로 */
+    else if(d.swapBack) delete m.swap;       /* 미룬 회차를 했으니 원래 순서로 */
+  }
+  /* 그날 이 회원(2대1이면 둘 중 누구 이름으로든)의 예약이 있으면 자동으로 「완료」 표시 */
+  const mt=pairOf(m), bk=db.bookings.find(b=>(b.memberId===m.id||(mt&&b.memberId===mt.id)) && b.date===log.date && !b.status);
+  if(bk) bk.status='done';
+  dropDraft(d);
+  return log;
+}
+function finishPair(){
+  const P=pairDrafts(draft); if(P.length<2){ finishSession(); return; }
+  const out=P.map(draftOut), M=P.map(d=>db.members.find(x=>x.id===d.memberId));
+  const empty=M.filter((m,k)=>!out[k].length);
+  if(empty.length===2){ toast('기록된 내용이 없습니다'); return; }
+  if(empty.length){ toast(`${empty[0].name} 회원 기록이 없습니다 — 빠졌으면 아래 「오늘 빠짐」을 눌러 주세요`); return; }
+  const la=commitDraft(P[0], out[0], M[1].id), lb=commitDraft(P[1], out[1], M[0].id, true);
+  save(); go({name:'summary', logId:la.id, next:lb.id});
+}
+function finishSession(){
+  const entries=draftOut(draft);
   if(!entries.length){ toast('기록된 내용이 없습니다'); return; }
   const m=db.members.find(x=>x.id===draft.memberId);
   /* 지난 기록 수정 모드 — 기존 로그를 덮어쓰고 끝 */
@@ -1583,20 +1846,8 @@ function finishSession(){
     const mid=draft.memberId; dropDraft(draft); save();
     go({name:'logs', id:mid}); toast('수정됐습니다'); return;
   }
-  const log={id:uid(), memberId:draft.memberId, dayIdx:draft.dayIdx, lap:draft.lap, date:(draft.date&&draft.date<=today())?draft.date:today(),
-    cond:draft.cond.trim(), progId:m.programId, entries};
-  if((draft.homework||'').trim()) log.homework=draft.homework.trim();
-  if((draft.note||'').trim()) log.note=draft.note.trim();
-  if(draft.refLogId){ log.refLogId=draft.refLogId; log.refDate=draft.refDate; }
-  db.logs.push(log);
-  m.sessionsDone=(m.sessionsDone||0)+1;
-  if(draft.swapFrom) m.swap={...draft.swapFrom};   /* 미룬 회차를 다음 차례로 */
-  else if(draft.swapBack) delete m.swap;           /* 미룬 회차를 했으니 원래 순서로 */
-  /* 오늘 이 회원의 예약이 있으면 자동으로 「완료」 표시 */
-  const bk=db.bookings.find(b=>b.memberId===m.id && b.date===log.date && !b.status);
-  if(bk) bk.status='done';
-  dropDraft(draft);
-  save(); const lid=log.id; go({name:'summary', logId:lid});
+  const log=commitDraft(draft, entries);
+  save(); go({name:'summary', logId:log.id});
 }
 
 /* ───────────────────── 수업지 인쇄 (A4 한 장) ─────────────────────
@@ -1705,7 +1956,9 @@ async function photoFill(){
   if(!db.cellOrder){ pickCellOrder('photo'); return; }
   const m=db.members.find(x=>x.id===draft.memberId), ord=CELL_ORDERS[cellOrder()];
   const sug= m&&m.lastCell? ord[(ord.indexOf(m.lastCell)+1)%8] : null;
+  const duoN=pairMate(draft)? pairDrafts(draft).map(d=>(db.members.find(x=>x.id===d.memberId)||{}).name) : null;
   modal(`<b>📷 오늘 쓴 칸을 누르세요</b>
+    ${duoN?`<div class="muted" style="margin:4px 0 0">👥 2대1 — 운동마다 윗줄은 ${esc(duoN[0])}, 아랫줄은 ${esc(duoN[1])} 기록으로 읽어요. 반대로 적었으면 다음 화면에서 바꿀 수 있습니다</div>`:''}
     ${ocrQuota?`<div class="muted" style="margin:4px 0 0">${ocrLeftText()}</div>`:''}
     <div class="muted" style="margin:4px 0 2px">8칸 일지 모양 그대로예요. 숫자는 선생님이 쓰는 순서(${cellOrder()==='row'?'가로':'세로'})입니다.${sug?' 파란 칸이 지난번 다음 칸이에요.':''}</div>
     ${cellGrid(p=>`<button class="${p===sug?'sug':''}" onclick="window.__ocrCell=${p}; closeModal(); document.getElementById('ocr-file').click()">${cellSeq(p)}${p===sug?'<small>다음 칸</small>':''}</button>`)}
@@ -1721,11 +1974,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
     try{
       const im=await fileImg(file), cell=window.__ocrCell||0, W=im.naturalWidth, H=im.naturalHeight;
       const img=toJpeg(im, cell?cellBox(im,cell):[0,0,W,H], cell?1500:1800, .85);
-      const r=await piAsk(img, draft.memberId, 'today');
+      const duoP=pairMate(draft)? pairDrafts(draft) : null;      /* 2대1 — 한 칸에 두 사람이 위아래 두 줄 */
+      const r=await piAsk(img, draft.memberId, 'today', !!duoP);
       if(r.limit){ ocrLimitModal(); return; }
       const {res,out}=r;
       if(res.status===404){ closeModal(); toast('판독 서버가 아직 설치되지 않았습니다'); return; }
       if(!res.ok||out.error) throw new Error('서버 '+res.status+' '+(out.error||''));
+      if(duoP){
+        const st=piDuoStart(out, duoP, img, cell);
+        closeModal();
+        if(st==='old'){ toast('2대1 판독이 아직 서버에 올라가지 않았습니다'); return; }
+        if(!st){ toast('읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요'); return; }
+        go({name:'pcheck'}); return;
+      }
       const got=piFromOut(out, draft.memberId);
       if(!got.rows.length){ closeModal(); toast('읽을 기록을 못 찾았습니다 — 사진을 더 밝고 똑바로 찍어보세요'); return; }
       pi={mode:'today', memberId:draft.memberId, cur:0, cells:[{status:'ok', img, seen:true, cell, ...got}], gone:[]};
@@ -2186,10 +2447,11 @@ function startRefSession(memberId, refLogId){
   if(!m||!ref) return;
   const pr=memberProgress(m);
   const ids=[...new Set((ref.entries||[]).map(e=>e.exId))].filter(id=>exOf(id));
-  addDraft({memberId, dayIdx:pr?pr.nextDay:0, lap:pr?pr.lap:0, cond:'', progId:m.programId||null,
+  const nd=addDraft({memberId, dayIdx:pr?pr.nextDay:0, lap:pr?pr.lap:0, cond:'', progId:m.programId||null,
     refLogId:ref.id, refDate:ref.date,
     entries: ids.map(exId=>{ const mode=exMode(exId);
       return {exId, mode, sets: mode==='chk'? []:[newSet(mode)], chk:false, issues:[], memo:'', open:false}; })});
+  { const mt=pairOf(m); if(mt){ const d2=draftOf(mt.id)||newDraftFor(mt); const P2=m.pairLead?[nd,d2]:[d2,nd]; pairLink(P2[0], P2[1]); curDraftId=nd.id; bindDraft(); } }   /* 2대1은 짝도 같이 */
   dsave(); go({name:'session'});
   toast(`📌 ${logDate(ref)} 수업을 기준으로 시작합니다`);
 }
@@ -2229,12 +2491,15 @@ function startEditLog(logId){
 function deleteLog(){
   const logId=draft&&draft.editLogId; if(!logId) return;
   /* 삭제하면 진행 회차가 1 줄어든다 — 이미 회차가 정해진 작성 중 수업과 어긋나지 않게 막는다 */
-  if(draftOf(draft.memberId)){ toast('이 회원의 작성 중인 수업을 먼저 끝내거나 지운 뒤 삭제해 주세요'); return; }
-  ask('이 수업 기록을 통째로 삭제할까요?\n(진행 회차도 1회 줄어듭니다)', '삭제', ()=>{
+  if(teamDraft(draft.memberId)){ toast('이 회원의 작성 중인 수업을 먼저 끝내거나 지운 뒤 삭제해 주세요'); return; }
+  ask('이 수업 기록을 통째로 삭제할까요?\n(진행 회차도 1회 줄어듭니다 — 2대1은 짝 기록이 남아 있으면 그대로예요)', '삭제', ()=>{
     const log=db.logs.find(l=>l.id===logId);
     const m=db.members.find(x=>x.id===log.memberId);
     db.logs=db.logs.filter(l=>l.id!==logId);
-    if(m) m.sessionsDone=Math.max(0,(m.sessionsDone||0)-1);
+    /* 2대1 수업은 두 사람 기록이 회차 하나를 같이 쓴다 — 짝 기록이 남아 있으면 회차는 그대로 둔다 */
+    const sib=log.pair&&db.logs.find(l=>l.memberId===log.pair&&l.pair===log.memberId&&l.date===log.date&&l.dayIdx===log.dayIdx);
+    if(sib){ if(!log.duo2) delete sib.duo2; }
+    else if(m&&!log.duo2) m.sessionsDone=Math.max(0,(m.sessionsDone||0)-1);
     const mid=log.memberId; dropDraft(draft); save();
     go({name:'logs', id:mid}); toast('삭제됐습니다'); });
 }
@@ -2271,7 +2536,9 @@ function vSummary(){
     ${rm?`<span class="muted num">e1RM ${rm.v}kg</span>`:''}
     ${r.delta!==null?`<span class="pill ${r.delta>=0?'good':'warn'}">${r.delta>=0?'+':''}${r.delta}%</span>`:''}
     ${iss||r.en.memo?`<br><span style="font-size:12px">⚠ ${[iss,esc(r.en.memo)].filter(Boolean).join(', ')}</span>`:''}</div>`; }).join('');
+  const nx=view.next&&db.logs.find(l=>l.id===view.next), nxM=nx&&db.members.find(x=>x.id===nx.memberId);
   return `<div class="top"><h1>${log.dayIdx?log.dayIdx+'회차'+' ':''}수업 완료</h1><span class="muted">${fmtD(log.date)}</span></div>
+    ${nxM?`<button class="btn ghost" style="border:1px solid var(--blue); margin-top:-4px" onclick="go({name:'summary', logId:'${nx.id}', next:'${log.id}'})">👥 짝 ${esc(nxM.name)} 회원 요약·카톡 보기 →</button>`:''}
     ${log.refDate?`<div class="muted" style="margin:-8px 0 10px">📌 기준 수업 ${esc(fullD(log.refDate))} 대비 변화</div>`:''}
     <div class="card"><b>${esc(m.name)}님, 오늘 운동 요약</b>
       ${log.cond?`<div class="muted">🩺 ${esc(log.cond)}</div>`:''}
@@ -2430,7 +2697,7 @@ function softRender(){
 /* ───────── 프로그램 (11-07 대표님: 루틴 복사·회차별 고치기·회차마다 따로 짜기·틀 불러오기 구조) ─────────
    프로그램 = 회차 칸(days[]). 회원 지난 기록은 그날 한 운동을 따로 갖고 있어서 칸을 고쳐도 바뀌지 않는다.
    바뀌는 건 다음 수업 목록·오늘 수업 보기·8칸 수업지 인쇄뿐 — 「수업 전에 앱으로 준비」 흐름 그대로 */
-function progUsers(pid){ return db.members.filter(m=>m.programId===pid && !m.demo); }
+function progUsers(pid){ return db.members.filter(m=>m.programId===pid && !m.demo && !pairHidden(m)); }
 /* 회원 전용 복사본(from)은 원본과 같은 프로그램으로 본다 — 지난 바퀴 같은 회차 비교가 끊기지 않게 */
 function sameProg(a,b){
   if(!a||!b||a===b) return true;
@@ -2521,7 +2788,7 @@ function progForkAsk(pid,d){
 }
 function progFork(pid, mid, d){
   const p=db.programs.find(x=>x.id===pid), m=db.members.find(x=>x.id===mid); if(!p||!m) return;
-  if(draftOf(mid)){ toast('이 회원의 작성 중인 수업을 먼저 끝내거나 지워 주세요'); return; }
+  if(teamDraft(mid)){ toast('이 회원의 작성 중인 수업을 먼저 끝내거나 지워 주세요'); return; }
   const c=copyProgram(pid, `${p.name} · ${m.name}`); m.programId=c.id; save(); closeModal();
   _progUndo=null; go({name:'progDay', id:c.id, d}); toast(`${m.name} 회원 전용 프로그램을 만들었어요 — 여기서 고친 내용은 이 회원에게만 적용됩니다`);
 }
@@ -2810,8 +3077,8 @@ function openBookModal(date, hh){
   if(!db.members.length){ toast('먼저 회원을 등록하세요'); return; }
   modal(`<b>${fmtD(date)} · ${hh}시 수업 등록</b>
     <select id="bk-min" style="margin:10px 0"><option value="00">${hh}:00</option><option value="30">${hh}:30</option></select>
-    <div class="exlist" style="max-height:40vh">${db.members.map(m=>
-      `<div class="opt" onclick="addBooking('${m.id}')"><span>${esc(m.name)}</span></div>`).join('')}</div>`);
+    <div class="exlist" style="max-height:40vh">${db.members.filter(m=>!pairHidden(m)).map(m=>
+      `<div class="opt" onclick="addBooking('${m.id}')"><span>${esc(tName(m))}${pairOf(m)?' <span class="pill">2대1</span>':''}</span></div>`).join('')}</div>`);
 }
 function addBooking(memberId){
   const min=(document.getElementById('bk-min')||{value:'00'}).value;
@@ -2868,7 +3135,7 @@ function chgRereg(memberId,delta){
 }
 /* ── 프로그램 변경·배정 ── */
 function openProgChange(memberId){
-  if(draftOf(memberId)){ toast('작성 중인 수업이 있어 변경할 수 없습니다 — 먼저 끝내거나 지워 주세요'); return; }
+  if(teamDraft(memberId)){ toast('작성 중인 수업이 있어 변경할 수 없습니다 — 먼저 끝내거나 지워 주세요'); return; }
   const m=db.members.find(x=>x.id===memberId);
   const opts=db.programs.filter(p=>p.id!==m.programId);
   /* 11-10 박상빈 팀장 요청: 중간에 바꿔도 회차를 이어 간다 — 기본값은 지금 회차, 1을 넣으면 처음부터 */
@@ -3244,8 +3511,8 @@ function piLibrary(memberId){
   db.exercises.forEach(e=>add(e.id));
   return ids.slice(0,200).map(id=>({name:exName(id), mode:exMode(id)}));
 }
-async function piAsk(dataUrl, memberId, kind){
-  return ocrCall({mode:'sheet', kind, image:dataUrl.split(',')[1], mime:'image/jpeg', library:piLibrary(memberId),
+async function piAsk(dataUrl, memberId, kind, duo){
+  return ocrCall({mode:'sheet', kind, ...(duo?{duo:true}:{}), image:dataUrl.split(',')[1], mime:'image/jpeg', library:piLibrary(memberId),
     issues:ISSUE_SETS.flatMap(g=>g.items), bands:BANDS});
 }
 /* 기록 글: 무게 운동 「20x12, 25x12x3」 · 시간 「60초, 60초」 · 레벨 「3x12」 · 밴드 「빨강x12」 */
@@ -3290,6 +3557,33 @@ function piRow(x, scope){
 function piRowMode(r){ if(r.exId) return exMode(r.exId); if(r.sug&&r.status==='check') return exMode(r.sug);
   const n=(r.raw.sec||[]).length&&!(r.raw.sets||[]).length; return n?'t':guessEx(r.written).mode; }
 function piRowTxt(r){ if(!r.edited) r.txt=piTxt(piRowMode(r), r.raw); }
+/* 2대1 판독 결과(운동마다 p:[윗줄 사람, 아랫줄 사람])에서 k번째 사람 것만 뽑아 1대1 모양으로 */
+function piDuoOut(out, k){
+  return {date:out.date, cond:out.cond, exercises:(out.exercises||[]).map(x=>{ const p=(x.p||[])[k]||{};
+    return {written:x.written, name:x.name, match:x.match, sure:x.sure, sets:p.sets||[], sec:p.sec||[], chk:!!p.chk, issues:p.issues||[], memo:p.memo||''}; })};
+}
+function piGone(d, rows){ const has=id=>rows.some(x=>!x.del&&(x.exId===id||x.sug===id)); return d.entries.filter(en=>!en.skip&&!has(en.exId)).map(en=>({exId:en.exId, keep:entryHasRecord(en,en.mode)})); }
+function piDuoStart(out, P, img, cell){
+  const ex=out.exercises||[];
+  if(ex.length && !ex.some(x=>Array.isArray(x.p))) return 'old';        /* 옛 서버 — 한 사람 모양으로만 답함 */
+  const cells=P.map((d,k)=>{ const got=piFromOut(piDuoOut(out,k), d.memberId); return {status:'ok', img, seen:true, cell, ...got, gone:piGone(d, got.rows)}; });
+  if(!cells.some(c=>c.rows.length)) return '';
+  pi={mode:'today', duo:P.map(d=>d.id), memberId:P[0].memberId, cur:0, cells, gone:[]};
+  return 'ok';
+}
+function piDuoNames(){ return pi.duo.map(id=>{ const d=drafts().find(x=>x.id===id), m=d&&db.members.find(x=>x.id===d.memberId); return m?m.name:'?'; }); }
+function piDuoTabs(ci){
+  const names=piDuoNames();
+  return `<div class="card" style="padding:10px 13px; border-color:var(--blue)">
+    <div class="muted" style="font-size:12.5px; margin-bottom:7px">👥 2대1 — 운동마다 윗줄을 ${esc(names[0])}, 아랫줄을 ${esc(names[1])} 기록으로 읽었어요. 두 사람 다 확인해 주세요</div>
+    <div class="grid2">${names.map((n,i)=>`<button class="btn ${i===ci?'':'subtle'}" style="margin:0" onclick="pi.cur=${i}; render()">${esc(n)}${i===ci?' (보는 중)':' 보기'}</button>`).join('')}</div>
+    <button class="btn subtle" style="margin:8px 0 0" onclick="piDuoSwap()">⇅ 위아래가 반대예요 — 두 사람 기록 서로 바꾸기</button></div>`;
+}
+function piDuoSwap(){
+  const a=pi.cells[0], b=pi.cells[1], ra=a.rows; a.rows=b.rows; b.rows=ra;
+  pi.duo.forEach((id,k)=>{ const d=drafts().find(x=>x.id===id); pi.cells[k].gone= d? piGone(d, pi.cells[k].rows) : []; });
+  render(); toast('두 사람 기록을 서로 바꿨습니다');
+}
 function piFromOut(out, memberId){
   const scope=piLibrary(memberId).map(e=>{ const x=db.exercises.find(y=>y.name===e.name); return x&&x.id; }).filter(Boolean).slice(0,40);
   const rows=(out.exercises||[]).filter(x=>x&&String(x.written||x.name||'').trim()).map(x=>piRow(x,scope));
@@ -3352,15 +3646,15 @@ function vPCheck(){
   if(!m){ pi=null; return vHome(); }
   const back= today? `go({name:'session'})` : `go({name:'member', id:'${m.id}'})`;
   const head=`<div class="top"><button class="back" onclick="${back}">←</button><h1>📷 ${today?'사진 내용 확인':esc(m.name)+' 옛 일지'}</h1><span class="muted num">${today?'':(ci+1)+'/'+pi.cells.length}</span></div>`;
-  const nav= today?'' : `<div class="sd-nav">${pi.cells.map((x,i)=>{ const q=(x.rows||[]).some(r=>!r.del&&r.status==='check'), f=x.status==='fail'||x.status==='wait';
+  const nav= today? (pi.duo? piDuoTabs(ci) : '') : `<div class="sd-nav">${pi.cells.map((x,i)=>{ const q=(x.rows||[]).some(r=>!r.del&&r.status==='check'), f=x.status==='fail'||x.status==='wait';
       return `<span class="${i===ci?'on':x.skip?'off':(q||f)?'warnc':x.seen?'fill':''}" onclick="piCurGo(${i})">${i+1}</span>`; }).join('')}</div>`;
   const rows=(c.rows||[]).map((r,ri)=>piRowHtml(c,ci,r,ri)).join('')||`<div class="muted">${c.status==='fail'||c.status==='wait'?'이 칸은 아직 못 읽었어요. 다시 읽거나 직접 넣어 주세요.':'읽은 운동이 없어요. 빈 칸이면 빼 주세요.'}</div>`;
   const add=`<button class="btn subtle" style="margin-top:10px" onclick="piAddRow(${ci})">＋ 운동 추가</button>`;
   let info='';
   if(today){
-    const gone=(pi.gone||[]);
+    const gone=pi.duo? (c.gone||[]) : (pi.gone||[]), gref=pi.duo? `pi.cells[${ci}].gone` : 'pi.gone';
     info= gone.length? `<div class="card"><b>사진에 없는 운동</b><div class="muted" style="margin:2px 0 6px">오늘 안 한 것으로 보고 뺍니다. 했다면 되살려 주세요.</div>
-      ${gone.map((g,i)=>`<div class="row" style="padding:4px 0"><span style="${g.keep?'':'opacity:.55; text-decoration:line-through'}">${esc(exName(g.exId))}</span><button class="ichip" onclick="pi.gone[${i}].keep=!pi.gone[${i}].keep; render()">${g.keep?'빼기':'되살리기'}</button></div>`).join('')}</div>` : '';
+      ${gone.map((g,i)=>`<div class="row" style="padding:4px 0"><span style="${g.keep?'':'opacity:.55; text-decoration:line-through'}">${esc(exName(g.exId))}</span><button class="ichip" onclick="${gref}[${i}].keep=!${gref}[${i}].keep; render()">${g.keep?'빼기':'되살리기'}</button></div>`).join('')}</div>` : '';
   } else {
     info=`<div class="card" style="padding:10px 13px"><div class="row"><b>${c.no?c.no+'회차':'빠지는 칸'}</b><input class="pc-d ${c.back?'bad':''}" placeholder="날짜 2025.10.20" value="${esc(fullD(c.date||''))}" onchange="piDateIn(${ci},this)"></div>
       ${c.guess?'<div style="color:var(--warn); font-size:13px; margin-top:4px">날짜를 못 읽어 앞뒤 칸으로 추정했어요. 확인해 주세요.</div>':''}
@@ -3369,7 +3663,7 @@ function vPCheck(){
       <input class="pc-memo" placeholder="컨디션 메모" value="${esc(c.cond||'')}" oninput="pi.cells[${ci}].cond=this.value; piPut()">
       <div class="grid2" style="margin-top:8px"><button class="btn subtle" onclick="piSkip(${ci})">${c.skip?'이 칸 다시 넣기':'이 칸 빼기'}</button>${c.status==='fail'||c.status==='wait'?`<button class="btn subtle" onclick="piRetry(${ci})">다시 읽기</button>`:`<button class="btn subtle" onclick="piFull(${ci})">종이 전체 보기</button>`}</div></div>`;
   }
-  const foot= today? `<button class="btn" onclick="piApplyToday()">이대로 오늘 기록에 넣기</button><div class="muted" style="font-size:12.5px; text-align:center">넣은 뒤 수업 화면에서 「수업 완료」를 눌러야 저장됩니다.</div>`
+  const foot= today? `<button class="btn" onclick="piApplyToday()">${pi.duo?'이대로 두 사람 기록에 넣기':'이대로 오늘 기록에 넣기'}</button><div class="muted" style="font-size:12.5px; text-align:center">넣은 뒤 수업 화면에서 「수업 완료」를 눌러야 저장됩니다.</div>`
     : `<div class="grid2"><button class="btn subtle" ${ci<=0?'disabled style="opacity:.4"':''} onclick="piCurGo(${ci-1})">‹ 앞 칸</button>
         <button class="btn subtle" ${ci>=pi.cells.length-1?'disabled style="opacity:.4"':''} onclick="piCurGo(${ci+1})">다음 칸 ›</button></div>
        ${pi.cells.some(x=>x.status==='wait'||x.status==='fail')?`<button class="btn ghost" style="margin-top:10px" onclick="piRun()">못 읽은 칸 ${pi.cells.filter(x=>x.status==='wait'||x.status==='fail').length}개 이어서 읽기</button>`:''}
@@ -3391,7 +3685,22 @@ function piApplyToday(){
   if(piUnsure().length){ toast('노란 줄의 운동 이름을 먼저 골라 주세요'); return; }
   if(!draft){ pi=null; go({name:'home'}); return; }
   piCreateNew();
-  const c=pi.cells[0], old=draft.entries, next=[];
+  if(pi.duo){   /* 2대1 — 사람마다 자기 칸을 자기 수업에 넣는다 */
+    const P=pi.duo.map(id=>drafts().find(x=>x.id===id));
+    if(P.some(d=>!d)){ pi=null; go({name:'home'}); return; }
+    P.forEach((d,k)=>{ withDraft(d, ()=>piApplyCell(pi.cells[k], pi.cells[k].gone||[]));
+      const mm=db.members.find(x=>x.id===d.memberId); if(mm&&pi.cells[k].cell) mm.lastCell=pi.cells[k].cell; });
+    pi=null; dsave(); go({name:'session'});
+    toast('두 사람 기록에 넣었습니다 — 확인 후 「두 사람 수업 완료」를 눌러 주세요'); return;
+  }
+  const c=pi.cells[0]; piApplyCell(c, pi.gone||[]);
+  const mm=db.members.find(x=>x.id===pi.memberId); if(mm&&c.cell) mm.lastCell=c.cell;   /* 다음 수업 때 「다음 칸」을 미리 표시 */
+  pi=null; dsave(); go({name:'session'});
+  toast('오늘 기록에 넣었습니다 — 확인 후 「수업 완료」를 눌러 주세요');
+}
+/* 확인을 마친 칸 하나를 「지금 열린 수업」(draft)에 넣는다 */
+function piApplyCell(c, gone){
+  const old=draft.entries, next=[];
   (c.rows||[]).filter(r=>!r.del).forEach(r=>{
     const e=piEntry(r), mode=exMode(r.exId), strSets=e.sets.map(s=>{ const o={}; for(const k in s) o[k]=k==='band'? s[k] : String(s[k]); return o; });
     let en=next.find(x=>x.exId===r.exId);
@@ -3401,11 +3710,8 @@ function piApplyToday(){
     (e.issues||[]).forEach(x=>{ if(!en.issues.includes(x)) en.issues.push(x); });
     if(e.memo) en.memo=en.memo? en.memo+', '+e.memo : e.memo;
   });
-  (pi.gone||[]).filter(g=>g.keep).forEach(g=>{ const was=old.find(x=>x.exId===g.exId); if(was&&!next.some(x=>x.exId===g.exId)) next.push(was); });
+  (gone||[]).filter(g=>g.keep).forEach(g=>{ const was=old.find(x=>x.exId===g.exId); if(was&&!next.some(x=>x.exId===g.exId)) next.push(was); });
   draft.entries=next; if(c.cond&&!draft.cond) draft.cond=c.cond;
-  const mm=db.members.find(x=>x.id===pi.memberId); if(mm&&c.cell) mm.lastCell=c.cell;   /* 다음 수업 때 「다음 칸」을 미리 표시 */
-  pi=null; dsave(); go({name:'session'});
-  toast('오늘 기록에 넣었습니다 — 확인 후 「수업 완료」를 눌러 주세요');
 }
 
 /* ── ② 옛 일지 사진으로 넣기: 고르기 → 읽기 → 칸별 확인 → 저장 ── */
