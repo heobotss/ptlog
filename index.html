@@ -1539,7 +1539,7 @@ function openPage(memberId){
   }
   const url=pageUrl(m);
   const st= m.pageStop==='tier'? '<span style="color:var(--warn)">멤버십이 확인되지 않아 새 수업은 올라가지 않고 있어요. 올라간 기록은 그대로 보입니다.</span>'
-    : m.pageAt? `마지막으로 올린 때 ${fmtD(m.pageAt.slice(0,10))} ${new Date(m.pageAt).toTimeString().slice(0,5)} · 수업을 완료하면 자동으로 새로 올라가요` : '올리는 중…';
+    : m.pageAt? `마지막으로 올린 때 ${(d=>(d.getMonth()+1)+'/'+d.getDate()+' '+d.toTimeString().slice(0,5))(new Date(m.pageAt))} · 수업을 완료하면 자동으로 새로 올라가요` : '올리는 중…';
   modal(`<b>🔗 ${esc(m.name)} 회원 페이지</b>
     <div class="muted" style="margin:6px 0 8px; line-height:1.6">${st}</div>
     <input type="text" readonly value="${esc(url)}" onclick="this.select()" style="font-size:12.5px">
