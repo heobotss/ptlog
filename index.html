@@ -1461,11 +1461,11 @@ const FN_PAGE=SB_URL+'/functions/v1/mpage';
 function pageUrl(m){ return (/^app\./.test(location.hostname)? location.origin : 'https://app.heobotss.com')+'/m.html?t='+m.pageToken; }
 function pageToken(){ const a=new Uint8Array(24); crypto.getRandomValues(a); const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return [...a].map(x=>c[x%c.length]).join(''); }
 function pageLogs(m){ return db.logs.map((l,i)=>({l,i})).filter(x=>x.l.memberId===m.id&&!x.l.seed).sort((a,b)=>(a.l.date||'').localeCompare(b.l.date||'')||a.i-b.i).map(x=>x.l); }
-/* 회원에게 보이는 기록 글 — 「40kg×12 · 3세트, 45kg×10」 */
+/* 회원에게 보이는 기록 글 — 「40kg×12회 · 3세트, 45kg×10회」 (11-13 대표님: 몇 회인지 글자로 보이게) */
 function pageRec(en, mode){
   if(mode==='chk') return en.chk? '완료':'';
   const v=validSets(en.sets||[], mode); if(!v.length) return '';
-  const parts= mode==='t'? v.map(s=>num(s.sec)+'초') : mode==='lv'? v.map(s=>'Lv'+num(s.lv)+'×'+num(s.n)) : mode==='band'? v.map(s=>s.band+' 밴드×'+num(s.r)) : v.map(setStr);
+  const parts= mode==='t'? v.map(s=>num(s.sec)+'초') : mode==='lv'? v.map(s=>'Lv'+num(s.lv)+'×'+num(s.n)+'회') : mode==='band'? v.map(s=>s.band+' 밴드×'+num(s.r)+'회') : v.map(s=>setStr(s)+'회');
   const out=[]; parts.forEach(p=>{ const l=out[out.length-1]; if(l&&l.p===p) l.n++; else out.push({p,n:1}); });
   return out.map(o=>o.n>1? o.p+' · '+o.n+'세트' : o.p).join(', ');
 }
@@ -2682,12 +2682,129 @@ function vSummary(){
         <div class="stat"><div class="muted">진행</div><div class="v num">${pr?`${pr.done%pr.total||pr.total}/${pr.total}회`:'-'}</div></div>
       </div></div>
     <button class="btn kakao" onclick="shareSummary('${log.id}')">💬 카톡으로 보내기</button>
+    <button class="btn ghost" onclick="openCard('${log.id}')">🖼 사진 카드로 보내기 — 화면 캡처처럼 한 장으로</button>
     <button class="btn ghost" onclick="go({name:'member', id:'${m.id}'})">기록 저장하고 닫기</button>`;
 }
 function shareText(log){
   const {m, rows, vol}=summaryData(log);
   const lines=rows.filter(r=>plainStr(r.en,r.mode)).map(r=>`· ${r.name} ${plainStr(r.en,r.mode)}`+(r.delta!==null?` (${log.refDate?(log.refDate.slice(0,4)===today().slice(0,4)?fmtD(log.refDate):fullD(log.refDate))+' 대비':'지난번 대비'} ${r.delta>=0?'+':''}${r.delta}%)`:''));
   return `[${m.name.replace(' (예시)','')}님 오늘 운동 – ${fmtD(log.date)}${log.dayIdx?' · '+log.dayIdx+'회차':''}]\n${lines.join('\n')}\n총 볼륨 ${vol.toLocaleString()}kg${log.homework?`\n📝 오늘 숙제: ${log.homework}`:''}\n오늘도 고생하셨습니다 💪`;
+}
+/* ───────── 카톡 사진 카드 (11-12 회의 「카톡 피드백을 프로그램 화면 캡처로」) ─────────
+   수업 요약을 앱 화면처럼 생긴 사진 한 장으로 그려 카톡에 사진으로 보낸다.
+   글 요약과 같은 선 — 운동·기록·숙제만. 특이사항·통증·컨디션·선생님 메모는 넣지 않는다.
+   ▲ 는 같은 운동을 바로 지난번에 했을 때보다 좋아진 정도(줄어든 건 표시 안 함). 회원 페이지와 같은 기준 */
+function recMetric(en){ const mode=exMode(en.exId); return mode==='w'? (r=>r?r.v:0)(e1rm(en.sets)) : mode==='t'? (bestT(en.sets)||0) : 0; }
+function cardRows(log){
+  const m=db.members.find(x=>x.id===log.memberId), logs=pageLogs(m), idx=logs.indexOf(log), last={};
+  logs.slice(0, idx<0? logs.length : idx).forEach(l=>(l.entries||[]).forEach(en=>{ const v=recMetric(en); if(v) last[en.exId]=v; }));
+  return (log.entries||[]).map(en=>{ const rec=pageRec(en, exMode(en.exId)); if(!rec) return null;
+    const cur=recMetric(en), prev=last[en.exId]||0;
+    return {nm:exName(en.exId), rec, tag:(exOf(en.exId)||{}).tag||'기타', d: cur&&prev? (cur-prev)/prev*100 : null,
+      up: cur&&prev&&cur>prev? Math.round((cur-prev)/prev*100) : 0}; }).filter(Boolean);
+}
+/* 「지난번보다 하체 12%, 코어 20% 더 좋아졌어요」 — 부위는 운동 분류(하체·가슴·등…) 그대로.
+   그 부위에서 지난번과 견줄 수 있는 운동 전부의 평균(줄어든 운동도 넣고 계산)이 1% 이상 오른 부위만 적는다 */
+function cardGainLine(rows){
+  const by={}; rows.forEach(r=>{ if(r.d===null||r.d===undefined) return; (by[r.tag]=by[r.tag]||[]).push(r.d); });
+  const parts=Object.keys(by).map(t=>({t, v:Math.round(by[t].reduce((a,x)=>a+x,0)/by[t].length)})).filter(x=>x.v>=1)
+    .sort((a,b)=>{ const o=t=>{ const i=TAG_ORDER.indexOf(t); return i<0?99:i; }; return o(a.t)-o(b.t); });
+  return parts.length? '지난번보다 '+parts.map(x=>x.t+' '+x.v+'%').join(', ')+' 더 좋아졌어요' : '';
+}
+async function cardCanvas(log){
+  const m=db.members.find(x=>x.id===log.memberId), rows=cardRows(log), all=pageLogs(m), nth=all.indexOf(log)+1, pr=memberProgress(m);
+  const vol=(log.entries||[]).reduce((a,en)=>a+volume(en.sets),0);
+  const name=(m.name||'').replace(' (예시)',''), hw=(log.homework||'').trim(), trainer=(db.trainerName||'').trim(), gainLine=cardGainLine(rows);
+  const dp=(log.date||'').split('-'), dateTxt=(dp.length===3? `${+dp[1]}월 ${+dp[2]}일 (${DAYS[new Date(+dp[0],+dp[1]-1,+dp[2]).getDay()]})` : fullD(log.date))+(log.dayIdx&&!log.imported? ' · '+log.dayIdx+'회차':'');
+  const tiles=[{k:'누적 수업', v:(nth||all.length)+'회'},
+    pr&&log.dayIdx&&!log.imported&&log.progId===m.programId? {k:'이번 프로그램', v:log.dayIdx+'/'+pr.total+'회'} : null,
+    vol? {k:'오늘 총 볼륨', v:vol.toLocaleString()+'kg'} : null].filter(Boolean);
+  const F="'IBM Plex Sans KR', -apple-system, 'Malgun Gothic', sans-serif";
+  try{ await Promise.all([400,500,600,700].map(w=>document.fonts.load(`${w} 32px 'IBM Plex Sans KR'`, '가0'))); }catch(e){}
+  const W=1080, P=56, IN=W-P*2, CP=40, cv=document.createElement('canvas'), c=cv.getContext('2d');
+  cv.width=W; cv.height=10;
+  const font=(w,s)=>{ c.font=`${w} ${s}px ${F}`; };
+  const wrap=(text,maxW)=>{ const out=[]; let line=''; for(const ch of String(text)){ if(c.measureText(line+ch).width>maxW&&line){ out.push(line); line=ch===' '?'':ch; } else line+=ch; } if(line) out.push(line); return out; };
+  const wrapTok=(text,maxW)=>{ const out=[]; let line=''; String(text).split(', ').forEach(t=>{ const nx=line? line+', '+t : t; if(c.measureText(nx).width>maxW&&line){ out.push(line+','); line=t; } else line=nx; }); if(line) out.push(line); return out; };
+  const rr=(x,y,w,h,r,fill,stroke)=>{ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+    if(fill){ c.fillStyle=fill; c.fill(); } if(stroke){ c.strokeStyle=stroke; c.lineWidth=2; c.stroke(); } };
+  const paint=()=>{
+    c.textBaseline='top'; c.textAlign='left';
+    c.fillStyle='#0C1424'; c.fillRect(0,0,W,cv.height);
+    let y=P+8;
+    font(600,28); c.fillStyle='#4D8DFF'; c.fillText('PT 수업 기록', P, y);
+    if(trainer){ c.textAlign='right'; font(400,26); c.fillStyle='#8FA0BC'; c.fillText(trainer+' 선생님', P+IN, y+2); c.textAlign='left'; }
+    y+=46;
+    font(700,58); c.fillStyle='#EAF0FA'; wrap(name+'님', IN).forEach(l=>{ c.fillText(l, P, y); y+=74; });
+    font(400,30); c.fillStyle='#8FA0BC'; c.fillText(dateTxt, P, y+2); y+=64;
+    /* 운동 줄 — 한 줄에 안 들어가면 이름 아래로 기록을 내린다 */
+    const L=rows.map(r=>{ font(500,34); const nw=c.measureText(r.nm).width; font(600,34); const rw=c.measureText(r.rec).width;
+      font(600,26); const uw=r.up? c.measureText('▲ '+r.up+'%').width+18 : 0;
+      const one= nw+rw+uw+40 <= IN-CP*2; font(600,34);
+      const lines= one? [r.rec] : wrapTok(r.rec, IN-CP*2-uw);
+      return {...r, one, lines, uw, h: one? 88 : 70+lines.length*48+18}; });
+    if(L.length){
+      const ch=L.reduce((a,r)=>a+r.h,0)+12;
+      rr(P, y, IN, ch, 28, '#131E33', '#243352');
+      let ry=y+6; const rx=P+IN-CP;
+      const rec=(t,up,uw,yy)=>{ c.textAlign='right'; if(up){ font(600,26); c.fillStyle='#3DD68C'; c.fillText('▲ '+up+'%', rx, yy+7); }
+        font(600,34); c.fillStyle='#EAF0FA'; c.fillText(t, rx-(up?uw:0), yy); c.textAlign='left'; };
+      L.forEach((r,i)=>{ if(i){ c.fillStyle='#243352'; c.fillRect(P+CP, ry, IN-CP*2, 2); }
+        font(500,34); c.fillStyle='#EAF0FA'; c.fillText(r.nm, P+CP, ry+24, IN-CP*2);
+        if(r.one) rec(r.rec, r.up, r.uw, ry+24);
+        else r.lines.forEach((l,k)=>rec(l, k===r.lines.length-1? r.up : 0, r.uw, ry+72+k*48));
+        ry+=r.h; });
+      y+=ch+20;
+    }
+    if(gainLine){ font(600,30); const lines=wrap('📈 '+gainLine, IN-CP*2), bh=lines.length*44+52;
+      rr(P, y, IN, bh, 24, 'rgba(61,214,140,.14)', null);
+      c.fillStyle='#3DD68C'; lines.forEach((l,k)=>c.fillText(l, P+CP, y+26+k*44)); y+=bh+20; }
+    if(hw){ font(500,30); const lines=wrap('📝 숙제  '+hw, IN-CP*2), bh=lines.length*44+52;
+      rr(P, y, IN, bh, 24, 'rgba(77,141,255,.16)', null);
+      c.fillStyle='#EAF0FA'; lines.forEach((l,k)=>c.fillText(l, P+CP, y+26+k*44)); y+=bh+20; }
+    if(tiles.length){ const g=16, tw=(IN-g*(tiles.length-1))/tiles.length;
+      tiles.forEach((t,i)=>{ const x=P+i*(tw+g); rr(x, y, tw, 124, 22, '#131E33', '#243352');
+        c.textAlign='center'; font(400,24); c.fillStyle='#8FA0BC'; c.fillText(t.k, x+tw/2, y+22);
+        font(600,38); c.fillStyle='#EAF0FA'; c.fillText(t.v, x+tw/2, y+60, tw-24); c.textAlign='left'; });
+      y+=124+26; }
+    c.textAlign='center'; font(400,26); c.fillStyle='#8FA0BC';
+    c.fillText(name+' 회원님, 오늘도 고생하셨습니다 💪', W/2, y+4, IN); c.textAlign='left';
+    return y+34+P;
+  };
+  const H=Math.ceil(paint()); cv.height=H; paint();
+  return cv;
+}
+let _card=null;
+async function openCard(logId){
+  const log=db.logs.find(l=>l.id===logId); if(!log) return;
+  /* 사진 카드는 멤버십 기능(회원 페이지와 같은 묶음) — 등급을 아직 모르면 막지 않는다 */
+  if(ocrQuota&&ocrQuota.tier==='trial'){ modal(`<b>사진 카드는 멤버십 기능이에요</b>
+    <div class="muted" style="margin:8px 0 12px; line-height:1.7">멤버십이 열리면 쓸 수 있습니다. 글로 보내는 「카톡으로 보내기」는 지금처럼 무료예요.</div>
+    <button class="btn subtle" onclick="closeModal()">닫기</button>`); return; }
+  if(!cardRows(log).length){ toast('사진으로 만들 기록이 없습니다'); return; }
+  try{
+    const cv=await cardCanvas(log), blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    if(_card&&_card.url) URL.revokeObjectURL(_card.url);
+    _card={blob, name:`수업기록_${(log.date||'').replace(/-/g,'')}.png`, url:URL.createObjectURL(blob)};
+  }catch(e){ console.error(e); toast('사진을 만들지 못했습니다'); return; }
+  modal(`<b>🖼 사진 카드</b>
+    <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다. 특이사항 · 컨디션 · 메모는 들어가지 않아요</div>
+    <div style="max-height:50vh; overflow:auto; border-radius:12px; border:1px solid var(--line)"><img src="${_card.url}" style="width:100%; display:block" alt="수업 기록 사진 카드"></div>
+    <button class="btn kakao" style="margin-top:10px" onclick="cardShare()">💬 사진으로 보내기</button>
+    <button class="btn ghost" onclick="cardSave()">⬇ 사진 저장</button>
+    <div class="muted" style="font-size:12.5px; text-align:center">사진을 길게 눌러 저장할 수도 있어요</div>`);
+}
+async function cardShare(){
+  if(!_card) return;
+  const f=new File([_card.blob], _card.name, {type:'image/png'});
+  try{ if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f]}); return; } }
+  catch(e){ if(e&&e.name==='AbortError') return; }
+  cardSave(true);
+}
+function cardSave(fallback){
+  if(!_card) return;
+  const a=document.createElement('a'); a.href=_card.url; a.download=_card.name; document.body.appendChild(a); a.click(); a.remove();
+  toast(fallback? '이 기기는 바로 보내기가 안 돼 사진을 저장했어요 — 카톡에서 사진으로 보내 주세요' : '사진을 저장했습니다');
 }
 async function shareSummary(logId){
   const log=db.logs.find(l=>l.id===logId);
