@@ -1339,6 +1339,9 @@ function openMemberEdit(memberId){
         <button class="btn ${m.sex==='여'?'':'subtle'}" id="me-sex-f" onclick="pickEditSex('여')">여성</button></div></div>
     <label class="fld"><span class="muted">생년월일 (선택 · 예: 900514 · 연도만 알면 1990)</span><input type="text" inputmode="numeric" id="me-birth" value="${esc((m.birth||'').replace(/-/g,''))}" placeholder="900514"></label>
     <label class="fld"><span class="muted">주의사항 (목표·부상 이력)</span><input type="text" id="me-note" value="${esc(m.note||'')}"></label>
+    <label class="fld" style="display:flex; align-items:flex-start; gap:10px; cursor:pointer">
+      <input type="checkbox" id="me-blog" style="width:auto; margin-top:4px" ${m.blogOk?'checked':''}>
+      <span><b>✍️ 블로그에 써도 됨</b><br><span class="muted">회원에게 동의를 받았을 때만 켜 주세요. 켠 회원의 기록만 블로그 글감이 됩니다${m.blogOk&&m.blogOk!==true?` · ${fullD(m.blogOk)}에 켬`:''}</span></span></label>
     ${pr&&!going?`<label class="fld"><span class="muted">다음 수업 회차 (1~${pr.total} · 지금 ${pr.nextDay}회차${pairOf(m)?' · 2대1은 두 사람 같이 바뀌어요':''})</span><input type="number" inputmode="numeric" id="me-next" min="1" max="${pr.total}" value="${cur}"></label>`:''}
     ${pr&&going?`<div class="muted" style="font-size:12.5px; margin-bottom:8px">진행 중인 수업이 있어 회차는 수업을 마친 뒤에 고칠 수 있어요</div>`:''}
     <button class="btn" onclick="saveMemberEdit('${m.id}')">저장</button>`);
@@ -1358,6 +1361,7 @@ function saveMemberEdit(memberId){
   }
   m.name=name; m.sex=_editSex; m.note=document.getElementById('me-note').value.trim();
   if(birth) m.birth=birth; else delete m.birth;
+  { const bk=document.getElementById('me-blog'); if(bk){ if(bk.checked){ if(!m.blogOk) m.blogOk=today(); } else delete m.blogOk; } }   /* 블로그에 써도 됨 (11-12 대표님 확정) */
   save(); closeModal(); render(); toast(moved? `저장했습니다 — 다음은 ${(m.sessionsDone%pr.total)+1}회차` : '저장했습니다');
 }
 /* 따로 등록돼 있던 두 회원을 2대1 한 건으로 합치기 (드문 경우) — 지금 보고 있는 회원의 프로그램·회차를 따라간다 */
@@ -1416,7 +1420,7 @@ function vMember(){
   return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button>
     <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openMemberEdit('${m.id}')"> ${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')?`(${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')})`:'(성별·생년월일 입력)'}</span></h1>
     <button class="ichip" onclick="openMemberEdit('${m.id}')">✏️ 수정</button></div>
-    <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${totalCnt}회</span>${nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${nsCnt}회</span>`:''}</div>
+    <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${totalCnt}회</span>${m.blogOk?` <span class="pill" style="cursor:pointer" onclick="openMemberEdit('${m.id}')">✍️ 블로그 가능</span>`:''}${nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${nsCnt}회</span>`:''}</div>
     ${pairOf(m)?pairSwitchHtml(m):''}
     ${m.note?`<div class="muted" style="margin:0 0 12px">${esc(m.note)}</div>`:''}
     ${pr?`<div class="card">
@@ -1798,6 +1802,8 @@ function vPairSession(){
     ${skipHtml}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       ${P.map((d,k)=>`<textarea rows="2" style="margin-top:6px" placeholder="${esc(M[k].name)} — 상담 내용, 다음에 챙길 것 등" oninput="useDraft('${d.id}'); draft.note=this.value; dsave()">${esc(d.note||'')}</textarea>`).join('')}</div>
+    <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
+      ${P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} — 예) 계단 오를 때 무릎이 안 아파요" value="${esc(d.said||'')}" oninput="useDraft('${d.id}'); draft.said=this.value; dsave()">`).join('')}</div>
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 각자 카톡 요약에 들어가요)</span>
       ${P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} 숙제" value="${esc(d.homework||'')}" oninput="useDraft('${d.id}'); draft.homework=this.value; dsave()">`).join('')}
       <div class="chips" style="margin-top:6px"><button class="ichip" onclick="pairHwSame()">⇆ ${esc(M[1].name)} 숙제를 ${esc(M[0].name)}와 같게</button></div></div>
@@ -1837,6 +1843,8 @@ function vSession(){
     ${skipHtml}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       <textarea id="note-in" rows="3" style="margin-top:6px" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea></div>
+    <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
+      <input type="text" id="said-in" style="margin-top:6px" placeholder="예) 계단 오를 때 무릎이 안 아파요" value="${esc(draft.said||'')}" oninput="draft.said=this.value; dsave()"></div>
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 카톡 요약에 들어가요)</span>
       <input type="text" id="hw-in" style="margin-top:6px" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
       <div class="chips" style="margin-top:6px">${[...new Set(live.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
@@ -1940,6 +1948,7 @@ function commitDraft(d, entries, pairMemberId, second){
     cond:(d.cond||'').trim(), progId:m.programId, entries};
   if((d.homework||'').trim()) log.homework=d.homework.trim();
   if((d.note||'').trim()) log.note=d.note.trim();
+  if((d.said||'').trim()) log.said=d.said.trim();
   if(d.refLogId){ log.refLogId=d.refLogId; log.refDate=d.refDate; }
   if(pairMemberId) log.pair=pairMemberId;            /* 2대1로 한 수업 — 같이 한 회원 */
   if(second) log.duo2=true;                          /* 2대1의 둘째 사람 기록 — 수업 횟수 통계에는 한 번만 센다 */
@@ -1973,7 +1982,8 @@ function finishSession(){
   if(draft.editLogId){
     const log=db.logs.find(l=>l.id===draft.editLogId);
     if(log){ log.entries=entries; log.cond=draft.cond.trim(); if(draft.editDate) log.date=draft.editDate; const hw=(draft.homework||'').trim(); if(hw) log.homework=hw; else delete log.homework;
-      const nt=(draft.note||'').trim(); if(nt) log.note=nt; else delete log.note; }
+      const nt=(draft.note||'').trim(); if(nt) log.note=nt; else delete log.note;
+      const sd=(draft.said||'').trim(); if(sd) log.said=sd; else delete log.said; }
     const mid=draft.memberId; dropDraft(draft); save();
     go({name:'logs', id:mid}); toast('수정됐습니다'); return;
   }
@@ -2603,7 +2613,7 @@ function vLogs(){
     return `<div class="card tap" onclick="startEditLog('${l.id}')">
       <div class="row"><div><b class="num">${l.imported?(l.date||'').replace(/-/g,'.'):fmtD(l.date)}</b> <span class="muted">${l.imported?'📥 종이 일지':l.dayIdx?`${l.dayIdx}회차 · ${l.lap}바퀴${p?' · '+esc(p.name):''}`:'수업'}${l.refDate?' · 📌 기준 '+fmtD(l.refDate):''}</span>
         <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div>
-        ${l.note?`<div style="font-size:12.5px; margin-top:3px; white-space:pre-line">🗒 ${esc(l.note.length>80?l.note.slice(0,80)+'…':l.note)}</div>`:''}</div>
+        ${l.note?`<div style="font-size:12.5px; margin-top:3px; white-space:pre-line">🗒 ${esc(l.note.length>80?l.note.slice(0,80)+'…':l.note)}</div>`:''}${l.said?`<div style="font-size:12.5px; margin-top:3px">💬 “${esc(l.said.length>80?l.said.slice(0,80)+'…':l.said)}”</div>`:''}</div>
         <span style="flex-shrink:0; text-align:right"><span class="muted">수정 ›</span><br><button class="ichip" style="margin-top:6px" onclick="event.stopPropagation(); go({name:'summary', logId:'${l.id}'})">💬 요약·카톡</button></span></div></div>`; }
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 수업 기록</h1><span class="muted num">${logs.length}회</span></div>
     ${list||'<div class="empty">아직 수업 기록이 없습니다</div>'}`;
@@ -2613,7 +2623,7 @@ function startEditLog(logId){
   const ed=drafts().find(d=>d.editLogId===logId);
   if(ed){ openDraft(ed.id); toast('고치던 내용을 이어서 엽니다'); return; }
   addDraft({memberId:log.memberId, dayIdx:log.dayIdx, lap:log.lap, progId:log.progId, cond:log.cond||'',
-    editLogId:logId, editDate:log.date, homework:log.homework||'', note:log.note||'',
+    editLogId:logId, editDate:log.date, homework:log.homework||'', note:log.note||'', said:log.said||'',
     entries:(log.entries||[]).map(e=>{ const mode=exMode(e.exId);
       return {exId:e.exId, mode, sets: mode==='chk'? []:(e.sets&&e.sets.length? e.sets.map(s=>({...s})):[newSet(mode)]),
         chk:!!e.chk, issues:[...(e.issues||[])], memo:e.memo||'', open:false}; })});
@@ -2675,6 +2685,7 @@ function vSummary(){
       ${log.cond?`<div class="muted">🩺 ${esc(log.cond)}</div>`:''}
       <div class="divider"></div>${list}
       ${log.note?`<div class="divider"></div><div style="font-size:13px; white-space:pre-line"><span class="muted">🗒 수업 메모 (카톡엔 안 나가요)</span><br>${esc(log.note)}</div>`:''}
+      ${log.said?`<div class="divider"></div><div style="font-size:13.5px"><span class="muted">💬 회원 한마디 (카톡엔 안 나가요)</span><br>“${esc(log.said)}”</div>`:''}
       ${log.homework?`<div class="divider"></div><div style="font-size:13.5px">📝 <b>오늘 숙제</b> ${esc(log.homework)}</div>`:''}
       <div class="divider"></div>
       <div class="grid2">
