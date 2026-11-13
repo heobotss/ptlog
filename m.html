@@ -139,9 +139,11 @@
 
   /* 평면 — 수업 기록 */
   /* 수업 기록 — 날짜마다 한 덩어리(11-13 대표님: 글만 죽 나열되면 안 읽힌다, 날짜가 다르다는 게 보이게) */
-  .ses{background:rgba(130,165,235,.06); border:1px solid var(--line2); border-radius:16px; padding:0 18px 6px; margin-bottom:14px; box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
-  .ses .hd{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:0 -18px; padding:15px 18px 13px; border-bottom:1px solid var(--line2); background:rgba(130,165,235,.07); border-radius:15px 15px 0 0}
-  .ses .d{font-size:19px; font-weight:700; letter-spacing:-.02em}
+  /* 11-13 대표님 재확인: 아직 날짜 구분이 약하다 → 테두리를 밝은 파랑으로, 덩어리 면을 바탕보다 한 단계 밝게, 날짜 띠를 파랗게, 덩어리 사이를 넓게 */
+  .ses{background:#0D1A36; border:1px solid rgba(118,170,255,.62); border-radius:16px; padding:0 18px 6px; margin-bottom:20px; box-shadow:inset 0 1px 0 rgba(255,255,255,.10)}
+  .ses .hd{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:0 -18px; padding:15px 18px 13px; border-bottom:1px solid rgba(118,170,255,.45); background:linear-gradient(90deg, rgba(77,141,255,.40), rgba(77,141,255,.16)); border-radius:15px 15px 0 0}
+  .ses .hd .label{color:var(--ice)}
+  .ses .d{font-size:19px; font-weight:700; letter-spacing:-.02em; color:#fff}
   .item{display:grid; grid-template-columns:7.2em 1fr; gap:12px; align-items:baseline; padding:12px 0; font-size:16px; border-bottom:1px solid var(--line)}
   .item:last-child{border-bottom:0}
   .item .nm{color:var(--ink); font-weight:600}
