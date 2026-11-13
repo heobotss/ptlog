@@ -3,91 +3,328 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#050A16">
 <title>나의 운동 기록</title>
 <meta property="og:title" content="나의 운동 기록">
-<meta property="og:description" content="수업마다 한 운동과 좋아진 기록을 모아 둔 페이지입니다">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<meta property="og:description" content="선생님이 수업마다 적어 드리는 개인 운동 기록입니다">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
-  /* 회원이 보는 페이지 — 선생님 앱(수업일지)과 같은 다크 네이비 톤. 회원별 웹 링크 (2026-11-13) */
+  /* 회원이 보는 페이지 — 2026-11-13 세 번째 개편(브랜드의 파란색 계열, 고급스럽게) + 판정단 네 명 반영.
+     원칙: 「빛이 귀해야 비싸 보인다」
+     · 입체는 둘뿐 — 맨 위 회원 카드(금속 모서리 테두리, 빛 띠는 처음 한 번만), 기념 주화(은빛 금속 고리)
+     · 유리 — 묶음 판(옅은 면 + 윗변 한 줄 빛, 그림자·blur 없음)   · 평면 — 출석 칸, 부위 막대, 수업 기록, 글
+     · 발광은 단계 고리 한 곳만. 재질은 무광 금속(은빛)과 사파이어 둘. 금색·젤리 광택·네온 없음
+     · 글자 크기는 34 / 24 / 19 / 17 / 15 / 14 여섯 단계. 숫자는 클수록 가늘게, 단위는 숫자의 절반 크기
+     · 금속 그라데이션 글자는 가장 큰 숫자 둘(수업 횟수, 연속 주)에만
+     내용의 선은 그대로 — 실제 기록에서만 계산, 줄어든 기록·빠진 주는 드러내지 않는다. 가장 작은 글자 14px */
   :root{
-    --bg:#0C1424; --card:#131E33; --card2:#182642; --line:#243352;
-    --ink:#EAF0FA; --sub:#8FA0BC; --blue:#4D8DFF; --blue-soft:rgba(77,141,255,.14);
-    --good:#3DD68C; --good-soft:rgba(61,214,140,.13);
+    --bg:#050A16; --face:#0C1730; --ink:#EEF3FF; --sub:#A3B5D6; --dim:#7387AD;
+    --line:rgba(170,195,240,.14); --line2:rgba(170,195,240,.26);
+    --blue:#4D8DFF; --silver:#DCE7FF; --ice:#CFE0FF; --hi:#9EC4FF;
+    --metal:linear-gradient(180deg,#FFFFFF 0%,#C9DAFF 100%);
+    --sans:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
   }
   *{box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent}
   html,body{background:var(--bg)}
-  body{color:var(--ink); font-family:'IBM Plex Sans KR',-apple-system,'Malgun Gothic',sans-serif; font-size:15px; line-height:1.55}
-  #page{max-width:480px; margin:0 auto; min-height:100vh; padding:22px 16px 48px}
-  .num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums}
-  .muted{color:var(--sub); font-size:12.5px}
-  .eyebrow{color:var(--blue); font-size:12.5px; font-weight:600; letter-spacing:.02em}
-  h1{font-size:24px; font-weight:700; letter-spacing:-.015em; margin-top:2px; overflow-wrap:anywhere}
-  h2{font-size:15px; font-weight:700; margin:22px 0 9px}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:13px 15px; margin-bottom:10px}
-  .stats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:16px}
-  .stat{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 8px; text-align:center; min-width:0}
-  .stat .v{font-size:17px; font-weight:600; margin-top:1px; white-space:nowrap}
-  .gain{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line)}
-  .gain:first-child{border-top:0; padding-top:2px} .gain:last-child{padding-bottom:2px}
-  .gain .nm{min-width:0; overflow-wrap:anywhere}
-  .pill{display:inline-block; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:100px; background:var(--good-soft); color:var(--good); white-space:nowrap}
-  .shead{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:7px}
-  .shead b{font-size:15.5px}
-  .item{display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:6px 0; border-top:1px solid var(--line); font-size:14px}
-  .item .nm{flex-shrink:0; max-width:46%; overflow-wrap:anywhere}
-  .item .rec{text-align:right; color:var(--ink); min-width:0; overflow-wrap:anywhere}
-  .up{color:var(--good); font-size:11.5px; font-weight:600; white-space:nowrap; margin-left:6px}
-  .hw{margin-top:8px; padding:8px 10px; border-radius:10px; background:var(--blue-soft); font-size:13.5px; overflow-wrap:anywhere}
-  .more{display:block; width:100%; padding:12px; margin-top:4px; border-radius:12px; border:1px solid var(--line); background:none; color:var(--sub); font-family:inherit; font-size:14px; cursor:pointer}
-  .more:active{background:var(--card2)}
-  .empty{text-align:center; color:var(--sub); padding:70px 16px; line-height:1.8}
-  .foot{margin-top:26px; text-align:center; color:var(--sub); font-size:12px; line-height:1.7}
+  body{color:var(--ink); font-family:var(--sans); font-weight:400; font-size:17px; line-height:1.65; word-break:keep-all; overflow-wrap:anywhere; -webkit-font-smoothing:antialiased;
+    background:radial-gradient(ellipse 130% 480px at 50% -140px, rgba(64,128,240,.14), rgba(64,128,240,0) 70%) no-repeat, var(--bg)}
+  #page{max-width:480px; margin:0 auto; min-height:100vh; padding-top:16px}
+  .label{font-size:14px; letter-spacing:.02em; color:var(--sub); font-weight:600}
+  .note{font-size:15px; color:var(--sub); line-height:1.7}
+  .gold{color:var(--hi); font-weight:700}
+  i.u{font-style:normal; font-size:.52em; font-weight:500; color:var(--sub); margin-left:.12em; letter-spacing:0}
+
+  /* 입체 — 맨 위 회원 카드 */
+  .hero{position:relative; margin:0 16px; padding:26px 22px 22px; border-radius:24px; overflow:hidden; isolation:isolate; border:1px solid transparent;
+    background:linear-gradient(160deg,#16306B 0%,#0B1A3E 55%,#081230 100%) padding-box,
+      linear-gradient(160deg,rgba(220,232,255,.60),rgba(220,232,255,.08) 40%,rgba(220,232,255,.24)) border-box;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 1px 0 rgba(0,0,0,.6), 0 24px 48px -28px rgba(0,0,0,.9)}
+  .hero:before{content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(120% 80% at 0% 0%, rgba(120,170,255,.20), rgba(120,170,255,0) 58%)}
+  .hero:after{content:''; position:absolute; top:-40%; bottom:-40%; left:-40%; width:22%; z-index:-1; pointer-events:none; transform:rotate(18deg); opacity:0;
+    background:linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.10) 50%, rgba(255,255,255,0)); animation:sheen 1.2s cubic-bezier(.3,.6,.2,1) .5s 1 both}
+  @keyframes sheen{0%{left:-40%; opacity:1} 85%{opacity:1} 100%{left:130%; opacity:0}}
+  .hero .label{color:rgba(220,232,255,.78)}
+  .hair{width:28px; height:1px; background:var(--silver); opacity:.7; margin:14px 0 20px}
+  .hero h1{font-weight:700; font-size:34px; letter-spacing:-.02em; line-height:1.25}
+  .hero h1 small{font-size:19px; font-weight:400; margin-left:.2em; color:rgba(226,236,255,.8)}
+  .hero .with{font-size:15px; color:rgba(220,232,255,.78); margin-top:8px}
+  .count{display:flex; align-items:baseline; gap:10px; margin-top:32px}
+  .count b{font-weight:280; font-size:108px; line-height:.86; letter-spacing:-.04em; font-variant-numeric:proportional-nums; background:var(--metal); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .count span{font-size:19px; font-weight:500; color:rgba(226,236,255,.86)}
+  .stage{display:flex; align-items:center; gap:16px; margin-top:24px; padding-top:24px; border-top:1px solid rgba(200,220,255,.14)}
+  .ring{position:relative; width:78px; height:78px; flex-shrink:0}
+  .ring svg{width:78px; height:78px; transform:rotate(-90deg); overflow:visible}
+  .ring .bgc{fill:none; stroke:rgba(200,220,255,.12); stroke-width:2}
+  .ring .fgc{fill:none; stroke-width:3; stroke-linecap:round; filter:drop-shadow(0 0 4px rgba(110,165,255,.6)); transition:stroke-dashoffset 1.3s cubic-bezier(.2,.7,.2,1)}
+  .ring .in{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.1}
+  .ring .in b{font-size:26px; font-weight:400; letter-spacing:-.02em; font-variant-numeric:proportional-nums}
+  .ring .in span{font-size:14px; color:rgba(220,232,255,.78); margin-top:1px}
+  .stage .ttl{font-size:24px; font-weight:700; letter-spacing:-.02em; line-height:1.25}
+  .stage .nxt{font-size:15px; color:rgba(220,232,255,.78); margin-top:4px}
+  .facts{display:grid; grid-template-columns:repeat(3,1fr); margin-top:24px; border-top:1px solid rgba(200,220,255,.14)}
+  .facts div{padding:16px 0 0 12px; border-left:1px solid rgba(200,220,255,.14); min-width:0}
+  .facts div:first-child{padding-left:0; border-left:0}
+  .facts dt{font-size:14px; color:rgba(220,232,255,.72); line-height:1.4; white-space:nowrap; letter-spacing:-.01em}
+  .facts dd{font-size:27px; font-weight:400; letter-spacing:-.02em; line-height:1.2; margin-top:4px; white-space:nowrap; font-variant-numeric:proportional-nums}
+  .facts dd i{font-style:normal; font-size:14px; font-weight:500; letter-spacing:0; margin-left:3px; color:rgba(220,232,255,.78)}
+
+  /* 평면 — 본문 */
+  section{padding:0 22px; margin-top:48px}
+  .sh{display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding-top:13px; margin-bottom:16px; position:relative}
+  .sh:before{content:''; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(90deg, rgba(190,212,255,.5), rgba(190,212,255,.10) 70%, rgba(190,212,255,0))}
+  .lead{font-size:24px; font-weight:600; line-height:1.42; letter-spacing:-.025em}
+  .row{display:flex; justify-content:space-between; align-items:baseline; gap:12px}
+
+  /* 유리 — 묶음 판 */
+  .glass{background:rgba(130,165,235,.06); border:1px solid var(--line); border-radius:18px; padding:4px 18px; box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .glass .top:last-child, .glass .part:last-of-type, .glass .gain:last-of-type{border-bottom:0}
+
+  /* 지난 수업 */
+  .top{display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:16px 0; border-bottom:1px solid var(--line)}
+  .top span{font-size:19px; font-weight:600; letter-spacing:-.02em}
+  .top b{font-size:28px; font-weight:400; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; font-variant-numeric:proportional-nums}
+  .hw{margin-top:24px; padding:2px 0 2px 16px; border-left:2px solid var(--blue)}
+  .hw .label{display:block; margin-bottom:4px}
+
+  /* 꾸준히 온 날들 */
+  .bigno{font-size:76px; font-weight:300; letter-spacing:-.04em; line-height:.92; font-variant-numeric:proportional-nums}
+  .bigno b{font-weight:300; background:var(--metal); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .bigno small{font-size:15px; font-weight:400; letter-spacing:0; margin-left:8px; color:var(--sub)}
+  .weeks{display:flex; gap:5px; margin-top:24px}
+  .weeks i{flex:1; aspect-ratio:1; max-width:26px; border-radius:4px; border:1px solid var(--line2)}
+  .weeks i.a{background:rgba(77,141,255,.35); border-color:transparent}
+  .weeks i.b{background:var(--blue); border-color:transparent; box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+  .weeks i.now{outline:1px solid var(--silver); outline-offset:2px}
+
+  /* 부위별 단련 */
+  .part{display:grid; grid-template-columns:52px 1fr 66px; align-items:center; gap:14px; padding:16px 0; border-bottom:1px solid var(--line)}
+  .part .nm{font-size:17px; font-weight:500}
+  .part .steps{display:flex; gap:5px}
+  .part .steps i{flex:1; height:3px; border-radius:2px; background:rgba(170,195,240,.16)}
+  .part .steps i.on{background:#7FA8F0}
+  .part.best .steps i.on{background:var(--silver)}
+  .part .v{font-size:19px; font-weight:500; letter-spacing:-.02em; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
+  .part .v i{font-style:normal; font-size:14px; font-weight:500; color:var(--sub); margin-left:1px; letter-spacing:0}
+  .part.off .nm{color:var(--dim)} .part.off .v{color:var(--dim); font-size:14px; font-weight:400; letter-spacing:0}
+
+  /* 처음보다 늘었습니다 */
+  .gain{padding:18px 0; border-bottom:1px solid var(--line)}
+  .gain .nm{font-size:19px; font-weight:600; letter-spacing:-.02em}
+  .gain .up{font-size:28px; font-weight:400; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; font-variant-numeric:proportional-nums}
+  .trk{position:relative; height:14px; margin-top:12px}
+  .trk:before{content:''; position:absolute; left:0; right:0; top:6px; height:2px; border-radius:2px; background:rgba(170,195,240,.16)}
+  .trk .seg{position:absolute; right:0; top:6px; height:2px; border-radius:2px; background:linear-gradient(90deg,#4D8DFF,#CFE0FF); transform-origin:left center; transform:scaleX(0); transition:transform 1.1s cubic-bezier(.2,.7,.2,1)}
+  .trk .p1,.trk .p2{position:absolute; top:2px; width:10px; height:10px; border-radius:50%; margin-left:-5px}
+  .trk .p1{background:var(--face); border:1.5px solid #6E93D8}
+  .trk .p2{left:auto; right:0; margin:0; background:var(--silver); box-shadow:0 0 0 3px rgba(77,141,255,.25)}
+
+  /* 입체 — 기념 주화: 어두운 남색 면에 은빛 금속 고리, 안쪽에 각인선 한 줄 */
+  .seals{display:grid; grid-template-columns:repeat(4,1fr); gap:24px 4px}
+  .seal{text-align:center; min-width:0}
+  .seal .c{width:68px; height:68px; margin:0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; border:1.5px solid transparent;
+    background:radial-gradient(circle at 50% 30%,#18294F,#0A1430 75%) padding-box, conic-gradient(from 200deg,#F2F6FF,#7E95C2,#E6EEFF,#55709F,#F2F6FF) border-box;
+    box-shadow:inset 0 0 0 4px #0B1632, inset 0 0 0 5px rgba(210,225,255,.22), 0 4px 10px -5px rgba(0,0,0,.7)}
+  .seal .c>span{display:flex; flex-direction:column; align-items:center; margin:0; font-size:22px; font-weight:700; letter-spacing:-.03em; line-height:1; color:var(--silver); font-variant-numeric:proportional-nums}
+  .seal.sm .c>span{font-size:19px}
+  .seal .c small{font-size:14px; font-weight:600; letter-spacing:.02em; color:var(--sub); margin-top:3px; line-height:1}
+  .seal.new .c{background:radial-gradient(circle at 50% 28%,#2C5BC4,#1D3F8F 78%) padding-box, conic-gradient(from 200deg,#FFFFFF,#8FA6D6,#F2F6FF,#6A86BC,#FFFFFF) border-box;
+    box-shadow:inset 0 0 0 4px #1D3F8F, inset 0 0 0 5px rgba(230,240,255,.35), 0 4px 10px -5px rgba(0,0,0,.7)}
+  .seal.new .c>span{color:#fff} .seal.new .c small{color:var(--ice)}
+  .seal.no .c{background:none; border:1px solid var(--line2); box-shadow:none}
+  .seal.no .c>span{color:var(--dim); font-weight:500} .seal.no .c small{color:var(--dim)}
+  .seal span{display:block; font-size:14px; font-weight:500; line-height:1.4; margin-top:10px}
+  .seal em{display:block; font-style:normal; font-size:14px; color:var(--sub); line-height:1.35}
+  .seal.no span{color:var(--dim); font-weight:400}
+
+  /* 평면 — 수업 기록 */
+  .ses{padding:24px 0 8px; border-bottom:1px solid var(--line)}
+  .ses:first-of-type{border-top:1px solid var(--line)}
+  .ses .d{font-size:19px; font-weight:700; letter-spacing:-.02em}
+  .item{display:grid; grid-template-columns:7.5em 1fr; gap:12px; align-items:baseline; padding:8px 0; font-size:16px}
+  .item .nm{color:#C6D3EC; font-weight:500}
+  .item .rec{font-size:15px; line-height:1.6; font-variant-numeric:tabular-nums}
+  .mk{font-size:14px; white-space:nowrap; margin-left:.4em}
+  .mk.t{color:var(--ice); font-weight:700} .mk.u{color:var(--sub)}
+  .ses .hw{margin:16px 0}
+  .more{display:block; width:100%; padding:16px; margin-top:24px; border-radius:14px; border:1px solid rgba(200,220,255,.28); background:none; color:var(--silver); font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .more:active{transform:translateY(1px); background:rgba(130,165,235,.08)}
+  .empty{text-align:center; color:var(--sub); padding:90px 26px; line-height:1.9}
+  .foot{margin:56px 22px 0; padding:24px 0 56px; text-align:center; position:relative}
+  .foot:before{content:''; position:absolute; left:20%; right:20%; top:0; height:1px; background:linear-gradient(90deg, rgba(190,212,255,0), rgba(190,212,255,.45), rgba(190,212,255,0))}
+  .foot p{font-size:17px; line-height:1.7; color:#C6D3EC}
+  .foot .label{display:block; margin-top:16px; color:var(--dim); font-weight:500}
+
+  section,.foot{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes rise{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+  @media (prefers-reduced-motion: reduce){ section,.foot{animation:none} .hero:after{animation:none; display:none} .ring .fgc,.trk .seg{transition:none} }
 </style>
-<div id="page"><div class="empty">기록을 불러오는 중…</div></div>
+<div id="page"><div class="empty">기록을 불러오는 중입니다</div></div>
 <script>
 const FN='https://kpubgeejyiupdvbbdxwt.supabase.co/functions/v1/mpage';
 const DAYS=['일','월','화','수','목','금','토'];
-let shown=8, D=null;
+const PARTS=['하체','가슴','등','어깨','팔','코어'];            /* 단련도에 쓰는 부위 — 웜업·유산소·재활·기타는 뺀다 */
+const STEPS=[1,3,5,10,15,20,30,40,50,65,80,100,120,150,180,210,240];   /* 이 수업 횟수에 닿을 때마다 한 단계. 그 뒤는 30회마다 */
+let D=null, C=null, showS=5, showG=3;
+const still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function dTxt(d){ if(!d) return ''; const p=d.split('-'); if(p.length<3) return d.replace(/-/g,'.');
-  const w=new Date(+p[0],+p[1]-1,+p[2]).getDay(); return (+p[1])+'월 '+(+p[2])+'일 ('+DAYS[w]+')'; }
-function ymTxt(d){ if(!d) return '-'; const p=d.split('-'); return p[0].slice(2)+'.'+p[1]; }
+function pd(d){ const p=String(d||'').split('-'); return p.length===3? new Date(+p[0],+p[1]-1,+p[2]) : null; }
+function dTxt(d){ const x=pd(d); return x? (x.getMonth()+1)+'월 '+x.getDate()+'일 '+DAYS[x.getDay()]+'요일' : String(d||'').replace(/-/g,'.'); }
+function dShort(d){ const x=pd(d); if(!x) return ''; return (x.getFullYear()!==new Date().getFullYear()? String(x.getFullYear()).slice(2)+'. ':'')+(x.getMonth()+1)+'. '+x.getDate(); }
+function wk(x){ const t=new Date(x.getFullYear(),x.getMonth(),x.getDate()); t.setDate(t.getDate()-((t.getDay()+6)%7)); return t; }   /* 그 주의 월요일 */
+function wkKey(x){ const t=wk(x); return t.getFullYear()+'-'+(t.getMonth()+1)+'-'+t.getDate(); }
+function r1(v){ return Math.round(v*10)/10; }
+function jong(w){ const c=String(w||'').charCodeAt(String(w||'').length-1); return c>=44032&&c<=55203&&(c-44032)%28>0; }   /* 받침이 있나 */
 function show(html){ document.getElementById('page').innerHTML=html; }
+function stageOf(n){ let lv=0, prev=0, next=STEPS[0]; const T=STEPS.slice(); while(T[T.length-1]<=n+30) T.push(T[T.length-1]+30);
+  for(let i=0;i<T.length;i++){ if(n>=T[i]){ lv=i+1; prev=T[i]; next=T[i+1]; } else { next=T[i]; break; } }
+  return {lv, prev, next, left:Math.max(0,next-n), p: next>prev? Math.min(1,(n-prev)/(next-prev)) : 0}; }
+function titleOf(n){ return n>=200?'운동이 일상':n>=100?'단단해지는 중':n>=50?'꾸준한 사람':n>=30?'자리 잡힘':n>=10?'몸이 익는 중':'첫걸음'; }
+function wNum(kg){ return kg>=1000? [r1(kg/1000).toLocaleString(),'톤'] : [Math.round(kg).toLocaleString(),'kg']; }
+function weightTxt(kg){ return wNum(kg).join(''); }
+
+/* 올라온 기록에서 화면에 쓸 값을 계산한다 — 전부 실제 기록에서만 */
+function calc(d){
+  const S=(d.sessions||[]).slice().reverse();                 /* 옛날 → 최근 */
+  const total=d.total||S.length, vol=S.reduce((a,s)=>a+(+s.vol||0),0);
+  const tops=[]; S.forEach(s=>(s.it||[]).forEach(x=>{ if(x.pr) tops.push({d:s.d, nm:x.nm}); }));
+  /* 주별 출석 */
+  const byW={}; S.forEach(s=>{ const x=pd(s.d); if(x){ const k=wkKey(x); byW[k]=(byW[k]||0)+1; } });
+  const now=wk(new Date()), firstD=S.length&&pd(S[0].d), cells=[];
+  const span= firstD? Math.min(16, Math.max(4, Math.round((now-wk(firstD))/6048e5)+1)) : 4;
+  for(let i=span-1;i>=0;i--){ const t=new Date(now); t.setDate(t.getDate()-i*7); cells.push(byW[wkKey(t)]||0); }
+  let cur=0, best=0, run=0;
+  if(firstD){ const t=new Date(wk(firstD)); while(t<=now){ if(byW[wkKey(t)]){ run++; best=Math.max(best,run); } else run=0; t.setDate(t.getDate()+7); }
+    const u=new Date(now); if(!byW[wkKey(u)]) u.setDate(u.getDate()-7);        /* 이번 주에 아직 안 왔어도 끊긴 걸로 보지 않는다 */
+    while(byW[wkKey(u)]){ cur++; u.setDate(u.getDate()-7); } }
+  const ym=(x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))(new Date());
+  const month=S.filter(s=>(s.d||'').slice(0,7)===ym).length;
+  /* 운동별 처음 → 최고 */
+  const ex= d.ex? d.ex.slice() : (d.gains||[]).map(g=>({nm:g.nm, tg:'', u:g.u, f:g.f, b:g.b, n:2}));
+  const gains=ex.filter(e=>e.b>e.f).map(e=>({...e, add:r1(e.b-e.f), pct:(e.b-e.f)/e.f})).sort((a,b)=>b.pct-a.pct);
+  /* 부위별 단련 — 칸은 그 부위 운동을 한 수업 수(1·5·15·30·60회), 옆 숫자는 그 부위 운동들의 처음 대비 최고 기록 평균 */
+  const parts=PARTS.map(t=>{ const n=S.filter(s=>(s.it||[]).some(x=>x.tg===t)).length;
+    const g=ex.filter(e=>e.tg===t&&e.n>=2&&e.f>0).map(e=>(e.b-e.f)/e.f*100), avg=g.length? Math.round(g.reduce((a,x)=>a+x,0)/g.length) : 0;
+    return {t, n, step:[1,5,15,30,60].filter(v=>n>=v).length, avg}; });
+  const hasParts=S.some(s=>(s.it||[]).some(x=>x.tg));
+  const kinds=new Set(); S.forEach(s=>(s.it||[]).forEach(x=>kinds.add(x.nm)));
+  return {S, total, vol, tops, cells, cur, best, month, gains, parts, hasParts, kinds:kinds.size, st:stageOf(total), last:S[S.length-1]||null};
+}
+/* 기념 — 받은 것(받은 날짜와 함께)과, 갈래마다 다음 하나 */
+function medals(c){
+  const out=[], S=c.S;
+  const fam=(list, val, unit, when)=>{ let nextShown=false;
+    list.forEach(([need,label,face])=>{ if(val>=need) out.push({label, face, on:1, d:when? when(need) : ''});
+      else if(!nextShown){ nextShown=true; out.push({label, face, on:0, left:need-val, unit, ratio:val/need}); } }); };
+  fam([[1,'첫 수업','첫<small>수업</small>'],[10,'수업 10번','10<small>번</small>'],[30,'수업 30번','30<small>번</small>'],[50,'수업 50번','50<small>번</small>'],[100,'수업 100번','100<small>번</small>'],[200,'수업 200번','200<small>번</small>'],[300,'수업 300번','300<small>번</small>'],[500,'수업 500번','500<small>번</small>']],
+      c.total, '번', n=>S[n-1]? S[n-1].d : '');
+  if(c.vol>0) fam([[1000,'무게 1톤','1<small>톤</small>'],[10000,'무게 10톤','10<small>톤</small>'],[50000,'무게 50톤','50<small>톤</small>'],[100000,'무게 100톤','100<small>톤</small>'],[300000,'무게 300톤','300<small>톤</small>']],
+      c.vol, 'kg', need=>{ let a=0; for(const s of S){ a+=(+s.vol||0); if(a>=need) return s.d; } return ''; });
+  if(c.hasParts) fam([[1,'첫 최고 기록','첫<small>기록</small>'],[10,'최고 기록 10번','10<small>기록</small>'],[30,'최고 기록 30번','30<small>기록</small>'],[60,'최고 기록 60번','60<small>기록</small>']],
+      c.tops.length, '번', n=>c.tops[n-1]? c.tops[n-1].d : '');
+  fam([[4,'4주 연속','4<small>주</small>'],[12,'12주 연속','12<small>주</small>'],[24,'24주 연속','24<small>주</small>']], c.best, '주');
+  if(c.hasParts){ const all=c.parts.filter(p=>p.n>0).length; out.push({label:'여섯 부위 모두', face:'6<small>부위</small>', on: all>=PARTS.length?1:0, left:PARTS.length-all, unit:'부위', ratio:all/PARTS.length}); }
+  return out;
+}
 function render(){
-  const d=D, S=d.sessions||[];
-  const stats=`<div class="stats">
-      <div class="stat"><div class="muted">누적 수업</div><div class="v num">${esc(d.total||S.length)}회</div></div>
-      <div class="stat"><div class="muted">${d.prog?'이번 프로그램':'최근 수업'}</div><div class="v num">${d.prog? esc(d.prog.done)+'/'+esc(d.prog.total)+'회' : esc(S[0]? (S[0].d||'').slice(5).replace('-','.') : '-')}</div></div>
-      <div class="stat"><div class="muted">시작</div><div class="v num">${esc(ymTxt(d.since))}</div></div></div>`;
-  const G=d.gains||[];
-  const gains= G.length? `<h2>좋아진 기록</h2><div class="card">${G.map(g=>
-      `<div class="gain"><span class="nm">${esc(g.nm)}<br><span class="muted">처음 ${esc(g.f)}${esc(g.u)} → <b style="color:var(--ink)">최고 ${esc(g.b)}${esc(g.u)}</b></span></span><span class="pill">+${esc(Math.round((g.b-g.f)*10)/10)}${esc(g.u)}</span></div>`).join('')}</div>
-      <div class="muted" style="margin:-2px 2px 0">처음 했을 때와 지금까지의 최고 기록을 견준 값이에요</div>` : '';
-  const list=S.slice(0,shown).map(s=>`<div class="card">
-      <div class="shead"><b>${esc(dTxt(s.d))}</b><span class="muted">${s.n? esc(s.n)+'회차':''}</span></div>
-      ${(s.it||[]).map(x=>`<div class="item"><span class="nm">${esc(x.nm)}</span><span class="rec">${esc(x.rec)}${x.up?`<span class="up">▲ ${esc(x.up)}%</span>`:''}</span></div>`).join('')}
-      ${s.hw?`<div class="hw">📝 <b>숙제</b> ${esc(s.hw)}</div>`:''}</div>`).join('');
-  show(`<div class="eyebrow">PT 수업 기록</div>
-    <h1>${esc(d.name)}님</h1>
-    <div class="muted" style="margin-top:3px">${d.trainer? esc(d.trainer)+' 선생님 · ':''}${S[0]? '마지막 수업 '+esc(dTxt(S[0].d)) : '아직 수업 기록이 없어요'}</div>
-    ${stats}${gains}
-    ${S.length?`<h2>수업 기록</h2>${list}`:''}
-    ${S.length>shown?`<button class="more" onclick="shown+=10; render()">이전 수업 더 보기 (${S.length-shown}회 남음)</button>`:''}
-    ${S.some(s=>(s.it||[]).some(x=>x.up))?'<div class="muted" style="margin:10px 2px 0">▲ 는 같은 운동의 지난 기록보다 좋아진 정도예요</div>':''}
-    <div class="foot">수업이 끝나면 이 페이지가 새로 바뀝니다<br>PT 수업일지</div>`);
+  const d=D, c=C=calc(d), S=c.S, name=esc(d.name), tch=d.trainer? esc(d.trainer)+' 선생님' : '';
+  if(!S.length){ show(`<header class="hero"><div class="label">개인 운동 기록</div><div class="hair"></div><h1>${name}<small>님</small></h1>
+      <p class="with">${tch? tch+'이 적어 드리는 기록입니다.' : ''} 첫 수업이 끝나면 여기에 기록이 쌓이기 시작합니다.</p></header>`); return; }
+  /* 함께한 기간 */
+  const f=pd(S[0].d), days=f? Math.round((new Date()-f)/864e5) : 0, mon=Math.floor(days/30.4);
+  const since= mon>=12? `${Math.floor(mon/12)}년${mon%12? ' '+mon%12+'개월':''}` : mon>=1? `${mon}개월` : days>=7? `${Math.floor(days/7)}주` : '';
+  const st=c.st, R=37, CIRC=2*Math.PI*R, wv=wNum(c.vol);
+  const hero=`<header class="hero">
+      <div class="label">개인 운동 기록</div>
+      <div class="hair"></div>
+      <h1>${name}<small>님</small></h1>
+      <p class="with">${tch? tch+'과 ' : ''}${since? `함께한 ${since}` : '함께 시작한 기록'}</p>
+      <div class="count"><b>${c.total}</b><span>번째 수업</span></div>
+      <div class="stage">
+        <div class="ring"><svg viewBox="0 0 78 78"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2F6FF"/><stop offset="1" stop-color="#4D8DFF"/></linearGradient></defs><circle class="bgc" cx="39" cy="39" r="${R}"/><circle class="fgc" id="ringfg" stroke="url(#rg)" cx="39" cy="39" r="${R}" stroke-dasharray="${CIRC}" stroke-dashoffset="${still? CIRC*(1-st.p) : CIRC}"/></svg>
+          <div class="in"><b>${st.lv}</b><span>단계</span></div></div>
+        <div><div class="ttl">${titleOf(c.total)}</div>
+          <div class="nxt">다음 단계까지 수업 ${st.left}번</div></div>
+      </div>
+      <dl class="facts">
+        ${c.vol>0? `<div><dt>들어 올린 무게</dt><dd><span id="volnum">${still? wv[0] : '0'}</span><i>${wv[1]}</i></dd></div>` : `<div><dt>해 본 운동</dt><dd>${c.kinds}<i>가지</i></dd></div>`}
+        ${c.tops.length? `<div><dt>새 최고 기록</dt><dd>${c.tops.length}<i>번</i></dd></div>` : `<div><dt>${c.vol>0?'해 본 운동':'늘어난 운동'}</dt><dd>${c.vol>0? c.kinds : c.gains.length}<i>가지</i></dd></div>`}
+        <div><dt>가장 긴 연속</dt><dd>${c.best}<i>주</i></dd></div>
+      </dl></header>`;
+  /* 한 줄 성적표 */
+  const g0=c.gains[0];
+  const rep= c.total<=3 && !g0? `이제 막 시작했습니다.<br><span class="gold">첫 기록</span>이 쌓이는 중입니다.`
+    : (c.month? `이번 달 <span class="gold">${c.month}번</span> 오셨습니다.` : `지금까지 모두 <span class="gold">${c.total}번</span> 오셨습니다.`)
+      + (g0? `<br>${esc(g0.nm)}${jong(g0.nm)?'은':'는'} 처음보다 <span class="gold">${g0.add}${esc(g0.u)}</span> 늘었습니다.` : '');
+  const vline= c.vol>=1000? `지금까지 들어 올린 무게를 모두 더하면 ${weightTxt(c.vol)}. 소형차 약 ${Math.max(1,Math.round(c.vol/1000)).toLocaleString()}대 무게입니다.`
+    : c.vol>=20? `지금까지 들어 올린 무게를 모두 더하면 ${weightTxt(c.vol)}. 20kg 쌀 포대 약 ${Math.round(c.vol/20)}개 무게입니다.` : '';
+  const report=`<section style="margin-top:38px"><p class="lead">${rep}</p>${vline?`<p class="note" style="margin-top:14px">${vline}</p>`:''}</section>`;
+  /* 지난 수업 한 장면 */
+  const L=c.last, lt=(L.it||[]).filter(x=>x.pr), exBy=n=>(d.ex||[]).find(e=>e.nm===n);
+  const scene= lt.length? `<div class="label gold" style="margin-bottom:12px">최고 기록을 새로 썼습니다</div>
+        <div class="glass">${lt.slice(0,3).map(x=>{ const e=exBy(x.nm); return `<div class="top"><span>${esc(x.nm)}</span><b>${e&&e.bd===L.d? esc(e.b)+'<i class="u">'+esc(e.u)+'</i>' : ''}</b></div>`; }).join('')}</div>`
+    : `<p class="lead">${L.vol? `이날 들어 올린 무게 <span class="gold">${Math.round(L.vol).toLocaleString()}kg</span><br>` : ''}운동 ${(L.it||[]).length}가지를 했습니다.</p>`;
+  const lastCard=`<section><div class="sh"><span class="label">지난 수업</span><span class="label">${esc(dTxt(L.d))}</span></div>
+      ${scene}${L.hw? `<div class="hw"><span class="label">${tch? tch+' 숙제' : '선생님 숙제'}</span>${esc(L.hw)}</div>` : ''}</section>`;
+  /* 출석 */
+  const att=`<section><div class="sh"><span class="label">꾸준히 온 날들</span><span class="label">${c.best>c.cur&&c.cur>0? `지금은 ${c.cur}주째` : c.month? `이번 달 ${c.month}번` : ''}</span></div>
+      <div class="bigno"><b>${c.best}</b><small>${c.best===c.cur? '주 연속, 지금도 이어지는 중' : '주 연속이 가장 긴 기록'}</small></div>
+      <div class="weeks">${c.cells.map((n,i,arr)=>`<i class="${n>=2?'b':n===1?'a':''}${i===arr.length-1?' now':''}"></i>`).join('')}</div>
+      <div class="row note" style="margin-top:8px"><span>${c.cells.length-1}주 전</span><span>이번 주</span></div>
+      <p class="note" style="margin-top:8px">한 칸이 한 주입니다. 짙은 칸은 두 번 이상 온 주입니다.</p></section>`;
+  /* 부위별 단련 */
+  const top=c.parts.filter(p=>p.avg>0).sort((a,b)=>b.avg-a.avg)[0];
+  const partsCard= c.hasParts? `<section><div class="sh"><span class="label">부위별 단련</span></div>
+      ${top? `<p class="lead" style="margin-bottom:20px"><span class="gold">${top.t}</span>${jong(top.t)?'이':'가'} 가장 많이 늘었습니다.</p>` : ''}
+      <div class="glass">${c.parts.map(p=>`<div class="part ${p.n?'':'off'}${top&&p.t===top.t?' best':''}"><span class="nm">${p.t}</span><span class="steps">${[1,2,3,4,5].map(i=>`<i class="${i<=p.step?'on':''}"></i>`).join('')}</span><span class="v">${p.n? (p.avg>0? '+'+p.avg+'<i>%</i>' : p.n+'<i>번</i>') : '아직'}</span></div>`).join('')}</div>
+      <p class="note" style="margin-top:14px">선은 그 부위 운동을 한 수업이 1 · 5 · 15 · 30 · 60번이 될 때마다 하나씩 찹니다. 오른쪽 숫자는 처음 했을 때보다 최고 기록이 늘어난 정도이고, 아직 견줄 기록이 없으면 한 횟수를 적습니다.</p></section>` : '';
+  /* 처음보다 늘었어요 */
+  const G=c.gains, gainCard= G.length? `<section><div class="sh"><span class="label">처음보다 늘었습니다</span><span class="label">${G.length}가지</span></div>
+      <div class="glass">${G.slice(0,showG).map(g=>{ const p=Math.min(92,Math.max(4,Math.round(g.f/g.b*100)));
+        return `<div class="gain"><div class="row"><span class="nm">${esc(g.nm)}</span><span class="up">+${esc(g.add)}<i class="u">${esc(g.u)}</i></span></div>
+        <div class="trk"><i class="seg" style="left:${p}%"></i><i class="p1" style="left:${p}%"></i><i class="p2"></i></div>
+        <div class="row note" style="margin-top:6px"><span>처음 ${esc(g.f)}${esc(g.u)}</span><span style="color:var(--ink); font-weight:600">최고 ${esc(g.b)}${esc(g.u)}</span></div></div>`; }).join('')}</div>
+      ${G.length>showG? `<button class="more" onclick="showG=999; render()">늘어난 운동 ${G.length}가지 모두 보기</button>` : ''}</section>` : '';
+  /* 기념 */
+  const M=medals(c), got=M.filter(x=>x.on), todo=M.filter(x=>!x.on).sort((a,b)=>b.ratio-a.ratio), nx=todo[0];
+  const newest=got.filter(x=>x.d).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0)[0];      /* 가장 최근에 받은 하나만 사파이어 면 */
+  const fill=(4-(got.length%4))%4 || 4;      /* 마지막 줄을 「다음 기념」으로 채운다 */
+  const medalCard=`<section><div class="sh"><span class="label">기념</span><span class="label">${got.length}개</span></div>
+      ${nx? `<p class="lead" style="font-size:21px; margin-bottom:26px">다음은 <span class="gold">${esc(nx.label)}</span>.<br>${nx.unit==='kg'? weightTxt(nx.left) : nx.left+nx.unit} 남았습니다.</p>` : ''}
+      <div class="seals">${[...got, ...todo.slice(0, fill)].map(x=>`<div class="seal ${x.on?'':'no'}${x===newest?' new':''}${/^\d{3}/.test(x.face)?' sm':''}"><div class="c"><span>${x.face}</span></div><span>${esc(x.label)}</span>${x.on&&x.d? `<em>${esc(dShort(x.d))}</em>` : ''}</div>`).join('')}</div></section>`;
+  /* 수업 기록 */
+  const recent=S.slice().reverse(), hasMark=recent.some(s=>(s.it||[]).some(x=>x.pr||x.up));
+  const list=recent.slice(0,showS).map(s=>`<div class="ses">
+      <div class="row"><span class="d">${esc(dTxt(s.d))}</span><span class="label">${s.n? esc(s.n)+'회차':''}</span></div>
+      <div style="margin-top:8px">${(s.it||[]).map(x=>`<div class="item"><span class="nm">${esc(x.nm)}</span><span class="rec">${esc(x.rec).split(', ').join('<br>')}${x.pr? '<span class="mk t">최고</span>' : x.up? '<span class="mk u">▲</span>' : ''}</span></div>`).join('')}</div>
+      ${s.hw? `<div class="hw"><span class="label">숙제</span>${esc(s.hw)}</div>` : ''}</div>`).join('');
+  const now=new Date();
+  show(`${hero}${report}${lastCard}${att}${partsCard}${gainCard}${medalCard}
+    <section><div class="sh"><span class="label">수업 기록</span><span class="label">${recent.length}번</span></div>
+      ${hasMark? '<p class="note" style="margin:-6px 0 16px"><span style="color:var(--ice); font-weight:700">최고</span> 그 운동의 최고 기록을 새로 쓴 날 &nbsp;·&nbsp; ▲ 바로 지난번보다 늘어난 운동</p>' : ''}
+      ${list}
+      ${recent.length>showS? `<button class="more" onclick="showS+=10; render()">이전 수업 더 보기 · ${recent.length-showS}번</button>` : ''}</section>
+    <footer class="foot"><p>${tch? `수업이 끝날 때마다<br>${tch}이 이어서 적어 드립니다.` : '수업이 끝날 때마다<br>이어서 적어 드립니다.'}</p>
+      <span class="label">${now.getFullYear()}. ${now.getMonth()+1}. ${now.getDate()} 기준</span></footer>`);
   document.title=(d.name||'')+'님의 운동 기록';
+  /* 움직임은 셋만 — 단계 고리, 늘어난 선, 무게 숫자(처음 한 번) */
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ const r=document.getElementById('ringfg'); if(r) r.style.strokeDashoffset=CIRC*(1-st.p);
+    document.querySelectorAll('.trk .seg').forEach(b=>{ b.style.transform='scaleX(1)'; }); }));
+  const vn=document.getElementById('volnum');
+  if(vn&&!still&&!render.done){ const t0=performance.now(), dur=1100; const tick=t=>{ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); vn.textContent=wNum(c.vol*e)[0]; if(k<1) requestAnimationFrame(tick); else vn.textContent=wv[0]; }; requestAnimationFrame(tick); }
+  else if(vn) vn.textContent=wv[0];
+  render.done=true;
 }
 async function boot(){
   const t=new URLSearchParams(location.search).get('t')||'';
   if(!/^[A-Za-z0-9]{20,40}$/.test(t)){ show('<div class="empty">주소가 올바르지 않습니다.<br>선생님께 링크를 다시 받아 주세요.</div>'); return; }
   try{
     const res=await fetch(FN+'?t='+encodeURIComponent(t), {cache:'no-store'});
-    if(res.status===404){ show('<div class="empty">이 페이지는 지금 볼 수 없습니다.<br>선생님이 링크를 껐거나 주소가 바뀌었어요.</div>'); return; }
+    if(res.status===404){ show('<div class="empty">이 페이지는 지금 볼 수 없습니다.<br>선생님이 링크를 껐거나 주소가 바뀌었습니다.</div>'); return; }
     const out=await res.json();
     if(!res.ok||!out.data) throw new Error('서버 '+res.status);
     D=out.data; render();
-  }catch(e){ show('<div class="empty">기록을 불러오지 못했습니다.<br>잠시 뒤 다시 열어 주세요.</div>'); }
+  }catch(e){ console.error(e); show('<div class="empty">기록을 불러오지 못했습니다.<br>잠시 뒤 다시 열어 주세요.</div>'); }
 }
 boot();
 </script>

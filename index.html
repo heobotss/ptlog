@@ -279,7 +279,7 @@ function seed(){
      ]},
     {id:uid(), memberId:m.id, dayIdx:4, lap:1, date:'2026-05-21', cond:'',
      entries:[
-      {exId:byName('백스쿼트'), sets:[{w:20,r:12},{w:35,r:8}], issues:['통증 줄어듦'], memo:'허리 통증 없이 수행'},
+      {exId:byName('백스쿼트'), sets:[{w:20,r:15},{w:35,r:8}], issues:['통증 줄어듦'], memo:'허리 통증 없이 수행'},   /* 20kg 12→15회 — 예시 회원 리포트에 근지구력 칸이 보이게(11-13) */
       {exId:byName('플랭크'), sets:[{sec:73}], issues:[], memo:''},
      ]},
   ];
@@ -1473,31 +1473,31 @@ function pageRec(en, mode){
   const out=[]; parts.forEach(p=>{ const l=out[out.length-1]; if(l&&l.p===p) l.n++; else out.push({p,n:1}); });
   return out.map(o=>o.n>1? o.p+' · '+o.n+'세트' : o.p).join(', ');
 }
+const PAGE_V=2;   /* 회원 페이지에 올리는 내용의 판 — 올리면 이미 켜 둔 페이지들이 새 모양으로 다시 올라간다 */
 function pageData(m){
   const logs=pageLogs(m), pr=memberProgress(m);
-  /* ▲ = 같은 운동을 「바로 지난번에 했을 때」보다 좋아진 정도(무게는 추정 최대 무게, 시간은 최고 초). 줄어든 건 표시하지 않는다 */
-  const last={};
-  const all=logs.map(l=>({d:l.date||'', n:l.imported?0:(l.dayIdx||0), hw:(l.homework||'').trim(),
-    it:(l.entries||[]).map(en=>{ const mode=exMode(en.exId), rec=pageRec(en,mode); if(!rec) return null;
+  /* up = 같은 운동을 「바로 지난번에 했을 때」보다 좋아진 정도(무게는 추정 최대 무게, 시간은 최고 초). 줄어든 건 표시하지 않는다
+     ex = 운동별 처음 → 지금까지 최고. 회원이 「실제로 든」 무게·버틴 시간으로만 견준다(추정값은 든 적 없는 숫자라 회원에겐 헷갈린다)
+     pr = 그날 그 운동의 최고 기록을 새로 세웠다는 표시(처음 한 날은 빼고) */
+  const last={}, ex={};
+  const all=logs.map(l=>{ let vol=0;
+    const it=(l.entries||[]).map(en=>{ const mode=exMode(en.exId), rec=pageRec(en,mode); if(!rec) return null;
+      vol+=volume(en.sets||[]);
       const cur= mode==='w'? (r=>r?r.v:0)(e1rm(en.sets)) : mode==='t'? (bestT(en.sets)||0) : 0, prev=last[en.exId]||0;
       if(cur) last[en.exId]=cur;
-      return {nm:exName(en.exId), rec, up: cur&&prev&&cur>prev? Math.round((cur-prev)/prev*100) : 0}; }).filter(Boolean)})).filter(s=>s.it.length);
-  const sessions=all.slice().reverse();          /* 전부 누적 — 회원 화면은 8개씩 펼쳐 본다 */
-  /* 좋아진 기록 — 회원이 「실제로 든」 무게로 견준다(추정 최대 무게는 든 적 없는 숫자라 회원에겐 헷갈린다). 첫 기록 → 지금까지 최고 */
-  const first={}, best={};
-  logs.forEach(l=>(l.entries||[]).forEach(en=>{ const mode=exMode(en.exId);
-    const v= mode==='w'? (b=>b?num(b.w):0)(bestW(en.sets)) : mode==='t'? (bestT(en.sets)||0) : 0; if(!v) return;
-    if(!(en.exId in first)) first[en.exId]={v, u:mode==='w'?'kg':'초'};
-    if(!best[en.exId]||v>best[en.exId]) best[en.exId]=v; }));
-  const gains=Object.keys(first).filter(id=>best[id]>first[id].v&&exOf(id))
-    .map(id=>({nm:exName(id), f:first[id].v, b:best[id], pct:Math.round((best[id]-first[id].v)/first[id].v*100), u:first[id].u}))
-    .sort((a,b)=>b.pct-a.pct).slice(0,5);
-  return {v:1, name:m.name, trainer:(db.trainerName||'').trim(), total:logs.length, since:logs[0]?(logs[0].date||''):'',
-    prog: pr? {name:pr.p.name, done:pr.done%pr.total, total:pr.total} : null, gains, sessions};
+      const v= mode==='w'? (b=>b?num(b.w):0)(bestW(en.sets)) : mode==='t'? (bestT(en.sets)||0) : 0;
+      const nm=exName(en.exId), tg=(exOf(en.exId)||{}).tag||'기타'; let top=0;
+      if(v){ const x=ex[en.exId]||(ex[en.exId]={nm, tg, u:mode==='w'?'kg':'초', f:v, fd:l.date||'', b:v, bd:l.date||'', n:0});
+        if(x.n>0 && v>x.b){ top=1; x.b=v; x.bd=l.date||''; } x.n++; }
+      return {nm, tg, rec, up: cur&&prev&&cur>prev? Math.round((cur-prev)/prev*100) : 0, ...(top?{pr:1}:{})}; }).filter(Boolean);
+    return {d:l.date||'', n:l.imported?0:(l.dayIdx||0), hw:(l.homework||'').trim(), vol:Math.round(vol), it}; }).filter(x=>x.it.length);
+  return {v:PAGE_V, name:m.name, trainer:(db.trainerName||'').trim(), total:logs.length, since:logs[0]?(logs[0].date||''):'',
+    prog: pr? {name:pr.p.name, done:pr.done%pr.total, total:pr.total} : null,
+    ex:Object.values(ex), sessions:all.slice().reverse()};   /* 수업은 전부 누적, 최신이 맨 위 */
 }
 /* 올린 뒤로 바뀐 게 있는지 싸게 보는 값 — 이름·회차·그 회원의 기록 */
 function pageSig(m){
-  const s=JSON.stringify([m.name, db.trainerName||'', m.programId||'', m.sessionsDone||0, pageLogs(m)]);
+  const s=JSON.stringify([PAGE_V, m.name, db.trainerName||'', m.programId||'', m.sessionsDone||0, pageLogs(m)]);
   let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0;
   return s.length+':'+h;
 }
@@ -2843,6 +2843,21 @@ function reportData(m){
     }
   }
   gains.sort((a,b)=>b.pct-a.pct); times.sort((a,b)=>b.pct-a.pct);
+  /* 근지구력 — 「같은 무게」에서 횟수가 늘어난 운동(11-13). 무게마다 처음 한 날의 최다 횟수와 그 뒤의 최다 횟수를 견주고,
+     운동마다 가장 많이 늘어난 무게 하나만 보여 준다. 맨몸(0kg)도 센다 */
+  const endur=[];
+  for(const exId in byEx){
+    if(exMode(exId)!=='w') continue;
+    const first={}, best={};
+    byEx[exId].forEach(x=>{ const top={};
+      validSets(x.e.sets,'w').forEach(st=>{ const w=num(st.w), rp=num(st.r); if(rp>0) top[w]=Math.max(top[w]||0, rp); });
+      for(const w in top){ if(!(w in first)) first[w]=top[w]; else best[w]=Math.max(best[w]||0, top[w]); } });
+    let pick=null;
+    for(const w in best){ if(best[w]>first[w]){ const c={w:+w, f:first[w], b:best[w], pct:Math.round((best[w]-first[w])/first[w]*100)};
+      if(!pick||c.pct>pick.pct||(c.pct===pick.pct&&c.w>pick.w)) pick=c; } }
+    if(pick) endur.push({name:exName(exId), ...pick});
+  }
+  endur.sort((a,b)=>b.pct-a.pct);
   /* 파란 칩 — 어떤 운동에서 좋아졌는지 운동 이름과 함께 */
   const imps=[];
   logs.forEach(l=>(l.entries||[]).forEach(e=>(e.issues||[]).forEach(iss=>{
@@ -2857,7 +2872,7 @@ function reportData(m){
   }
   const vol=logs.reduce((a,l)=>a+(l.entries||[]).reduce((s,e)=>s+volume(e.sets),0),0);
   return {logs, first:logs[0].date, last:logs[logs.length-1].date, cnt:logs.length,
-    gains:gains.slice(0,3), times, imps, resolved, vol};
+    gains:gains.slice(0,3), endur:endur.slice(0,3), times, imps, resolved, vol};
 }
 function vReport(){
   const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
@@ -2867,20 +2882,23 @@ function vReport(){
   const sec=(title,inner)=> inner? `<div class="divider"></div><div class="muted" style="margin-bottom:6px">${title}</div>${inner}`:'';
   const gainsHtml=r.gains.map(g=>`<div style="font-size:13.5px; margin-bottom:5px">🏋️ ${esc(g.name)}
     <b class="num">${g.f}→${g.b}${g.unit}</b> <span class="pill good">+${g.pct}%</span></div>`).join('');
+  const endurHtml=r.endur.map(g=>`<div style="font-size:13.5px; margin-bottom:5px">🔁 ${esc(g.name)} <span class="muted num">${g.w? g.w+'kg':'맨몸'}</span>
+    <b class="num">${g.f}→${g.b}회</b> <span class="pill good">+${g.pct}%</span></div>`).join('');
   const timesHtml=r.times.map(g=>`<div style="font-size:13.5px; margin-bottom:5px">⏱ ${esc(g.name)}
     <b class="num">${g.f}→${g.b}${g.unit}</b> <span class="pill good">+${g.pct}%</span></div>`).join('');
   const impsHtml=r.imps.map(x=>`<div style="font-size:13px; margin-bottom:4px">${esc(x.ex)} — ${issueSpan(x.iss)} <span class="muted num">${fmtD(x.date)}</span></div>`).join('');
   const resHtml=r.resolved.map(x=>`<div style="font-size:13px; margin-bottom:4px">${esc(x.ex)} — ${issueSpan(x.iss)},
-    <span class="muted">${fmtD(x.date)} 이후 <b class="num">${x.after}회</b> 수업 재발 없음</span></div>`).join('');
+    <span class="muted">${fmtD(x.date)} 이후 <b class="num">${x.after}회</b> 수업 동안 다시 안 나옴</span></div>`).join('');
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>변화 리포트</h1><span></span></div>
     <div class="card"><b>${esc(m.name)}님의 변화 (${r.first.slice(0,4)===r.last.slice(0,4)?fmtD(r.first)+' ~ '+fmtD(r.last):fullD(r.first)+' ~ '+fullD(r.last)})</b>
       <div class="muted">수업 <span class="num">${r.cnt}</span>회 · 누적 볼륨 <span class="num">${r.vol.toLocaleString()}kg</span></div>
       ${sec('💪 근력 상승 TOP 3', gainsHtml)}
+      ${sec('🔁 근지구력 상승 TOP 3 — 같은 무게에서 늘어난 횟수', endurHtml)}
       ${sec('⏱ 시간 기록 성장', timesHtml)}
       ${sec('🔵 좋아진 것', impsHtml)}
-      ${sec('🩹 잡은 통증 — 이후 재발 없음', resHtml)}
+      ${sec('🩹 통증 메모 — 이후 다시 안 나옴', resHtml)}
       ${sec('⚖️ 몸의 변화 (인바디)', ibReportHtml(m))}
-      ${!gainsHtml&&!timesHtml&&!impsHtml&&!resHtml?'<div class="divider"></div><div class="muted">같은 운동을 2회 이상 기록하면 변화가 계산됩니다</div>':''}
+      ${!gainsHtml&&!endurHtml&&!timesHtml&&!impsHtml&&!resHtml?'<div class="divider"></div><div class="muted">같은 운동을 2회 이상 기록하면 변화가 계산됩니다</div>':''}
     </div>
     <button class="btn kakao" onclick="shareReport('${m.id}')">💬 카톡으로 보내기</button>`;
 }
@@ -2893,9 +2911,10 @@ function shareReport(memberId){
   const name=m.name.replace(' (예시)','');
   const L=[`[${name}님의 변화 리포트 — ${fmtD(r.first)}~${fmtD(r.last)} · 수업 ${r.cnt}회]`];
   if(r.gains.length){ L.push('💪 근력 상승'); r.gains.forEach(g=>L.push(`· ${g.name} ${g.f}→${g.b}kg (+${g.pct}%)`)); }
+  if(r.endur.length){ L.push('🔁 근지구력 상승 (같은 무게에서 늘어난 횟수)'); r.endur.forEach(g=>L.push(`· ${g.name} ${g.w? g.w+'kg':'맨몸'} ${g.f}→${g.b}회 (+${g.pct}%)`)); }
   if(r.times.length){ L.push('⏱ 시간 기록'); r.times.forEach(g=>L.push(`· ${g.name} ${g.f}→${g.b}초 (+${g.pct}%)`)); }
   if(r.imps.length){ L.push('🔵 좋아진 것'); r.imps.forEach(x=>L.push(`· ${x.ex} — ${x.iss} (${fmtD(x.date)})`)); }
-  if(r.resolved.length){ L.push('🩹 잡은 통증'); r.resolved.forEach(x=>L.push(`· ${x.ex} — ${x.iss}, ${fmtD(x.date)} 이후 재발 없음`)); }
+  if(r.resolved.length){ L.push('🩹 통증 메모 — 이후 다시 안 나옴'); r.resolved.forEach(x=>L.push(`· ${x.ex} — ${x.iss}, ${fmtD(x.date)} 이후 다시 안 나옴`)); }
   const ibL=ibReportLines(m); if(ibL.length){ L.push('⚖️ 몸의 변화 (인바디)'); ibL.forEach(x=>L.push('· '+x)); }
   L.push(`누적 볼륨 ${r.vol.toLocaleString()}kg — 여기까지 함께 온 기록입니다 💪`);
   shareTextRaw(L.join('\n'));
