@@ -136,6 +136,14 @@
   .tl .ev .d{font-size:11px; color:var(--sub); font-family:'IBM Plex Mono',monospace}
   .empty{text-align:center; color:var(--sub); padding:38px 16px; font-size:14px}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .seclabel{font-size:12.5px; color:var(--sub); margin:14px 2px 6px}
+  .tiles{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+  .tile{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:13px 4px 11px; text-align:center; color:var(--ink); font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; line-height:1.35}
+  .tile i{display:block; font-style:normal; font-size:21px; margin-bottom:5px}
+  .tile small{display:block; font-weight:400; font-size:11.5px; color:var(--sub); margin-top:2px}
+  .tile.hot{border-color:var(--blue)} .tile.hot small{color:var(--warn)}
+  .tile:active{background:var(--card2)}
+  .finrow{border-top:1px solid var(--line)} .finh{padding:13px 0; cursor:pointer; font-size:14.5px}
   .phgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px}
   .phgrid .ph{position:relative; aspect-ratio:1/1; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.07); cursor:pointer}
   .phgrid .ph img{width:100%; height:100%; object-fit:cover; display:block}
@@ -669,7 +677,7 @@ async function bootData(){
   bindDraft(); pdraft=null; booted=true;
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
-  checkAccess(); loadOcrQuota(); loadPhStat(); pageWatch();
+  checkAccess(); loadOcrQuota(); loadPhStat(); pageWatch(); hwSync();
   loadIg();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
@@ -892,7 +900,7 @@ function render(){
   [['home','home'],['schedule','sch'],['programs','prog'],['library','lib'],['settings','set']].forEach(([n,id])=>{
     const b=document.getElementById('nav-'+id); if(b) b.className = view.name===n ? 'on':''; });
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
-    report:vReport, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, mkprog:vMkProg, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
+    report:vReport, consult:vConsult, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, mkprog:vMkProg, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
     programs:vPrograms, progDetail:vProgDetail, progDay:vProgDay, progNew:vProgNew, library:vLibrary,
     memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
   el.classList.toggle('wide', view.name==='pcheck');
@@ -999,7 +1007,7 @@ function vHome(){
     ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
       <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
       <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
-    ${bdayHtml()}${briefHtml()}${scorecardHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
+    ${bdayHtml()}${briefHtml()}${monthHtml()}${scorecardHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
     ${list || '<div class="empty">아직 회원이 없습니다.<br>아래 버튼으로 첫 회원을 등록하세요.</div>'}
     <button class="btn ghost" onclick="go({name:'memberNew'})">＋ 회원 등록</button>`;
 }
@@ -1450,6 +1458,7 @@ function vMember(){
     (l.entries||[]).forEach(e=>{ const iss=(e.issues||[]).map(issueSpan).join(', ');
       if(iss||e.memo) notes.push(`${fmtD(l.date)} ${esc(exName(e.exId))} — ${[iss, esc(e.memo)].filter(Boolean).join(', ')}`); });
   });
+  if(UI2) return vMember2(m, pr, {totalCnt, nsCnt, notes, seedN});
   return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button>
     <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openMemberEdit('${m.id}')"> ${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')?`(${[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ')})`:'(성별·생년월일 입력)'}</span></h1>
     <button class="ichip" onclick="openMemberEdit('${m.id}')">✏️ 수정</button></div>
@@ -1473,7 +1482,8 @@ function vMember(){
     :cycleCard(m)}
     ${db.logs.some(l=>l.memberId===m.id)&&!draftOf(m.id)?`<button class="btn ghost" style="border:1px solid var(--warn); color:var(--warn); background:var(--warn-soft)" onclick="openRefPicker('${m.id}')">📌 기준 수업 불러오기 — 지난 수업과 비교하며 수업</button>`:''}
     <button class="btn ghost" onclick="go({name:'search', id:'${m.id}'})">🔍 운동으로 기록 찾기</button>
-    <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트${pr&&pr.rebadge?' — 재등록 상담에 쓰세요':''}</button>
+    ${totalCnt?`<button class="btn ghost" ${pr&&pr.rebadge?'style="border:1px solid var(--blue)"':''} onclick="go({name:'consult', id:'${m.id}'})">📋 재등록 상담 한 장${pr&&pr.rebadge?` — 잔여 ${pr.remaining}회, 지금 쓰세요`:' — 처음부터 지금까지 한 화면'}</button>`:''}
+    <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트</button>
     <button class="btn ghost" onclick="openPage('${m.id}')">🔗 회원 페이지${m.pageToken?' · 켜짐 (보기 · 링크 보내기)':' — 회원이 자기 기록을 보는 링크'}</button>
     <button class="btn ghost" onclick="go({name:'inbody', id:'${m.id}'})">⚖️ 인바디${(m.inbody||[]).length?` · ${m.inbody.length}회 측정 (최근 ${fullD(ibSorted(m).slice(-1)[0].date)})`:' — 측정 기록 넣기'}</button>
     <button class="btn ghost" onclick="go({name:'logs', id:'${m.id}'})">🗂 지난 수업 기록 · 수정</button>
@@ -1506,7 +1516,7 @@ function pageRec(en, mode){
   const out=[]; parts.forEach(p=>{ const l=out[out.length-1]; if(l&&l.p===p) l.n++; else out.push({p,n:1}); });
   return out.map(o=>o.n>1? o.p+' · '+o.n+'세트' : o.p).join(', ');
 }
-const PAGE_V=2;   /* 회원 페이지에 올리는 내용의 판 — 올리면 이미 켜 둔 페이지들이 새 모양으로 다시 올라간다 */
+const PAGE_V=3;   /* 회원 페이지에 올리는 내용의 판 — 올리면 이미 켜 둔 페이지들이 새 모양으로 다시 올라간다 */
 function pageData(m){
   const logs=pageLogs(m), pr=memberProgress(m);
   /* up = 같은 운동을 「바로 지난번에 했을 때」보다 좋아진 정도(무게는 추정 최대 무게, 시간은 최고 초). 줄어든 건 표시하지 않는다
@@ -1527,11 +1537,12 @@ function pageData(m){
     return {d:l.date||'', n:l.imported?0:(l.dayIdx||0), hw:(l.homework||'').trim(), vol:Math.round(vol), it, ...(ph.length?{ph}:{})}; }).filter(x=>x.it.length);
   return {v:PAGE_V, name:m.name, trainer:(db.trainerName||'').trim(), total:logs.length, since:logs[0]?(logs[0].date||''):'',
     prog: pr? {name:pr.p.name, done:pr.done%pr.total, total:pr.total} : null,
-    ex:Object.values(ex), sessions:all.slice().reverse()};   /* 수업은 전부 누적, 최신이 맨 위 */
+    ex:Object.values(ex), sessions:all.slice().reverse(),   /* 수업은 전부 누적, 최신이 맨 위 */
+    ...(ba=>ba.length?{ba}:{})(baPairs(m).slice(0,8).map(p=>({nm:p.nm||'', a:{k:p.a.k, d:p.a.d}, b:{k:p.b.k, d:p.b.d}})))};   /* 전후 사진 묶음 */
 }
 /* 올린 뒤로 바뀐 게 있는지 싸게 보는 값 — 이름·회차·그 회원의 기록 */
 function pageSig(m){
-  const s=JSON.stringify([PAGE_V, m.name, db.trainerName||'', m.programId||'', m.sessionsDone||0, pageLogs(m)]);
+  const s=JSON.stringify([PAGE_V, m.name, db.trainerName||'', m.programId||'', m.sessionsDone||0, pageLogs(m), m.baPairs||0, m.baHide||0]);
   let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0;
   return s.length+':'+h;
 }
@@ -1560,6 +1571,25 @@ function pageWatch(){
   if(!user||!sb||!db) return;
   clearTimeout(_pageT);
   _pageT=setTimeout(()=>{ if(!db) return; (db.members||[]).forEach(m=>{ if(m.pageToken && pageSig(m)!==m.pageSig) pagePush(m.id); }); }, 6000);
+}
+/* 숙제 「했어요」(11-13) — 회원이 회원 페이지에서 누른 표시를 받아 온다. m.hwDone = {수업 날짜: 누른 때}
+   앱을 열 때 한 번, 수업을 시작할 때 그 회원 것만 다시. 안 눌렀다고 따로 표시하지 않는다 */
+async function hwSync(memberId){
+  if(!db||!user||!sb) return;
+  const list=(db.members||[]).filter(m=>m.pageToken && (!memberId||m.id===memberId) && lastHomework(m.id));
+  let changed=false;
+  for(const m of list){
+    try{ const res=await fetch(FN_PAGE+'?t='+encodeURIComponent(m.pageToken), {cache:'no-store'}); if(!res.ok) continue;
+      const hw=(await res.json()).hw||{};
+      if(JSON.stringify(hw)!==JSON.stringify(m.hwDone||{})){ if(Object.keys(hw).length) m.hwDone=hw; else delete m.hwDone; changed=true; } }catch(e){}
+  }
+  if(changed){ save(); const a=document.activeElement;
+    if(view.name==='session' && !document.getElementById('modal') && !(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))) render(); }
+}
+function hwDoneHtml(memberId, hw){
+  const m=db.members.find(x=>x.id===memberId), at=m&&m.hwDone&&hw&&m.hwDone[hw.date]; if(!at) return '';
+  const d=new Date(at);
+  return `<div style="margin-top:4px; color:var(--good); font-size:13.5px; font-weight:600">✅ 회원이 ${d.getMonth()+1}/${d.getDate()}에 「했어요」를 눌렀어요</div>`;
 }
 async function pageDel(token){ try{ const r=await pageCall({action:'del', token}); return r.status===200; }catch(e){ return false; } }
 function openPage(memberId){
@@ -1673,9 +1703,10 @@ async function phGc(keys){
 function phThumbs(ref, list){
   return list.length? `<div class="phgrid">${list.map(p=>`<div class="ph" onclick="phView('${ref}','${p.k}')"><img data-ph="${p.k}" alt="">${p.ex?`<span>${esc(exName(p.ex))}</span>`:''}</div>`).join('')}</div>` : '';
 }
-function phCard(ref){
+function phCard(ref, bare){
   const h=phHolder(ref); if(!h) return '';
   const a=h.photos||[];
+  if(bare) return `${phThumbs(ref,a)}<button class="btn subtle" style="margin:8px 0 0" onclick="phPick('${ref}')">＋ 사진 올리기 (여러 장 가능)</button>`;
   return `<div class="card"><b>📷 수업 사진</b> <span class="muted" style="font-size:12.5px">${a.length}/${PH_MAX}장 · 회원 페이지에도 보여요</span>
     ${phThumbs(ref,a)}
     <button class="btn subtle" style="margin-top:8px" onclick="phPick('${ref}')">＋ 사진 올리기 (여러 장 가능)</button></div>`;
@@ -1804,6 +1835,7 @@ function startAhead(memberId){
 }
 function startSession(memberId, ahead){
   const m=db.members.find(x=>x.id===memberId); if(!m) return; const pr=memberProgress(m);
+  hwSync(memberId); if(pairOf(m)) hwSync(pairOf(m).id);      /* 회원이 숙제 「했어요」를 눌렀는지 받아 온다(기다리지 않는다) */
   /* 이 회원의 작성 중 수업이 있으면 이어 쓰기. 다른 회원 것은 그대로 두고 새로 시작한다 (11-12 회의 — 버리지 않는다) */
   const d0=draftOf(memberId);
   if(d0){ openDraft(d0.id); toast('작성 중이던 수업을 이어 씁니다'); return; }
@@ -1915,7 +1947,8 @@ function entryParts(en,i,forceOpen){
     const done=entryHasRecord(en,mode);
     /* 접힌 상태 오른쪽: 종이 일지의 위첨자처럼 지난 최고 기록을 작게 */
     const best=bestTxt(draft.memberId, en.exId);
-    const bestPeek= best && best.kind!=='last' && !(prev && prev.e===best.e)? ` · 🏆${best.rec}` : '';
+    const dare= !draft.editLogId&&!done? dareOf(draft.memberId, en.exId) : null;
+    const bestPeek= (best && best.kind!=='last' && !(prev && prev.e===best.e)? ` · 🏆${best.rec}` : '')+(dare?' · 🔥':'');
     const peek = done? `<span class="peek done">✓ 기록됨</span>`
       : prev? `<span class="peek">${prev.isRef?'📌':'지난'} ${mode==='chk'?'✓ '+(prev.label.split(' · ')[1]||prev.label) : compactStr(prev.e,mode)}${bestPeek}</span>`
       : best&&best.kind!=='last'? `<span class="peek">🏆${best.rec}</span>` : `<span class="peek">첫 기록</span>`;
@@ -1931,6 +1964,7 @@ function entryParts(en,i,forceOpen){
           ${best?`<br><span style="color:var(--warn)">${best.kind==='last'?`🕘 마지막으로 한 날 · ${bestD(best.date)}`:`🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${bestD(best.date)}${prev.e===best.e?' (이 날)':''}`}</span>`:''}</div>`;
       } else prevHtml= best&&best.kind!=='last'? `<div class="prev"><span style="color:var(--warn)">🏆 전체 ${bestWord(best)} <b class="num">${esc(best.rec)}</b> · ${bestD(best.date)}</span></div>`
         : `<div class="prev muted">이전 기록 없음 — 오늘이 기준점이 됩니다</div>`;
+      if(dare) prevHtml+=`<div class="prev" style="border:1px solid var(--warn); color:var(--warn)">🔥 <b>오늘 깨 볼 만해요</b> — 지난번 <b class="num">${dare.last}</b>, 최고 <b class="num">${dare.best}</b> <span class="num">(${bestD(dare.date)})</span>${dare.same?' 와 같았어요':' 에 거의 닿았어요'}</div>`;
       const chips=ISSUE_SETS.map(g=>g.items.map(p=>
         `<button class="ichip ${en.issues.includes(p)?'on-'+g.cls:''}" onclick="togIssue(${i},'${p}')">${p}</button>`).join('')).join('');
       const inputArea = mode==='chk'
@@ -1954,6 +1988,91 @@ function entryParts(en,i,forceOpen){
     const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
     return {peek, body, done, card:`<div class="card" ${en.open?'style="border-color:var(--blue)"':''}>
       <div class="exhead" onclick="togOpen(${i})"><span><b>${esc(exName(en.exId))}</b>${isAddH?' <span class="pill">퍼스널</span>':''}</span>${peek}</div>${body}</div>`};
+}
+/* ── 화면 정리(11-13 대표님: 기능이 늘어 화면이 어지럽다) — UI2 가 true 면 묶음 배치로 그린다 ──
+   수업 화면 아래의 사진·메모·회원 한마디·숙제 칸 넷을 「수업 마무리」 한 칸으로. 한 줄씩만 보이고 누른 줄만 펼쳐진다.
+   적어 둔 것이 있으면 줄에 그 내용이 보인다 */
+let UI2=true;    /* 11-13 대표님 시안 확인 뒤 켬 — 옛 배치는 false 로 돌아간다 */
+function finCard(rows){
+  const open=view.fin||'';
+  return `<div class="card" style="padding:4px 15px 6px"><div class="muted" style="padding:9px 0 2px">수업 마무리</div>
+    ${rows.map(r=>`<div class="finrow"><div class="row finh" onclick="finTog('${r.k}')"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${r.icon} <b>${r.name}</b> ${r.stat? `<span style="color:var(--blue); font-size:13px">${esc(r.stat)}</span>` : `<span class="muted">${r.hint}</span>`}</span><span class="muted" style="flex-shrink:0">${open===r.k?'접기 ▴':'▾'}</span></div>
+      ${open===r.k? `<div style="padding:0 0 12px">${r.body}</div>` : ''}</div>`).join('')}</div>`;
+}
+function finTog(k){ view.fin= view.fin===k? '' : k; render(); }
+function cut(s,n){ s=String(s||'').trim().replace(/\s+/g,' '); return s.length>n? s.slice(0,n)+'…' : s; }
+function sessFin(live){
+  const n=(draft.photos||[]).length;
+  return finCard([
+    {k:'ph', icon:'📷', name:'수업 사진', hint:'회원 페이지에도 보여요', stat:n? n+'장':'', body:phCard('d:'+draft.id, true)},
+    {k:'note', icon:'🗒', name:'수업 메모', hint:'선생님만 보기', stat:cut(draft.note,16),
+      body:`<textarea id="note-in" rows="3" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea>`},
+    {k:'said', icon:'💬', name:'회원 한마디', hint:'회원이 한 말 그대로', stat:cut(draft.said,16),
+      body:`<input type="text" id="said-in" placeholder="예) 계단 오를 때 무릎이 안 아파요" value="${esc(draft.said||'')}" oninput="draft.said=this.value; dsave()">`},
+    {k:'hw', icon:'📝', name:'오늘 숙제', hint:'카톡 요약에 들어가요', stat:cut(draft.homework,16),
+      body:`<input type="text" id="hw-in" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
+        <div class="chips" style="margin-top:6px">${[...new Set(live.map(e=>exName(e.exId)))].slice(0,12).map(x=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(x)}">＋ ${esc(x)}</span>`).join('')}</div>`}]);
+}
+function pairFin(P, M){
+  const n=(P[0].photos||[]).length, any=k=>P.map(d=>cut(d[k],8)).filter(Boolean).join(' / ');
+  return finCard([
+    {k:'ph', icon:'📷', name:'수업 사진', hint:'두 분 수업에 같이 붙어요', stat:n? n+'장':'', body:phCard('d:'+P[0].id, true)},
+    {k:'note', icon:'🗒', name:'수업 메모', hint:'선생님만 보기', stat:any('note'),
+      body:P.map((d,k)=>`<textarea rows="2" style="margin-top:6px" placeholder="${esc(M[k].name)} — 상담 내용, 다음에 챙길 것 등" oninput="useDraft('${d.id}'); draft.note=this.value; dsave()">${esc(d.note||'')}</textarea>`).join('')},
+    {k:'said', icon:'💬', name:'회원 한마디', hint:'회원이 한 말 그대로', stat:any('said'),
+      body:P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} — 예) 계단 오를 때 무릎이 안 아파요" value="${esc(d.said||'')}" oninput="useDraft('${d.id}'); draft.said=this.value; dsave()">`).join('')},
+    {k:'hw', icon:'📝', name:'오늘 숙제', hint:'각자 카톡 요약에 들어가요', stat:any('homework'),
+      body:P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} 숙제" value="${esc(d.homework||'')}" oninput="useDraft('${d.id}'); draft.homework=this.value; dsave()">`).join('')
+        +`<div class="chips" style="margin-top:6px"><button class="ichip" onclick="pairHwSame()">⇆ ${esc(M[1].name)} 숙제를 ${esc(M[0].name)}와 같게</button></div>`}]);
+}
+/* 회원 화면 — 단추 19개를 묶음으로: 맨 위 수업 시작, 그 아래 작은 줄, 「회원에게 보여 주기」「기록」 두 칸씩, 나머지는 「더 보기」 */
+function tileBtn(icon, name, sub, act, hot){ return `<button class="tile${hot?' hot':''}" onclick="${act}"><i>${icon}</i>${name}${sub?`<small>${sub}</small>`:''}</button>`; }
+function vMember2(m, pr, x){
+  const dr=draftOf(m.id), has=db.logs.some(l=>l.memberId===m.id), sx=[m.sex, ageTxt(m.birth)].filter(Boolean).join(' · ');
+  const quick=[ pr? ['📋 오늘 수업 보기', `go({name:'peek', id:'${m.id}', k:0})`] : null,
+    pr? ['🖨 8회 수업지 인쇄', `printSheet8('${m.id}')`] : null,
+    has&&!dr? ['📌 기준 수업 불러오기', `openRefPicker('${m.id}')`] : null,
+    pr&&!dr&&!pr.swapped&&pr.ahead? [`${pr.ahead.day}회차 먼저 하기`, `startAhead('${m.id}')`] : null ].filter(Boolean);
+  return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button>
+    <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openMemberEdit('${m.id}')"> ${sx?`(${sx})`:'(성별·생년월일 입력)'}</span></h1>
+    <button class="ichip" onclick="openMemberEdit('${m.id}')">✏️ 수정</button></div>
+    <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${x.totalCnt}회</span>${m.blogOk?` <span class="pill" style="cursor:pointer" onclick="openMemberEdit('${m.id}')">✍️ 블로그 가능</span>`:''}${x.nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${x.nsCnt}회</span>`:''}</div>
+    ${pairOf(m)?pairSwitchHtml(m):''}
+    ${m.note?`<div class="muted" style="margin:0 0 12px">${esc(m.note)}</div>`:''}
+    ${pr?`<div class="card">
+      <div class="row"><b>${esc(pr.p.name)}</b>${pr.lap>1?`<span class="pill good">${pr.lap}바퀴째</span>`:''}</div>
+      <div class="muted">진행 <span class="num">${pr.done%pr.total}/${pr.total}</span>회 · 잔여 <span class="num">${pr.remaining}</span>회
+        ${pr.rebadge?' · <span style="color:var(--warn)">재등록 타이밍</span>':''}</div>
+      <div class="prog"><i style="width:${(pr.done%pr.total)/pr.total*100}%"></i></div>
+    </div>
+    ${dr? `<button class="btn" onclick="openDraft('${dr.id}')">▶ ${dr.dayIdx}회차 수업 이어 쓰기 (자동 저장됨)</button>`
+      : `<button class="btn" onclick="startSession('${m.id}')">${pairOf(m)?'👥 2대1 · ':''}${pr.nextDay}회차 수업 시작</button>
+        ${pr.swapped? `<div class="muted" style="margin:-4px 0 6px; font-size:13px">지난번에 미룬 ${pr.nextDay}회차 차례예요 — 이걸 하면 ${pr.after.day}회차부터 원래 순서로 이어집니다</div>` : ''}`}`
+    : cycleCard(m)}
+    ${quick.length?`<div class="chips" style="margin:4px 0 2px">${quick.map(q=>`<button class="ichip" onclick="${q[1]}">${q[0]}</button>`).join('')}${dr?`<button class="ichip" onclick="discardDraft('${dr.id}')">작성 중인 수업 지우기</button>`:''}</div>`:''}
+    <div class="seclabel">회원에게 보여 주기</div>
+    <div class="tiles">
+      ${tileBtn('🔗','회원 페이지', m.pageToken?'켜짐':'링크 만들기', `openPage('${m.id}')`)}
+      ${x.totalCnt? tileBtn('📋','재등록 상담', pr&&pr.rebadge?`잔여 ${pr.remaining}회`:'한 장으로', `go({name:'consult', id:'${m.id}'})`, pr&&pr.rebadge) : ''}
+      ${tileBtn('📈','변화 리포트','', `go({name:'report', id:'${m.id}'})`)}</div>
+    <div class="seclabel">기록</div>
+    <div class="tiles">
+      ${tileBtn('🗂','지난 수업', x.totalCnt? x.totalCnt+'회 · 수정':'', `go({name:'logs', id:'${m.id}'})`)}
+      ${tileBtn('🔍','운동으로 찾기','', `go({name:'search', id:'${m.id}'})`)}
+      ${tileBtn('⚖️','인바디', (m.inbody||[]).length? m.inbody.length+'회 측정':'', `go({name:'inbody', id:'${m.id}'})`)}</div>
+    ${x.notes.length?`<div class="card"><div class="muted" style="margin-bottom:6px">최근 컨디션·특이사항</div>
+      <div style="font-size:13px">${x.notes.slice(0,6).join('<br>')}</div></div>`:''}
+    <button class="btn subtle" onclick="view.more=!view.more; render()">${view.more?'접기 ▴':'더 보기 ▾ — 옛 기록 넣기 · 프로그램 · 재등록 · 노쇼'}</button>
+    ${view.more?`<div class="grid2">
+      <button class="btn subtle" onclick="openImport('${m.id}')">📷 옛 일지 사진으로 넣기</button>
+      <button class="btn subtle" onclick="openSeed('${m.id}')">📥 옛 기록 빠르게 넣기${x.seedN?` · ${x.seedN}줄`:''}</button>
+      ${x.totalCnt?`<button class="btn subtle" onclick="openMkProg('${m.id}')">📋 수업으로 프로그램 만들기</button>`:''}
+      <button class="btn subtle" onclick="openProgChange('${m.id}')">${pr?'프로그램 변경':'프로그램 배정'}</button>
+      <button class="btn subtle" onclick="openRereg('${m.id}')">🔁 재등록 처리</button>
+      <button class="btn subtle" onclick="openNoshow('${m.id}')">🚫 노쇼 기록${x.nsCnt?` · ${x.nsCnt}회`:''}</button>
+      ${pairOf(m)?`<button class="btn subtle" onclick="pairSplit('${m.id}')">👥 2대1 풀기</button>`
+        :`<button class="btn subtle" onclick="openPairMerge('${m.id}')">👥 2대1로 합치기</button>`}</div>
+    <button class="btn danger" onclick="delMember('${m.id}')">회원 삭제</button>`:''}`;
 }
 /* 2대1 수업 화면 — 운동 카드 하나에 사람별 칸 두 개. 기록은 회원마다 따로 저장된다 */
 function vPairSession(){
@@ -1985,7 +2104,7 @@ function vPairSession(){
       <div class="chips" style="margin-top:6px">${sk.map(i=>`<button class="ichip" onclick="useDraft('${d.id}'); unskipToday(${i})">↺ ${esc(exName(d.entries[i].exId))}</button>`).join('')}</div></div>`; }).join('');
   const lastHtml=P.map((d,k)=>{ const l=lastLogOf(d.memberId), hw=lastHomework(d.memberId);
     const a=l&&(l.note||'').trim()? `<div style="margin-top:2px; white-space:pre-line; font-size:13.5px"><span class="muted">🗒 지난 수업 메모 ${fmtD(l.date)}</span><br>${esc(l.note)}</div>`:'';
-    const b=hw? `<div style="margin-top:2px; font-size:13.5px"><span class="muted">📝 지난 숙제 ${fmtD(hw.date)}</span> ${esc(hw.homework)}</div>`:'';
+    const b=hw? `<div style="margin-top:2px; font-size:13.5px"><span class="muted">📝 지난 숙제 ${fmtD(hw.date)}</span> ${esc(hw.homework)}</div>${hwDoneHtml(d.memberId, hw)}`:'';
     return a||b? `<div class="card" style="padding:9px 13px"><b>${esc(M[k].name)}</b>${a}${b}</div>`:''; }).join('');
   return `<div class="top"><button class="back" onclick="leaveSession()">←</button>
     <h1>👥 ${esc(M[0].name)} · ${esc(M[1].name)}</h1><span class="muted num">${doneCnt}/${ids.length}</span></div>
@@ -1997,7 +2116,7 @@ function vPairSession(){
     ${P.map((d,k)=>`<input class="cond" type="text" placeholder="🩺 ${esc(M[k].name)} 오늘 컨디션" value="${esc(d.cond)}" onchange="useDraft('${d.id}'); draft.cond=this.value; dsave()">`).join('')}
     ${cards||'<div class="empty">운동이 없습니다 — 아래 「운동 추가」로 넣어 주세요</div>'}
     ${skipHtml}
-    ${phCard('d:'+P[0].id)}
+    ${UI2? pairFin(P, M) : `${phCard('d:'+P[0].id)}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       ${P.map((d,k)=>`<textarea rows="2" style="margin-top:6px" placeholder="${esc(M[k].name)} — 상담 내용, 다음에 챙길 것 등" oninput="useDraft('${d.id}'); draft.note=this.value; dsave()">${esc(d.note||'')}</textarea>`).join('')}</div>
     <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
@@ -2005,6 +2124,7 @@ function vPairSession(){
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 각자 카톡 요약에 들어가요)</span>
       ${P.map((d,k)=>`<input type="text" style="margin-top:6px" placeholder="${esc(M[k].name)} 숙제" value="${esc(d.homework||'')}" oninput="useDraft('${d.id}'); draft.homework=this.value; dsave()">`).join('')}
       <div class="chips" style="margin-top:6px"><button class="ichip" onclick="pairHwSame()">⇆ ${esc(M[1].name)} 숙제를 ${esc(M[0].name)}와 같게</button></div></div>
+`}
     <div class="grid2">
       <button class="btn ghost" onclick="photoFill()">📷 사진으로 채우기</button>
       <button class="btn ghost" onclick="pairAddBoth()">＋ 운동 추가 (둘 다)</button></div>
@@ -2035,11 +2155,11 @@ function vSession(){
       <input type="date" style="flex:1; width:auto" value="${editing?(draft.editDate||''):(draft.date||today())}" max="${today()}" onchange="setSessDate(this.value)"></div>
     ${draft.refLogId?`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📌 기준 수업 ${esc((l=>l?logDate(l):fullD(draft.refDate))(db.logs.find(x=>x.id===draft.refLogId)))}</b><div class="muted">운동마다 그날 기록이 옆에 붙습니다 — 오늘 숫자를 적으면 변화가 바로 계산됩니다</div></div>`:''}
     ${!editing&&(l=>l&&(l.note||'').trim()?`<div class="card" style="padding:9px 13px"><b>🗒 지난 수업 메모</b> <span class="muted">${fmtD(l.date)}</span><div style="margin-top:2px; white-space:pre-line; font-size:13.5px">${esc(l.note)}</div></div>`:'')(lastLogOf(draft.memberId))}
-    ${!editing&&(hw=>hw?`<div class="card" style="border-color:var(--good); padding:9px 13px"><b>📝 지난 숙제</b> <span class="muted">${fmtD(hw.date)}</span><div style="margin-top:2px">${esc(hw.homework)}</div><div class="muted" style="font-size:12.5px; margin-top:2px">하셨어요? 확인하고 칭찬 한마디</div></div>`:'')(lastHomework(draft.memberId))}
+    ${!editing&&(hw=>hw?`<div class="card" style="border-color:var(--good); padding:9px 13px"><b>📝 지난 숙제</b> <span class="muted">${fmtD(hw.date)}</span><div style="margin-top:2px">${esc(hw.homework)}</div>${hwDoneHtml(draft.memberId, hw)||'<div class="muted" style="font-size:12.5px; margin-top:2px">하셨어요? 확인하고 칭찬 한마디</div>'}</div>`:'')(lastHomework(draft.memberId))}
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
     ${skipHtml}
-    ${phCard('d:'+draft.id)}
+    ${UI2? sessFin(live) : `${phCard('d:'+draft.id)}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       <textarea id="note-in" rows="3" style="margin-top:6px" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea></div>
     <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
@@ -2047,6 +2167,7 @@ function vSession(){
     <div class="card"><b>📝 오늘 숙제</b> <span class="muted" style="font-size:12.5px">(선택 · 카톡 요약에 들어가요)</span>
       <input type="text" id="hw-in" style="margin-top:6px" placeholder="예) 데드버그 10회 3세트, 폼롤러 종아리 2분" value="${esc(draft.homework||'')}" oninput="draft.homework=this.value; dsave()">
       <div class="chips" style="margin-top:6px">${[...new Set(live.map(e=>exName(e.exId)))].slice(0,12).map(n=>`<span class="ichip" onclick="hwAdd(this.dataset.n)" data-n="${esc(n)}">＋ ${esc(n)}</span>`).join('')}</div></div>
+`}
     <div class="grid2">
       <button class="btn ghost" onclick="photoFill()">📷 사진으로 채우기</button>
       <button class="btn ghost" onclick="addExerciseToday()">＋ 퍼스널 운동</button></div>
@@ -2459,6 +2580,21 @@ function bestEver(memberId, exId){
 function shortD(d){ const p=(d||'').split('-'); return p.length===3? `${p[0].slice(2)}.${+p[1]}.${+p[2]}` : p.length===2? `${p[0].slice(2)}.${+p[1]}` : ''; }
 /* 항상 같이 보여 줄 「전체 최고 + 날짜」 — 모든 운동에 날짜를 붙인다 (10-15 대표님 지시)
    무게·시간·레벨 = 최고 기록, 밴드 = 가장 최근 기록, 체크만 하는 운동 = 마지막으로 한 날 */
+/* 「오늘 깨 볼 만함」(11-13) — 지난번에 한 기록이 전체 최고의 95% 이상인데 최고를 넘지는 못한 운동에만 붙는다.
+   실제로 든 가장 무거운 무게(또는 가장 오래 버틴 시간)로 견준다. 세 번 넘게 한 운동만, 지난번에 통증·자세 표시(빨강)가 있었으면 뺀다.
+   지난번에 막 최고를 세운 운동은 붙이지 않는다 — 초보 회원은 거의 매번이라 표시가 흔해진다 */
+function dareOf(memberId, exId){
+  const mode=exMode(exId); if(mode!=='w'&&mode!=='t') return null;
+  const m=db.members.find(x=>x.id===memberId); if(!m) return null;
+  const val=e=> mode==='w'? (b=>b?num(b.w):0)(bestW(e.sets)) : (bestT(e.sets)||0);
+  const recs=[]; pageLogs(m).forEach(l=>(l.entries||[]).forEach(e=>{ if(e.exId===exId){ const v=val(e); if(v>0) recs.push({v, e, d:l.date}); } }));
+  if(recs.length<3) return null;
+  const last=recs[recs.length-1], top=Math.max(...recs.map(r=>r.v)), bi=recs.findIndex(r=>r.v===top);
+  if(bi===recs.length-1 || last.v<top*0.95) return null;
+  if((last.e.issues||[]).some(i=>issueCls(i)==='bad')) return null;
+  const u= mode==='w'?'kg':'초';
+  return {last:last.v+u, best:top+u, date:recs[bi].d, same:last.v===top};
+}
 function bestTxt(memberId, exId){
   const mode=exMode(exId); if(!memberId) return null;
   const b=bestEver(memberId, exId); if(!b) return null;
@@ -2901,6 +3037,9 @@ function vSummary(){
         <div class="stat"><div class="muted">진행</div><div class="v num">${pr?`${pr.done%pr.total||pr.total}/${pr.total}회`:'-'}</div></div>
       </div></div>
     ${phCard('l:'+log.id)}
+    ${(ml=>ml?`<div class="card" style="border-color:var(--blue)"><b>🎉 ${esc(m.name.replace(' (예시)',''))}님의 ${ml.txt}입니다</b>
+      <div class="muted" style="margin:2px 0 8px">기념 카드를 보내 보세요 — 오늘 기록 위에 「${ml.txt}」가 크게 들어갑니다</div>
+      <button class="btn" style="margin:0" onclick="openCard('${log.id}', true)">🎉 기념 카드 보내기</button></div>`:'')(mileOf(log))}
     <button class="btn kakao" onclick="shareSummary('${log.id}')">💬 카톡으로 보내기</button>
     <button class="btn ghost" onclick="openCard('${log.id}')">🖼 사진 카드로 보내기 — 화면 캡처처럼 한 장으로</button>
     <button class="btn ghost" onclick="go({name:'member', id:'${m.id}'})">기록 저장하고 닫기</button>`;
@@ -2931,7 +3070,21 @@ function cardGainLine(rows){
     .sort((a,b)=>{ const o=t=>{ const i=TAG_ORDER.indexOf(t); return i<0?99:i; }; return o(a.t)-o(b.t); });
   return parts.length? '지난번보다 '+parts.map(x=>x.t+' '+x.v+'%').join(', ')+' 더 좋아졌어요' : '';
 }
-async function cardCanvas(log){
+/* 기념이 되는 수업(11-13 대표님 확정) — 수업 10·30·50·100번째와 그 뒤 50번마다, 첫 수업부터 100일·1년(그 뒤 해마다).
+   최고 기록을 세운 날은 넣지 않는다(초보 회원은 거의 매번이라 알림이 너무 잦다). 날짜 기념은 그 날을 넘긴 뒤 첫 수업에 */
+function mileOf(log){
+  const m=db.members.find(x=>x.id===log.memberId); if(!m) return null;
+  const all=pageLogs(m), i=all.indexOf(log); if(i<0) return null;
+  const n=i+1;
+  if([10,30,50,100].includes(n)||(n>100&&n%50===0)) return {txt:n+'번째 수업'};
+  const day=s=>{ const p=String(s||'').split('-'); return p.length===3? Math.round(new Date(+p[0],+p[1]-1,+p[2]).getTime()/86400000) : NaN; };
+  const d0=day(all[0].date), dn=day(log.date)-d0, dp= i>0? day(all[i-1].date)-d0 : NaN;
+  if(!(dn>=0)||!(dp>=0)) return null;
+  const marks=[[100,'100일']]; for(let y=1;y<=30;y++) marks.push([365*y, y+'년']);
+  const hit=marks.filter(([d])=>dn>=d&&dp<d).pop();
+  return hit? {txt:'첫 수업부터 '+hit[1]} : null;
+}
+async function cardCanvas(log, mile){
   const m=db.members.find(x=>x.id===log.memberId), rows=cardRows(log), all=pageLogs(m), nth=all.indexOf(log)+1, pr=memberProgress(m);
   const vol=(log.entries||[]).reduce((a,en)=>a+volume(en.sets),0);
   const name=(m.name||'').replace(' (예시)',''), hw=(log.homework||'').trim(), trainer=(db.trainerName||'').trim(), gainLine=cardGainLine(rows);
@@ -2957,6 +3110,8 @@ async function cardCanvas(log){
     y+=46;
     font(700,58); c.fillStyle='#EAF0FA'; wrap(name+'님', IN).forEach(l=>{ c.fillText(l, P, y); y+=74; });
     font(400,30); c.fillStyle='#8FA0BC'; c.fillText(dateTxt, P, y+2); y+=64;
+    if(mile){ rr(P, y, IN, 132, 28, 'rgba(77,141,255,.18)', '#4D8DFF');
+      c.textAlign='center'; font(700,50); c.fillStyle='#EAF0FA'; c.fillText('🎉 '+mile.txt, W/2, y+38, IN-CP*2); c.textAlign='left'; y+=132+20; }
     /* 운동 줄 — 한 줄에 안 들어가면 이름 아래로 기록을 내린다 */
     const L=rows.map(r=>{ font(500,34); const nw=c.measureText(r.nm).width; font(600,34); const rw=c.measureText(r.rec).width;
       font(600,26); const uw=r.up? c.measureText('▲ '+r.up+'%').width+18 : 0;
@@ -2988,24 +3143,25 @@ async function cardCanvas(log){
         font(600,38); c.fillStyle='#EAF0FA'; c.fillText(t.v, x+tw/2, y+60, tw-24); c.textAlign='left'; });
       y+=124+26; }
     c.textAlign='center'; font(400,26); c.fillStyle='#8FA0BC';
-    c.fillText(name+' 회원님, 오늘도 고생하셨습니다 💪', W/2, y+4, IN); c.textAlign='left';
+    c.fillText(mile? name+' 회원님, 여기까지 함께해 주셔서 감사합니다 💪' : name+' 회원님, 오늘도 고생하셨습니다 💪', W/2, y+4, IN); c.textAlign='left';
     return y+34+P;
   };
   const H=Math.ceil(paint()); cv.height=H; paint();
   return cv;
 }
 let _card=null;
-async function openCard(logId){
+async function openCard(logId, withMile){
   const log=db.logs.find(l=>l.id===logId); if(!log) return;
+  const mile= withMile? mileOf(log) : null;
   /* 사진 카드는 멤버십 기능(회원 페이지와 같은 묶음) — 등급을 아직 모르면 막지 않는다 */
   if(ocrQuota&&ocrQuota.tier==='trial'){ modal(`<b>사진 카드는 멤버십 기능이에요</b>
     <div class="muted" style="margin:8px 0 12px; line-height:1.7">멤버십이 열리면 쓸 수 있습니다. 글로 보내는 「카톡으로 보내기」는 지금처럼 무료예요.</div>
     <button class="btn subtle" onclick="closeModal()">닫기</button>`); return; }
   if(!cardRows(log).length){ toast('사진으로 만들 기록이 없습니다'); return; }
   try{
-    const cv=await cardCanvas(log), blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    const cv=await cardCanvas(log, mile), blob=await new Promise(r=>cv.toBlob(r,'image/png'));
     if(_card&&_card.url) URL.revokeObjectURL(_card.url);
-    _card={blob, name:`수업기록_${(log.date||'').replace(/-/g,'')}.png`, url:URL.createObjectURL(blob)};
+    _card={blob, name:`${mile?'기념카드':'수업기록'}_${(log.date||'').replace(/-/g,'')}.png`, url:URL.createObjectURL(blob)};
   }catch(e){ console.error(e); toast('사진을 만들지 못했습니다'); return; }
   modal(`<b>🖼 사진 카드</b>
     <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다. 특이사항 · 컨디션 · 메모는 들어가지 않아요</div>
@@ -3127,6 +3283,227 @@ function shareReport(memberId){
   const ibL=ibReportLines(m); if(ibL.length){ L.push('⚖️ 몸의 변화 (인바디)'); ibL.forEach(x=>L.push('· '+x)); }
   L.push(`누적 볼륨 ${r.vol.toLocaleString()}kg — 여기까지 함께 온 기록입니다 💪`);
   shareTextRaw(L.join('\n'));
+}
+/* ───────── 재등록 상담 한 장 (11-13 대표님 확정) ─────────
+   회차가 끝나 갈 때 회원과 같이 보는 화면 — 처음 → 지금, 좋아진 것, 사진, 회원이 한 말, 다음 목표.
+   숫자는 회원이 실제로 든 무게·버틴 시간만(추정값 안 씀, 회원 페이지와 같은 기준). 결과를 약속하는 말은 넣지 않는다.
+   「사진으로 저장·보내기」에는 숫자와 다음 목표만 들어간다 — 통증·좋아진 것 표시·회원 한마디·사진은 화면에서만 */
+function consultData(m){
+  const r=reportData(m); if(!r) return null;
+  const gains=(pageData(m).ex||[]).filter(x=>x.f>0&&x.b>x.f).map(x=>({nm:x.nm, f:x.f, b:x.b, u:x.u, pct:Math.round((x.b-x.f)/x.f*100)})).sort((a,b)=>b.pct-a.pct).slice(0,5);
+  const day=s=>{ const p=String(s||'').split('-'); return p.length===3? new Date(+p[0],+p[1]-1,+p[2]).getTime()/86400000 : NaN; };
+  const dd=Math.round(day(r.last)-day(r.first));
+  const span= !(dd>=0)? '' : dd>=60? Math.round(dd/30)+'개월' : (dd+1)+'일';
+  const said=r.logs.filter(l=>(l.said||'').trim()).slice(-3).reverse().map(l=>({d:l.date, t:l.said.trim()}));
+  const photos=r.logs.slice().reverse().flatMap(l=>(l.photos||[]).map(p=>({ref:'l:'+l.id, k:p.k, ex:p.ex}))).slice(0,8);
+  return {r, gains, span, said, photos};
+}
+function vConsult(){
+  const m=db.members.find(x=>x.id===view.id); if(!m) return vHome();
+  const c=consultData(m), pr=memberProgress(m), name=m.name.replace(' (예시)','');
+  const top=`<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>재등록 상담 한 장</h1><span></span></div>`;
+  if(!c) return top+`<div class="empty">아직 수업 기록이 없어 만들 수 없습니다</div>`;
+  const r=c.r, per= r.first.slice(0,4)===r.last.slice(0,4)? fmtD(r.first)+' ~ '+fmtD(r.last) : fullD(r.first)+' ~ '+fullD(r.last);
+  const card=(title,inner)=> inner? `<div class="card"><div class="muted" style="margin-bottom:8px">${title}</div>${inner}</div>` : '';
+  const row=(l,v,p)=>`<div class="row" style="font-size:14.5px; margin-bottom:7px; gap:10px"><span>${l}</span><span style="white-space:nowrap"><b class="num">${v}</b>${p?` <span class="pill good">+${p}%</span>`:''}</span></div>`;
+  const tiles=[['누적 수업', r.cnt+'회'], c.span?['함께한 기간', c.span]:null, r.vol?['든 무게 합계', r.vol>=1000? (Math.round(r.vol/100)/10).toLocaleString()+'톤' : r.vol.toLocaleString()+'kg']:null].filter(Boolean);
+  return top+`
+    <div class="muted" style="margin:-8px 0 10px">회원과 같이 보는 화면이에요 — 컨디션·수업 메모는 나오지 않습니다${pr&&pr.rebadge?` · <span style="color:var(--warn)">잔여 ${pr.remaining}회</span>`:''}</div>
+    <div class="card"><b style="font-size:18px">${esc(name)}님이 걸어온 길</b>
+      <div class="muted" style="margin:2px 0 10px">${per}</div>
+      <div style="display:grid; grid-template-columns:repeat(${tiles.length},1fr); gap:8px">${tiles.map(t=>`<div class="stat"><div class="muted">${t[0]}</div><div class="v num">${t[1]}</div></div>`).join('')}</div></div>
+    ${card('💪 처음보다 늘어난 운동 — 실제로 든 무게 · 버틴 시간', c.gains.map(g=>row(esc(g.nm), `${g.f}${g.u} → ${g.b}${g.u}`, g.pct)).join(''))}
+    ${card('🔁 같은 무게에서 늘어난 횟수', r.endur.map(g=>row(`${esc(g.name)} <span class="muted num">${g.w? g.w+'kg':'맨몸'}</span>`, `${g.f}회 → ${g.b}회`, g.pct)).join(''))}
+    ${card('🔵 좋아진 것', (g=>{ r.imps.forEach(x=>{ const k=x.ex+'|'+x.iss, o=g[k]||(g[k]={...x, n:0}); o.n++; o.date=x.date; }); return Object.values(g).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,6); })({}).map(x=>`<div style="font-size:13.5px; margin-bottom:5px">${esc(x.ex)} — ${issueSpan(x.iss)} <span class="muted num">${x.n>1? x.n+'번 · 최근 ':''}${fmtD(x.date)}</span></div>`).join(''))}
+    ${card('🩹 예전에 불편했던 곳 — 그 뒤로 다시 안 나옴', r.resolved.map(x=>`<div style="font-size:13.5px; margin-bottom:5px">${esc(x.ex)} — ${issueSpan(x.iss)} <span class="muted">${fmtD(x.date)} 이후 <b class="num">${x.after}회</b> 수업 동안</span></div>`).join(''))}
+    ${card('⚖️ 몸의 변화 (인바디)', ibReportHtml(m))}
+    ${card('💬 회원님이 하신 말', c.said.map(s=>`<div style="font-size:14.5px; margin-bottom:7px">“${esc(s.t)}” <span class="muted num">${fmtD(s.d)}</span></div>`).join(''))}
+    ${baPhotos(m).length>=2? baHtml(m) : ''}
+    ${card('📷 최근 수업 사진', c.photos.length? `<div class="phgrid" style="margin-top:0">${c.photos.map(p=>`<div class="ph" onclick="phView('${p.ref}','${p.k}')"><img data-ph="${p.k}" alt="">${p.ex?`<span>${esc(exName(p.ex))}</span>`:''}</div>`).join('')}</div>` : '')}
+    <div class="card"><b>🎯 다음 목표</b> <span class="muted" style="font-size:12.5px">(회원과 같이 정해서 적어 두세요)</span>
+      <textarea rows="3" style="margin-top:6px" placeholder="예) 스쿼트 50kg 10회 · 주 2회 꾸준히 · 계단 오를 때 무릎 편하게" oninput="consultGoal('${m.id}', this.value)">${esc(m.nextGoal||'')}</textarea></div>
+    <button class="btn kakao" onclick="consultCard('${m.id}')">🖼 사진으로 저장 · 보내기</button>
+    <div class="muted" style="font-size:12.5px; text-align:center; margin:-4px 0 10px">사진에는 숫자와 다음 목표만 들어가요 — 불편했던 곳 · 회원님이 하신 말 · 수업 사진은 이 화면에서만</div>
+    <button class="btn ghost" onclick="go({name:'report', id:'${m.id}'})">📈 변화 리포트 자세히 보기</button>
+    ${pr&&pr.rebadge?`<button class="btn subtle" onclick="openRereg('${m.id}')">🔁 재등록 처리</button>`:''}`;
+}
+function consultGoal(memberId, v){ const m=db.members.find(x=>x.id===memberId); if(!m) return; v=String(v||''); if(v.trim()) m.nextGoal=v; else delete m.nextGoal; save(); }
+function wTxt(kg){ return kg>=1000? (Math.round(kg/100)/10).toLocaleString()+'톤' : Math.round(kg).toLocaleString()+'kg'; }
+function consultCanvas(m){
+  const d=consultData(m), r=d.r, name=(m.name||'').replace(' (예시)',''), goal=(m.nextGoal||'').trim();
+  return sheetCanvas({kicker:'PT 변화 기록', title:name+'님이 걸어온 길', sub:fullD(r.first)+' ~ '+fullD(r.last),
+    tiles:[{k:'누적 수업', v:r.cnt+'회'}, d.span?{k:'함께한 기간', v:d.span}:null, r.vol?{k:'든 무게 합계', v:wTxt(r.vol)}:null].filter(Boolean),
+    sects:[{title:'처음보다 늘어난 운동', rows:d.gains.map(g=>({l:g.nm, v:`${g.f}${g.u} → ${g.b}${g.u}`, pct:g.pct}))},
+      {title:'같은 무게에서 늘어난 횟수', rows:r.endur.map(g=>({l:g.name+' '+(g.w? g.w+'kg':'맨몸'), v:`${g.f}회 → ${g.b}회`, pct:g.pct}))}],
+    boxes:[{title:'몸의 변화 (인바디)', lines:ibReportLines(m), fill:'#131E33'}, {title:'다음 목표', lines:goal?[goal]:[], fill:'rgba(77,141,255,.16)'}],
+    foot:name+' 회원님, 여기까지 함께 온 기록입니다 💪'});
+}
+/* 숫자 한 장 — 상담 한 장·월말 한 장이 같이 쓰는 그림 틀(사진 카드와 같은 다크 네이비) */
+async function sheetCanvas(S){
+  const trainer=(db.trainerName||'').trim(), tiles=S.tiles||[];
+  const F="'IBM Plex Sans KR', -apple-system, 'Malgun Gothic', sans-serif";
+  try{ await Promise.all([400,500,600,700].map(w=>document.fonts.load(`${w} 32px 'IBM Plex Sans KR'`, '가0'))); }catch(e){}
+  const W=1080, P=56, IN=W-P*2, CP=40, cv=document.createElement('canvas'), c=cv.getContext('2d');
+  cv.width=W; cv.height=10;
+  const font=(w,s)=>{ c.font=`${w} ${s}px ${F}`; };
+  const wrap=(text,maxW)=>{ const out=[]; String(text).split('\n').forEach(par=>{ let line=''; for(const ch of par){ if(c.measureText(line+ch).width>maxW&&line){ out.push(line); line=ch===' '?'':ch; } else line+=ch; } out.push(line); }); return out.filter((l,i,a)=>l||i<a.length-1); };
+  const rr=(x,y,w,h,rad,fill,stroke)=>{ c.beginPath(); c.moveTo(x+rad,y); c.arcTo(x+w,y,x+w,y+h,rad); c.arcTo(x+w,y+h,x,y+h,rad); c.arcTo(x,y+h,x,y,rad); c.arcTo(x,y,x+w,y,rad); c.closePath();
+    if(fill){ c.fillStyle=fill; c.fill(); } if(stroke){ c.strokeStyle=stroke; c.lineWidth=2; c.stroke(); } };
+  const paint=()=>{
+    c.textBaseline='top'; c.textAlign='left';
+    c.fillStyle='#0C1424'; c.fillRect(0,0,W,cv.height);
+    let y=P+8;
+    font(600,28); c.fillStyle='#4D8DFF'; c.fillText(S.kicker, P, y);
+    if(trainer){ c.textAlign='right'; font(400,26); c.fillStyle='#8FA0BC'; c.fillText(trainer+' 선생님', P+IN, y+2); c.textAlign='left'; }
+    y+=46;
+    font(700,58); c.fillStyle='#EAF0FA'; wrap(S.title, IN).forEach(l=>{ c.fillText(l, P, y); y+=74; });
+    font(400,30); c.fillStyle='#8FA0BC'; c.fillText(S.sub||'', P, y+2); y+=64;
+    if(tiles.length){ const g=16, tw=(IN-g*(tiles.length-1))/tiles.length;
+      tiles.forEach((t,i)=>{ const x=P+i*(tw+g); rr(x, y, tw, 124, 22, '#131E33', '#243352');
+        c.textAlign='center'; font(400,24); c.fillStyle='#8FA0BC'; c.fillText(t.k, x+tw/2, y+22);
+        font(600,38); c.fillStyle='#EAF0FA'; c.fillText(t.v, x+tw/2, y+60, tw-24); c.textAlign='left'; });
+      y+=124+24; }
+    /* 묶음 — 제목 한 줄 + (이름 … 처음 → 지금 ▲%) 줄들. 이름이 길면 줄어들게 */
+    const sect=(title, rows)=>{ if(!rows.length) return;
+      const ch=74+rows.length*72+14; rr(P, y, IN, ch, 28, '#131E33', '#243352');
+      font(500,26); c.fillStyle='#8FA0BC'; c.fillText(title, P+CP, y+28, IN-CP*2);
+      let ry=y+74; const rx=P+IN-CP;
+      rows.forEach((w,i)=>{ if(i){ c.fillStyle='#243352'; c.fillRect(P+CP, ry, IN-CP*2, 2); }
+        c.textAlign='right'; font(600,26); c.fillStyle='#3DD68C'; const up='▲ '+w.pct+'%', uw=c.measureText(up).width+18; c.fillText(up, rx, ry+27);
+        font(600,32); c.fillStyle='#EAF0FA'; const vw=c.measureText(w.v).width; c.fillText(w.v, rx-uw, ry+20); c.textAlign='left';
+        font(500,32); c.fillStyle='#EAF0FA'; c.fillText(w.l, P+CP, ry+20, IN-CP*2-uw-vw-24); ry+=72; });
+      y+=ch+20; };
+    (S.sects||[]).forEach(s=>sect(s.title, s.rows||[]));
+    const box=(title, lines, fill)=>{ if(!lines.length) return; font(500,30);
+      const L=lines.flatMap(t=>wrap(t, IN-CP*2)), bh=74+L.length*46+20; rr(P, y, IN, bh, 24, fill, null);
+      font(500,26); c.fillStyle='#8FA0BC'; c.fillText(title, P+CP, y+28);
+      font(500,30); c.fillStyle='#EAF0FA'; L.forEach((l,k)=>c.fillText(l, P+CP, y+74+k*46)); y+=bh+20; };
+    (S.boxes||[]).forEach(b=>box(b.title, b.lines||[], b.fill||'#131E33'));
+    c.textAlign='center'; font(400,26); c.fillStyle='#8FA0BC';
+    c.fillText(S.foot||'', W/2, y+6, IN); c.textAlign='left';
+    return y+38+P;
+  };
+  const H=Math.ceil(paint()); cv.height=H; paint();
+  return cv;
+}
+async function consultCard(memberId){
+  const m=db.members.find(x=>x.id===memberId); if(!m||!consultData(m)) return;
+  if(ocrQuota&&ocrQuota.tier==='trial'){ modal(`<b>사진으로 보내기는 멤버십 기능이에요</b>
+    <div class="muted" style="margin:8px 0 12px; line-height:1.7">멤버십이 열리면 쓸 수 있습니다. 이 화면을 회원과 같이 보는 것은 지금처럼 됩니다.</div>
+    <button class="btn subtle" onclick="closeModal()">닫기</button>`); return; }
+  try{
+    const cv=await consultCanvas(m), blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    if(_card&&_card.url) URL.revokeObjectURL(_card.url);
+    _card={blob, name:`변화기록_${today().replace(/-/g,'')}.png`, url:URL.createObjectURL(blob)};
+  }catch(e){ console.error(e); toast('사진을 만들지 못했습니다'); return; }
+  modal(`<b>🖼 변화 기록 사진</b>
+    <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다</div>
+    <div style="max-height:50vh; overflow:auto; border-radius:12px; border:1px solid var(--line)"><img src="${_card.url}" style="width:100%; display:block" alt="변화 기록 사진"></div>
+    <button class="btn kakao" style="margin-top:10px" onclick="cardShare()">💬 사진으로 보내기</button>
+    <button class="btn ghost" onclick="cardSave()">⬇ 사진 저장</button>`);
+}
+/* ───────── 사진 전후 비교 (11-13 대표님 확정: 자동 + 직접 고르기 둘 다) ─────────
+   자동 — 운동 카드에서 올려 운동 이름표가 붙은 사진은, 그 운동의 가장 처음 사진과 가장 최근 사진을 짝짓는다(날짜가 달라야 한다)
+   직접 — 수업 단위로 올린 사진은 운동을 모르니 선생님이 두 장을 골라 묶는다. m.baPairs=[{a,b}] · 빼 둔 자동 묶음은 m.baHide=[운동 id]
+   상담 한 장 화면과 회원 페이지에 보인다 */
+function baPhotos(m){
+  const out=[], seen={};
+  pageLogs(m).forEach(l=>(l.photos||[]).forEach(p=>{ if(!seen[p.k]){ seen[p.k]=1; out.push({k:p.k, d:l.date||'', ex:p.ex&&exOf(p.ex)?p.ex:null, ref:'l:'+l.id}); } }));
+  return out;
+}
+function baPairs(m){
+  const all=baPhotos(m), by={}; all.forEach(p=>{ by[p.k]=p; });
+  const out=[];
+  (m.baPairs||[]).forEach((x,i)=>{ let a=by[x.a], b=by[x.b]; if(!a||!b) return; if(a.d>b.d) [a,b]=[b,a]; out.push({a, b, nm:a.ex&&a.ex===b.ex? exName(a.ex):'', idx:i}); });
+  const used=new Set(out.flatMap(p=>[p.a.k, p.b.k])), ex={};
+  all.forEach(p=>{ if(p.ex) (ex[p.ex]=ex[p.ex]||[]).push(p); });
+  for(const id in ex){ if((m.baHide||[]).includes(id)) continue;
+    const a=ex[id].slice().sort((x,y)=>x.d.localeCompare(y.d)), f=a[0], l=a[a.length-1];
+    if(f.d&&l.d&&f.d<l.d&&!(used.has(f.k)&&used.has(l.k))) out.push({a:f, b:l, nm:exName(id), auto:id}); }
+  return out;
+}
+function baHtml(m){
+  const P=baPairs(m);
+  const tile=(p,cap)=>`<div class="ph" style="aspect-ratio:3/4" onclick="phView('${p.ref}','${p.k}')"><img data-ph="${p.k}" alt=""><span>${cap} ${fmtD(p.d)}</span></div>`;
+  return `<div class="card"><div class="muted" style="margin-bottom:8px">📷 전후 사진 — 회원 페이지에도 보여요</div>
+    ${P.map(p=>`<div style="margin-bottom:12px"><div class="row" style="margin-bottom:5px"><b style="font-size:14px">${p.nm? esc(p.nm) : '직접 묶은 사진'}</b>
+        <span class="muted" style="font-size:12.5px; cursor:pointer; text-decoration:underline" onclick="${p.auto? `baHide('${m.id}','${p.auto}')` : `baDrop('${m.id}',${p.idx})`}">빼기</span></div>
+      <div class="phgrid" style="grid-template-columns:1fr 1fr; margin-top:0">${tile(p.a,'처음')}${tile(p.b,'최근')}</div></div>`).join('')
+      || '<div class="muted" style="font-size:13px; margin-bottom:8px">운동 카드에서 올린 사진은 같은 운동의 처음과 최근이 자동으로 짝지어져요. 수업 사진은 아래에서 두 장을 골라 묶으세요.</div>'}
+    <button class="btn subtle" style="margin:0" onclick="openBaPick('${m.id}')">＋ 사진 두 장 골라 전후로 묶기</button></div>`;
+}
+function baHide(memberId, exId){ const m=db.members.find(x=>x.id===memberId); if(!m) return; (m.baHide=m.baHide||[]).push(exId); save(); render(); toast('뺐습니다'); }
+function baDrop(memberId, i){ const m=db.members.find(x=>x.id===memberId); if(!m||!m.baPairs) return; m.baPairs.splice(i,1); if(!m.baPairs.length) delete m.baPairs; save(); render(); toast('묶음을 풀었습니다'); }
+let _baSel=[];
+function openBaPick(memberId, keep){
+  const m=db.members.find(x=>x.id===memberId); if(!m) return;
+  if(!keep) _baSel=[];
+  const all=baPhotos(m).reverse(), list=all.slice(0,120);
+  if(all.length<2){ toast('사진이 두 장 넘게 있어야 묶을 수 있어요'); return; }
+  modal(`<b>📷 전후로 묶을 사진 두 장</b>
+    <div class="muted" style="margin:4px 0 8px">예전 사진 한 장, 요즘 사진 한 장을 눌러 주세요 (${_baSel.length}/2)${all.length>120?' · 최근 120장만 보여요':''}</div>
+    <div class="phgrid" style="max-height:52vh; overflow:auto">${list.map(p=>`<div class="ph" style="${_baSel.includes(p.k)?'outline:3px solid var(--blue); outline-offset:-3px':''}" onclick="baTap('${m.id}','${p.k}')"><img data-ph="${p.k}" alt=""><span>${fmtD(p.d)}${p.ex?' · '+esc(exName(p.ex)):''}</span></div>`).join('')}</div>
+    <div class="grid2" style="margin-top:10px"><button class="btn subtle" onclick="closeModal()">취소</button>
+    <button class="btn" ${_baSel.length===2?'':'disabled style="opacity:.45"'} onclick="baMake('${m.id}')">전후로 묶기</button></div>`);
+  phHydrate();
+}
+function baTap(memberId, k){ const i=_baSel.indexOf(k); if(i>=0) _baSel.splice(i,1); else{ if(_baSel.length>=2) _baSel.shift(); _baSel.push(k); } openBaPick(memberId, true); }
+function baMake(memberId){
+  const m=db.members.find(x=>x.id===memberId); if(!m||_baSel.length!==2) return;
+  (m.baPairs=m.baPairs||[]).push({a:_baSel[0], b:_baSel[1]}); _baSel=[]; save(); closeModal(); render(); toast('전후 사진으로 묶었습니다');
+}
+
+/* ───────── 월말 한 장 (11-13) ─────────
+   매달, 지난달에 수업을 2번 넘게 한 회원마다 「○월 한 달」 카드를 만들 수 있다 — 수업 횟수·든 무게·새로 쓴 최고 기록(실제로 든 무게·버틴 시간).
+   자동으로 보내지 않는다. 첫 화면에 「지난달 카드 보낼 회원 ○명」이 뜨고 선생님이 눌러서 보낸다. 만든 회원은 목록에서 빠진다(m.monthSent) */
+function lastMonthKey(){ const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthData(m, ym){
+  const all=pageLogs(m), inM=all.filter(l=>(l.date||'').slice(0,7)===ym); if(inM.length<2) return null;
+  const val=e=>{ const mode=exMode(e.exId); return mode==='w'? (b=>b?num(b.w):0)(bestW(e.sets)) : mode==='t'? (bestT(e.sets)||0) : 0; };
+  const before={}, now={};
+  all.forEach(l=>{ const d=(l.date||'').slice(0,7), tgt= d<ym? before : d===ym? now : null; if(!tgt) return;
+    (l.entries||[]).forEach(e=>{ const v=val(e); if(v>(tgt[e.exId]||0)) tgt[e.exId]=v; }); });
+  const prs=Object.keys(now).filter(id=>before[id]&&now[id]>before[id]).map(id=>({nm:exName(id), f:before[id], b:now[id], u:exMode(id)==='w'?'kg':'초', pct:Math.round((now[id]-before[id])/before[id]*100)}))
+    .sort((a,b)=>b.pct-a.pct);
+  const vol=inM.reduce((a,l)=>a+(l.entries||[]).reduce((s,e)=>s+volume(e.sets),0),0);
+  return {ym, cnt:inM.length, vol, prs, total:all.filter(l=>(l.date||'').slice(0,7)<=ym).length};
+}
+function monthList(){ const ym=lastMonthKey(); if(db.monthDone===ym) return []; return db.members.filter(m=>m.monthSent!==ym && monthData(m, ym)); }
+function monthHtml(){
+  if(ocrQuota&&ocrQuota.tier==='trial') return '';
+  const L=monthList(); if(!L.length) return '';
+  return `<div class="card tap" style="border-color:var(--blue)" onclick="openMonth()"><div class="row"><div><b>🗓 ${+lastMonthKey().slice(5)}월 한 달 카드</b>
+    <div class="muted">보낼 회원 ${L.length}명 — 지난달 수업·새 최고 기록을 한 장으로</div></div><span class="muted">보기 ›</span></div></div>`;
+}
+function openMonth(){
+  const ym=lastMonthKey(), L=monthList();
+  if(!L.length){ closeModal(); render(); return; }
+  modal(`<b>🗓 ${+ym.slice(5)}월 한 달 카드</b>
+    <div class="muted" style="margin:4px 0 10px">회원을 누르면 카드가 만들어져요. 자동으로 보내지 않습니다</div>
+    <div style="max-height:50vh; overflow:auto">${L.map(m=>{ const d=monthData(m, ym);
+      return `<div class="row" style="padding:9px 0; border-bottom:1px solid var(--line); cursor:pointer" onclick="monthCard('${m.id}')"><span><b>${esc(m.name)}</b> <span class="muted">수업 ${d.cnt}회${d.prs.length?` · 새 최고 기록 ${d.prs.length}개`:''}</span></span><span class="muted">카드 ›</span></div>`; }).join('')}</div>
+    <button class="btn subtle" style="margin-top:12px" onclick="monthSkip()">이번 달은 그만 보기</button>`);
+}
+function monthSkip(){ db.monthDone=lastMonthKey(); save(); closeModal(); render(); toast('다음 달에 다시 알려 드릴게요'); }
+async function monthCard(memberId){
+  const m=db.members.find(x=>x.id===memberId), ym=lastMonthKey(), d=m&&monthData(m, ym); if(!d) return;
+  const name=m.name.replace(' (예시)','');
+  try{
+    const cv=await sheetCanvas({kicker:'PT 월간 기록', title:name+'님의 '+(+ym.slice(5))+'월', sub:ym.replace('-','년 ')+'월 한 달',
+      tiles:[{k:'이번 달 수업', v:d.cnt+'회'}, d.vol?{k:'든 무게 합계', v:wTxt(d.vol)}:null, {k:'누적 수업', v:d.total+'회'}].filter(Boolean),
+      sects:[{title:'이번 달에 새로 쓴 최고 기록', rows:d.prs.slice(0,6).map(g=>({l:g.nm, v:`${g.f}${g.u} → ${g.b}${g.u}`, pct:g.pct}))}],
+      boxes:[], foot:name+' 회원님, 한 달 동안 고생하셨습니다 💪'});
+    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    if(_card&&_card.url) URL.revokeObjectURL(_card.url);
+    _card={blob, name:`월간기록_${ym.replace('-','')}.png`, url:URL.createObjectURL(blob)};
+  }catch(e){ console.error(e); toast('사진을 만들지 못했습니다'); return; }
+  m.monthSent=ym; save();
+  modal(`<b>🗓 ${esc(name)}님 ${+ym.slice(5)}월 카드</b>
+    <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다</div>
+    <div style="max-height:46vh; overflow:auto; border-radius:12px; border:1px solid var(--line)"><img src="${_card.url}" style="width:100%; display:block" alt="월간 기록 사진"></div>
+    <button class="btn kakao" style="margin-top:10px" onclick="cardShare()">💬 사진으로 보내기</button>
+    <button class="btn ghost" onclick="cardSave()">⬇ 사진 저장</button>
+    <button class="btn subtle" onclick="openMonth()">다음 회원 ›</button>`);
 }
 async function shareTextRaw(text){
   try{ if(navigator.share){ await navigator.share({text}); return; } }catch(e){ if(e&&e.name==='AbortError')return; }
@@ -4528,7 +4905,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.18 — 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.19 — 📋 재등록 상담 한 장 · 숙제 「했어요」 · 🎉 기념 카드 · 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){

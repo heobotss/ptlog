@@ -151,12 +151,22 @@
   .mk{font-size:14px; white-space:nowrap; margin-left:.45em}
   .mk.t{color:var(--ice); font-weight:700; background:rgba(77,141,255,.20); padding:1px 7px 2px; border-radius:6px} .mk.u{color:var(--hi)}
   .ses .hw{margin:6px 0 14px}
+  .hwb{display:block; margin-top:10px; padding:10px 18px; border-radius:999px; border:1px solid rgba(118,170,255,.62); background:none; color:var(--ice); font-family:inherit; font-size:15px; font-weight:600; cursor:pointer}
+  .hwb.on{background:#4D8DFF; border-color:#4D8DFF; color:#fff}
+  .hwb:active{transform:translateY(1px)}
+  .hwd{display:inline-block; margin-left:8px; font-size:14px; font-weight:600; color:var(--ice); white-space:nowrap}
   /* 수업 사진 — 평면. 날짜 덩어리 안 맨 아래에 세 칸씩 */
   .phs{display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0 14px}
   .phs .p{position:relative; aspect-ratio:1/1; border-radius:10px; overflow:hidden; background:rgba(130,165,235,.10); cursor:pointer}
   .phs .p img{width:100%; height:100%; object-fit:cover; display:block}
   .phs .p img:not([src]){visibility:hidden}
   .phs .p span{position:absolute; left:0; right:0; bottom:0; padding:3px 7px 4px; font-size:14px; line-height:1.3; color:#fff; background:rgba(5,12,28,.62); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .bap{margin-bottom:22px} .bap .nm{font-size:17px; font-weight:600; color:var(--ink); margin-bottom:10px}
+  .ba{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+  .ba .p{position:relative; aspect-ratio:3/4; border-radius:12px; overflow:hidden; background:rgba(130,165,235,.10); cursor:pointer}
+  .ba .p img{width:100%; height:100%; object-fit:cover; display:block}
+  .ba .p img:not([src]){visibility:hidden}
+  .ba .p span{position:absolute; left:0; right:0; bottom:0; padding:5px 9px 6px; font-size:14px; color:#fff; background:rgba(5,12,28,.62)}
   #pv{position:fixed; inset:0; z-index:50; background:rgba(3,8,20,.96)}
   #pv .tr{display:flex; height:100%; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -webkit-overflow-scrolling:touch}
   #pv .tr::-webkit-scrollbar{display:none}
@@ -317,13 +327,19 @@ function render(){
       <div class="seals">${[...got, ...todo.slice(0, fill)].map(x=>`<div class="seal ${x.on?'':'no'}${x===newest?' new':''}${/^\d{3}/.test(x.face)?' sm':''}"><div class="c"><span>${x.face}</span></div><span>${esc(x.label)}</span>${x.on&&x.d? `<em>${esc(dShort(x.d))}</em>` : ''}</div>`).join('')}</div></section>`;
   /* 수업 기록 */
   const recent=S.slice().reverse(), hasMark=recent.some(s=>(s.it||[]).some(x=>x.pr||x.up));
+  const hwTop=recent.find(s=>s.hw)||null;      /* 「했어요」 단추는 가장 최근 숙제 하나에만 */
   const list=recent.slice(0,showS).map(s=>`<div class="ses">
       <div class="hd"><span class="d">${esc(dTxt(s.d))}</span><span class="label">${s.n? esc(s.n)+'회차 · ':''}운동 ${(s.it||[]).length}가지</span></div>
       <div>${(s.it||[]).map(x=>`<div class="item"><span class="nm">${esc(x.nm)}</span><span class="rec">${esc(x.rec).split(', ').join('<br>')}${x.pr? '<span class="mk t">최고</span>' : x.up? '<span class="mk u">▲</span>' : ''}</span></div>`).join('')}</div>
-      ${s.hw? `<div class="hw"><span class="label">숙제</span>${esc(s.hw)}</div>` : ''}
+      ${s.hw? `<div class="hw"><span class="label">숙제</span>${esc(s.hw)}${hwMark(s, s===hwTop)}</div>` : ''}
       ${(s.ph||[]).length? `<div class="phs">${s.ph.map(p=>`<div class="p" onclick="phOpen(this)"><img data-ph="${esc(p.k)}" alt="${esc(dTxt(s.d))} 수업 사진">${p.nm? `<span>${esc(p.nm)}</span>` : ''}</div>`).join('')}</div>` : ''}</div>`).join('');
   const now=new Date();
-  show(`${hero}${report}${lastCard}${att}${partsCard}${gainCard}${medalCard}
+  /* 전후 사진 — 선생님이 묶었거나, 같은 운동의 처음·최근 사진이 자동으로 짝지어진 것 */
+  const BA=(d.ba||[]).filter(p=>p&&p.a&&p.b);
+  const baCard= BA.length? `<section><div class="sh"><span class="label">처음과 지금</span><span class="label">${BA.length}묶음</span></div>
+      ${BA.map(p=>`<div class="bap">${p.nm? `<div class="nm">${esc(p.nm)}</div>` : ''}
+        <div class="ba">${[['처음',p.a],['최근',p.b]].map(x=>`<div class="p" onclick="phOpen(this)"><img data-ph="${esc(x[1].k)}" alt="${x[0]} 사진"><span>${x[0]} · ${esc(dShort(x[1].d))}</span></div>`).join('')}</div></div>`).join('')}</section>` : '';
+  show(`${hero}${report}${lastCard}${att}${partsCard}${gainCard}${baCard}${medalCard}
     <section id="sec-ses"><div class="sh"><span class="label">수업 기록</span><span class="label">${recent.length}번</span></div>
       ${hasMark? '<p class="note" style="margin:-6px 0 16px"><span style="color:var(--ice); font-weight:700">최고</span> 그 운동의 최고 기록을 새로 쓴 날 &nbsp;·&nbsp; ▲ 바로 지난번보다 늘어난 운동</p>' : ''}
       ${list}
@@ -341,6 +357,26 @@ function render(){
   if(!render.done) setTimeout(()=>document.getElementById('page').classList.add('done'), 900);
   render.done=true;
   phFill();
+}
+/* 숙제 「했어요」(11-13) — 회원이 누르면 선생님 앱의 다음 수업 화면에 보인다. 가장 최근 숙제에만 단추, 지난 숙제는 한 것만 표시.
+   안 눌렀다고 따로 표시하지 않는다 */
+let HW={}, hwBusy=false;
+function hwMark(s, top){
+  const at=HW[s.d];
+  if(top) return `<button class="hwb${at?' on':''}" onclick="hwTap('${esc(s.d)}')">${at? '✓ 했어요' : '했어요'}</button>`;
+  return at? '<span class="hwd">✓ 했어요</span>' : '';
+}
+async function hwTap(d){
+  if(hwBusy) return; hwBusy=true;
+  const was=HW[d], on=!was;
+  if(on) HW[d]=new Date().toISOString(); else delete HW[d];
+  render();
+  try{ const t=new URLSearchParams(location.search).get('t')||'';
+    const res=await fetch(FN,{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({action:'hw', token:t, d, on})});
+    const out=await res.json(); if(!res.ok||!out.ok) throw new Error('서버 '+res.status);
+    HW=out.hw||HW;
+  }catch(e){ console.error(e); if(was) HW[d]=was; else delete HW[d]; render(); alert('저장하지 못했습니다. 잠시 뒤 다시 눌러 주세요.'); }
+  hwBusy=false;
 }
 /* 수업 사진 — 기록에는 열쇠만 있다. 화면에 그려진 칸만 사진 서버에 물어 주소를 받아 채운다(주소는 하루 동안 같다) */
 const FN_PHOTO='https://kpubgeejyiupdvbbdxwt.supabase.co/functions/v1/photo';
@@ -379,7 +415,7 @@ async function boot(){
     if(res.status===404){ show('<div class="empty">이 페이지는 지금 볼 수 없습니다.<br>선생님이 링크를 껐거나 주소가 바뀌었습니다.</div>'); return; }
     const out=await res.json();
     if(!res.ok||!out.data) throw new Error('서버 '+res.status);
-    D=out.data; render();
+    D=out.data; HW=out.hw||{}; render();
   }catch(e){ console.error(e); show('<div class="empty">기록을 불러오지 못했습니다.<br>잠시 뒤 다시 열어 주세요.</div>'); }
 }
 boot();
