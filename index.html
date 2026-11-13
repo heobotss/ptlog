@@ -141,7 +141,10 @@
   .phgrid .ph img{width:100%; height:100%; object-fit:cover; display:block}
   .phgrid .ph img:not([src]){visibility:hidden}
   .phgrid .ph span{position:absolute; left:0; right:0; bottom:0; padding:2px 4px; font-size:10.5px; line-height:1.3; color:#fff; background:rgba(0,0,0,.55); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .phbig{width:100%; max-height:62vh; object-fit:contain; border-radius:10px; background:#000; display:block; margin:8px 0}
+  .phtr{display:flex; overflow-x:auto; scroll-snap-type:x mandatory; margin:8px 0; border-radius:10px; background:#000; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .phtr::-webkit-scrollbar{display:none}
+  .phtr .sl{flex:0 0 100%; scroll-snap-align:center; scroll-snap-stop:always; display:flex; align-items:center; justify-content:center; min-height:38vh}
+  .phtr .sl img{width:100%; max-height:60vh; object-fit:contain; display:block}
   .stat{background:var(--card2); border-radius:10px; padding:10px 12px}
   .stat .v{font-size:17px; font-weight:700}
   .exlist{max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:6px; margin:8px 0}
@@ -832,7 +835,28 @@ function prevRecord(memberId, exId, dayIdx, lap, progId){
 
 /* ───────────────────── 라우팅 ───────────────────── */
 let view={name:'home'};
-function go(v){ view=v; render(); window.scrollTo(0,0); }
+function go(v){ view=v; backFuel(); render(); window.scrollTo(0,0); }
+/* ── 폰의 「뒤로」 단추 (11-13 대표님: 뒤로를 누르면 앱이 꺼진다 → 전 단계로 가게) ──
+   화면을 옮기거나 창을 띄울 때마다 브라우저 기록을 한 칸 쌓아 두고, 「뒤로」가 눌리면 그 한 칸을 쓰면서 한 단계만 물러난다.
+   순서: 열린 창 닫기 → 그 화면의 ← 단추와 같은 일 → 첫 화면으로 → 첫 화면에서는 「한 번 더 누르면 닫힙니다」 */
+let _fuel=0, _backing=false, _skipPop=false;
+function backFuel(){ if(_backing) return; try{ history.pushState({ptlog:1},''); _fuel++; }catch(e){} }
+window.addEventListener('popstate', ()=>{
+  if(_skipPop){ _skipPop=false; return; }
+  _fuel=Math.max(0,_fuel-1);
+  if(!booted||!db) return;
+  _backing=true;
+  try{
+    if(document.getElementById('modal')){ closeModal(); return; }
+    const b=document.querySelector('#app .top .back');
+    if(b){ b.click(); return; }
+    if(view.name==='summary'){ const l=db.logs.find(x=>x.id===view.logId); go(l?{name:'member', id:l.memberId}:{name:'home'}); return; }
+    if(view.name!=='home'){ go({name:'home'}); return; }
+    /* 첫 화면 — 남은 기록 칸을 한꺼번에 비워, 다음 「뒤로」에 바로 닫히게 한다 */
+    if(_fuel>0){ _skipPop=true; const n=_fuel; _fuel=0; history.go(-n); }
+    toast('한 번 더 누르면 앱이 닫힙니다');
+  } finally{ _backing=false; }
+});
 function toast(msg){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(),1900); }
 function esc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -845,7 +869,8 @@ function sortedEx(list){
 }
 
 /* ── 자체 모달 (브라우저 기본 confirm/prompt는 아티팩트에서 차단됨) ── */
-function modal(html){ closeModal();
+function modal(html){ const had=!!document.getElementById('modal'); closeModal();
+  if(!had) backFuel();           /* 창이 떠 있을 때 「뒤로」는 창만 닫는다 */
   const o=document.createElement('div'); o.id='modal'; o.className='overlay';
   o.innerHTML=`<div class="sheet">${html}</div>`;
   o.addEventListener('click', e=>{ if(e.target===o) closeModal(); });
@@ -1727,6 +1752,7 @@ async function phHydrate(){
   if(_phHyd) return;
   const blank=()=>[...document.querySelectorAll('img[data-ph]:not([src])')];
   if(!blank().length) return;
+  if(!_phUrlAt) _phUrlAt=Date.now();
   if(Date.now()-_phUrlAt>12*3600*1000){ Object.keys(_phUrl).forEach(k=>{ if(!/^blob:/.test(_phUrl[k])) delete _phUrl[k]; }); _phUrlAt=Date.now(); }
   const need=[...new Set(blank().map(e=>e.dataset.ph))].filter(k=>!_phUrl[k]);
   if(need.length&&user&&sb){ _phHyd=true;
@@ -1734,14 +1760,20 @@ async function phHydrate(){
     _phHyd=false; }
   blank().forEach(e=>{ const u=_phUrl[e.dataset.ph]; if(u) e.src=u; });
 }
+/* 크게 보기 — 그 수업 사진을 옆으로 밀어 넘긴다 */
 function phView(ref, k){
-  const h=phHolder(ref), p=h&&(h.photos||[]).find(x=>x.k===k); if(!p) return;
-  modal(`<b>📷 수업 사진</b>${p.ex?` <span class="muted">${esc(exName(p.ex))}</span>`:''}
-    <img class="phbig" data-ph="${k}" alt="" ${_phUrl[k]?`src="${_phUrl[k]}"`:''}>
-    <div class="grid2"><button class="btn subtle" onclick="phDel('${ref}','${k}')">이 사진 지우기</button>
+  const h=phHolder(ref), a=(h&&h.photos)||[], i0=a.findIndex(x=>x.k===k); if(i0<0) return;
+  modal(`<b>📷 수업 사진</b> <span class="muted" id="phv-cap"></span>
+    <div class="phtr" id="phv">${a.map(p=>`<div class="sl"><img data-ph="${p.k}" alt="" ${_phUrl[p.k]?`src="${_phUrl[p.k]}"`:''}></div>`).join('')}</div>
+    ${a.length>1?'<div class="muted" style="font-size:12.5px; text-align:center; margin:-2px 0 8px">옆으로 밀면 다음 사진</div>':''}
+    <div class="grid2"><button class="btn subtle" onclick="phDelCur('${ref}')">이 사진 지우기</button>
     <button class="btn ghost" onclick="closeModal()">닫기</button></div>`);
+  const tr=document.getElementById('phv'), cap=()=>{ const i=Math.max(0,Math.min(a.length-1,Math.round(tr.scrollLeft/(tr.clientWidth||1)))); tr.dataset.i=i;
+    const p=a[i], c=document.getElementById('phv-cap'); if(c) c.textContent=(i+1)+' / '+a.length+(p.ex?' · '+exName(p.ex):''); };
+  tr.scrollLeft=tr.clientWidth*i0; tr.dataset.i=i0; tr.addEventListener('scroll', cap, {passive:true}); cap();
   phHydrate();
 }
+function phDelCur(ref){ const tr=document.getElementById('phv'), h=phHolder(ref), p=tr&&h&&(h.photos||[])[Math.round(tr.scrollLeft/(tr.clientWidth||1))]; if(p) phDel(ref, p.k); }
 function phDel(ref, k){
   ask('이 사진을 지울까요?\n회원 페이지에서도 사라집니다', '지우기', ()=>{
     const h=phHolder(ref); if(!h) return;
