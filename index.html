@@ -136,6 +136,12 @@
   .tl .ev .d{font-size:11px; color:var(--sub); font-family:'IBM Plex Mono',monospace}
   .empty{text-align:center; color:var(--sub); padding:38px 16px; font-size:14px}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .phgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px}
+  .phgrid .ph{position:relative; aspect-ratio:1/1; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.07); cursor:pointer}
+  .phgrid .ph img{width:100%; height:100%; object-fit:cover; display:block}
+  .phgrid .ph img:not([src]){visibility:hidden}
+  .phgrid .ph span{position:absolute; left:0; right:0; bottom:0; padding:2px 4px; font-size:10.5px; line-height:1.3; color:#fff; background:rgba(0,0,0,.55); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .phbig{width:100%; max-height:62vh; object-fit:contain; border-radius:10px; background:#000; display:block; margin:8px 0}
   .stat{background:var(--card2); border-radius:10px; padding:10px 12px}
   .stat .v{font-size:17px; font-weight:700}
   .exlist{max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:12px; padding:6px; margin:8px 0}
@@ -204,6 +210,7 @@
 <input type="file" id="ocr-file" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="ib-file" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="pi-file" accept="image/*" multiple style="display:none" onchange="const f=this.files; if(f&&f.length) piOnFiles(f).then(()=>{this.value=''});">
+<input type="file" id="ph-file" accept="image/*" multiple style="display:none" onchange="const f=this.files; if(f&&f.length) phOnFiles(f).then(()=>{this.value=''});">
 <div class="nav"><div class="in">
   <button id="nav-home" onclick="go({name:'home'})"><span class="ico">👥</span>회원</button>
   <button id="nav-sch" onclick="go({name:'schedule'})"><span class="ico">🗓</span>시간표</button>
@@ -659,7 +666,7 @@ async function bootData(){
   bindDraft(); pdraft=null; booted=true;
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
-  checkAccess(); loadOcrQuota(); pageWatch();
+  checkAccess(); loadOcrQuota(); loadPhStat(); pageWatch();
   loadIg();
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
@@ -867,7 +874,8 @@ function render(){
   if(view.name==='programs'||view.name==='progDetail'||view.name==='progDay'||view.name==='progNew'){ const b=document.getElementById('nav-prog'); if(b) b.className='on'; }
   el.innerHTML=fn();
   if(view.name==='home'||view.name==='settings'){ const b=accessBanner(); if(b) el.insertAdjacentHTML('afterbegin', b); }
-  updateSyncBadge();
+  if(view.name==='home'){ const b=phBanner(); if(b){ const t=el.querySelector('.top'); if(t) t.insertAdjacentHTML('afterend', b); else el.insertAdjacentHTML('afterbegin', b); } }
+  updateSyncBadge(); phHydrate();
 }
 
 /* ── 주간 브리핑 — 매주 월요일부터, 닫을 때까지 홈에 뜬다 ── */
@@ -1490,7 +1498,8 @@ function pageData(m){
       if(v){ const x=ex[en.exId]||(ex[en.exId]={nm, tg, u:mode==='w'?'kg':'초', f:v, fd:l.date||'', b:v, bd:l.date||'', n:0});
         if(x.n>0 && v>x.b){ top=1; x.b=v; x.bd=l.date||''; } x.n++; }
       return {nm, tg, rec, up: cur&&prev&&cur>prev? Math.round((cur-prev)/prev*100) : 0, ...(top?{pr:1}:{})}; }).filter(Boolean);
-    return {d:l.date||'', n:l.imported?0:(l.dayIdx||0), hw:(l.homework||'').trim(), vol:Math.round(vol), it}; }).filter(x=>x.it.length);
+    const ph=(l.photos||[]).map(p=>p.ex&&exOf(p.ex)? {k:p.k, nm:exName(p.ex)} : {k:p.k});   /* 수업 사진 — 열쇠만 올린다. 실제 사진은 회원 화면이 사진 서버에서 받는다 */
+    return {d:l.date||'', n:l.imported?0:(l.dayIdx||0), hw:(l.homework||'').trim(), vol:Math.round(vol), it, ...(ph.length?{ph}:{})}; }).filter(x=>x.it.length);
   return {v:PAGE_V, name:m.name, trainer:(db.trainerName||'').trim(), total:logs.length, since:logs[0]?(logs[0].date||''):'',
     prog: pr? {name:pr.p.name, done:pr.done%pr.total, total:pr.total} : null,
     ex:Object.values(ex), sessions:all.slice().reverse()};   /* 수업은 전부 누적, 최신이 맨 위 */
@@ -1589,11 +1598,165 @@ function delMember(id){
   const m=db.members.find(x=>x.id===id);
   ask(`${m.name} 회원과 모든 기록을 삭제할까요?${pairOf(m)?`\n(${pairOf(m).name} 회원은 1대1 회원으로 남습니다)`:''}`, '삭제', ()=>{
     if(m.pageToken) pageDel(m.pageToken);          /* 회원 페이지도 같이 끈다 */
+    const ph=[...db.logs, ...drafts()].filter(x=>x.memberId===id).flatMap(phKeys);   /* 이 회원 수업 사진도 같이 지운다(짝 기록에 붙은 건 남는다) */
     db.members=db.members.filter(x=>x.id!==id);
     db.logs=db.logs.filter(l=>l.memberId!==id);
     db.drafts=drafts().filter(d=>d.memberId!==id); bindDraft();
     db.members.forEach(x=>{ if(x.pairId===id) delete x.pairId; });
-    save(); go({name:'home'}); });
+    save(); phGc(ph); go({name:'home'}); });
+}
+
+/* ───────── 수업 사진 (11-12 회의 · 11-13 대표님 확정) ─────────
+   수업 때 찍은 사진을 수업에 붙여 맡아 둔다. 기본은 수업 단위, 운동 카드에서 올리면 그 운동 이름표가 붙는다(AI 분류 없음).
+   올릴 때 긴 변 1280px 로 줄인다(장당 약 0.2MB). 수업 한 번에 20장. 회원 페이지에도 보인다. 2대1은 두 사람 수업에 같이 붙는다.
+   기록에는 사진 열쇠만 남는다 — log.photos / draft.photos = [{k:열쇠, ex:운동 id(선택)}]
+   서버는 Edge Function 「photo」(사진서버\photo-함수코드.ts) + Cloudflare R2. 멤버십 기능(열리기 전에는 관리자·우리 센터 선생님) */
+const FN_PHOTO=SB_URL+'/functions/v1/photo';
+const PH_MAX=20;
+let phStat=null, _phTarget=null, _phUrlAt=0;
+const _phUrl={};
+async function phCall(body, bin){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session) return {status:401, out:{}};
+  const h={'apikey':SB_KEY,'Authorization':'Bearer '+session.access_token};
+  const res= bin? await fetch(FN_PHOTO+'?a=put',{method:'POST', headers:{...h,'content-type':'image/jpeg'}, body:bin})
+    : await fetch(FN_PHOTO,{method:'POST', headers:{...h,'content-type':'application/json'}, body:JSON.stringify(body)});
+  let out={}; try{ out=await res.json(); }catch(e){}
+  return {status:res.status, out};
+}
+async function loadPhStat(){
+  if(!user||!sb) return;
+  try{ const r=await phCall({action:'status'}); if(r.status===200){ phStat=r.out; if(view.name==='home') render(); } }catch(e){}
+  phGc([]);   /* 지난번에 인터넷이 끊겨 못 지운 사진이 있으면 다시 지운다 */
+}
+/* 사진이 붙는 곳 — 'd:작성 중 수업 id' 또는 'l:기록 id' */
+function phHolder(ref){ const id=ref.slice(2); return ref[0]==='d'? (drafts().find(d=>d.id===id)||null) : (db.logs.find(l=>l.id===id)||null); }
+function pairLogOf(log){ return log&&log.pair? (db.logs.find(l=>l.memberId===log.pair&&l.pair===log.memberId&&l.date===log.date&&l.dayIdx===log.dayIdx&&l.id!==log.id)||null) : null; }
+function phMates(ref, h){ const o= ref[0]==='d'? pairMate(h) : pairLogOf(h); return o?[o]:[]; }   /* 2대1 — 같이 붙는 짝 수업 */
+function phUsed(k){ return db.logs.some(l=>(l.photos||[]).some(p=>p.k===k)) || drafts().some(d=>(d.photos||[]).some(p=>p.k===k)); }
+function phKeys(h){ return ((h&&h.photos)||[]).map(p=>p.k); }
+/* 어디에도 안 붙어 있게 된 사진을 서버에서 지운다. 못 지우면 db.phTrash 에 남겨 다음에 다시 */
+async function phGc(keys){
+  if(!db) return;
+  const dead=[...new Set([...(db.phTrash||[]), ...keys])].filter(k=>k&&!phUsed(k));
+  if(!dead.length){ if(db.phTrash){ delete db.phTrash; save(); } return; }
+  db.phTrash=dead; save();
+  if(!user||!sb) return;
+  try{ const r=await phCall({action:'del', keys:dead.slice(0,60)});
+    if(r.status===200){ db.phTrash=dead.slice(60); if(!db.phTrash.length) delete db.phTrash; dead.slice(0,60).forEach(k=>{ delete _phUrl[k]; }); save(); } }catch(e){}
+}
+function phThumbs(ref, list){
+  return list.length? `<div class="phgrid">${list.map(p=>`<div class="ph" onclick="phView('${ref}','${p.k}')"><img data-ph="${p.k}" alt="">${p.ex?`<span>${esc(exName(p.ex))}</span>`:''}</div>`).join('')}</div>` : '';
+}
+function phCard(ref){
+  const h=phHolder(ref); if(!h) return '';
+  const a=h.photos||[];
+  return `<div class="card"><b>📷 수업 사진</b> <span class="muted" style="font-size:12.5px">${a.length}/${PH_MAX}장 · 회원 페이지에도 보여요</span>
+    ${phThumbs(ref,a)}
+    <button class="btn subtle" style="margin-top:8px" onclick="phPick('${ref}')">＋ 사진 올리기 (여러 장 가능)</button></div>`;
+}
+/* 운동 카드 안 — 그 운동에 붙인 사진과 「이 운동 사진」 단추 */
+let _phSkipEx=false;   /* 2대1 화면 — 사진은 두 사람 수업에 같이 붙으니 운동 카드에 단추를 한 번만 그린다 */
+function phExRow(ref, exId){
+  const h=phHolder(ref); if(!h||_phSkipEx) return '';
+  return `${phThumbs(ref,(h.photos||[]).filter(p=>p.ex===exId))}
+    <button class="btn subtle" style="margin-top:9px" onclick="phPick('${ref}','${exId}')">📷 이 운동 사진 올리기${pairMate(h)?' (두 분 수업에 같이 붙어요)':''}</button>`;
+}
+function phTierBlocked(){ return (phStat&&phStat.tier==='trial') || (!phStat&&ocrQuota&&ocrQuota.tier==='trial'); }
+function phTierModal(){ modal(`<b>수업 사진은 멤버십 기능이에요</b>
+  <div class="muted" style="margin:8px 0 12px; line-height:1.7">수업 때 찍은 사진을 수업 기록에 붙여 맡아 두고, 회원 페이지에서도 보여 주는 기능입니다.<br>멤버십이 열리면 쓸 수 있습니다. 지금은 센터 선생님 계정만 열려 있어요.</div>
+  <button class="btn subtle" onclick="closeModal()">닫기</button>`); }
+function phPick(ref, exId){
+  const h=phHolder(ref); if(!h) return;
+  if(!user||!sb){ toast('로그인 상태에서만 사진을 올릴 수 있습니다'); return; }
+  if(phTierBlocked()){ phTierModal(); return; }
+  if((h.photos||[]).length>=PH_MAX){ toast(`수업 한 번에 ${PH_MAX}장까지 올릴 수 있어요`); return; }
+  _phTarget={ref, exId:exId||null};
+  document.getElementById('ph-file').click();
+}
+/* 긴 변 1280px jpeg 로 줄인다 — 0.33MB 를 넘으면 화질을 한 단계씩 낮춘다 */
+async function phShrink(file){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((ok,no)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=()=>no(new Error('img')); i.src=url; });
+    const w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1, 1280/Math.max(w,h));
+    const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w*s)); c.height=Math.max(1,Math.round(h*s));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    let q=0.8, b=null;
+    do{ b=await new Promise(r=>c.toBlob(r,'image/jpeg',q)); q-=0.1; }while(b&&b.size>330000&&q>=0.45);
+    return b;
+  } finally{ URL.revokeObjectURL(url); }
+}
+function phFailMsg(r){
+  const e=r&&r.out&&r.out.error, s=r&&r.status;
+  if(s===402){ if(phStat) phStat.tier='trial'; return '수업 사진은 멤버십 기능이에요'; }
+  if(e==='full') return '사진 저장 공간이 가득 찼습니다 — 대표님께 알려 주세요. 기록은 그대로 쓸 수 있어요';
+  if(e==='day') return '오늘 올릴 수 있는 사진 수를 넘었습니다';
+  if(s===404||e==='config') return '사진 서버가 아직 준비되지 않았습니다';
+  if(s===401) return '다시 로그인한 뒤 올려 주세요';
+  return '올리지 못했습니다 — 인터넷 연결을 확인하고 다시 눌러 주세요';
+}
+async function phOnFiles(files){
+  const t=_phTarget; _phTarget=null; if(!t) return;
+  const h0=phHolder(t.ref); if(!h0) return;
+  const left=PH_MAX-(h0.photos||[]).length, arr=[...files].filter(f=>/^image\//.test(f.type||'image/')).slice(0,left);
+  const over=files.length>left;
+  if(!arr.length) return;
+  modal(`<b>📷 사진 올리는 중</b><div class="muted" id="ph-prog" style="margin:8px 0 4px">준비 중…</div><div class="muted" style="font-size:12.5px">화면을 닫지 말고 잠시만 기다려 주세요</div>`);
+  let ok=0, fail='';
+  for(const f of arr){
+    const pe=document.getElementById('ph-prog'); if(pe) pe.textContent=`${ok+1} / ${arr.length}장`;
+    try{
+      const blob=await phShrink(f); if(!blob){ fail='읽을 수 없는 사진이 있어 건너뛰었습니다'; continue; }
+      const r=await phCall(null, blob);
+      if(r.status!==200||!r.out.key){ fail=phFailMsg(r); break; }
+      const h=phHolder(t.ref);
+      if(!h){ phGc([r.out.key]); break; }         /* 올리는 사이 그 수업이 사라졌다 */
+      const p={k:r.out.key}; if(t.exId) p.ex=t.exId;
+      (h.photos=h.photos||[]).push(p);
+      phMates(t.ref,h).forEach(o=>{ if((o.photos||[]).length<PH_MAX) (o.photos=o.photos||[]).push({...p}); });
+      _phUrl[p.k]=URL.createObjectURL(blob); ok++; save();
+    }catch(e){ fail= e&&e.message==='img'? '읽을 수 없는 사진이 있어 건너뛰었습니다' : '올리지 못했습니다 — 인터넷 연결을 확인하고 다시 눌러 주세요'; if(!(e&&e.message==='img')) break; }
+  }
+  closeModal(); render();
+  toast(fail? (ok? `${ok}장 올림 · `:'')+fail : over? `${ok}장 올렸습니다 — 수업 한 번에 ${PH_MAX}장까지예요` : `사진 ${ok}장을 올렸습니다`);
+}
+/* 화면에 그려진 사진 칸에 주소를 채운다 — 주소는 서버가 그때그때 내준다(이틀짜리) */
+let _phHyd=false;
+async function phHydrate(){
+  if(_phHyd) return;
+  const blank=()=>[...document.querySelectorAll('img[data-ph]:not([src])')];
+  if(!blank().length) return;
+  if(Date.now()-_phUrlAt>12*3600*1000){ Object.keys(_phUrl).forEach(k=>{ if(!/^blob:/.test(_phUrl[k])) delete _phUrl[k]; }); _phUrlAt=Date.now(); }
+  const need=[...new Set(blank().map(e=>e.dataset.ph))].filter(k=>!_phUrl[k]);
+  if(need.length&&user&&sb){ _phHyd=true;
+    try{ const r=await phCall({action:'urls', keys:need.slice(0,300)}); if(r.status===200) Object.assign(_phUrl, r.out.urls||{}); }catch(e){}
+    _phHyd=false; }
+  blank().forEach(e=>{ const u=_phUrl[e.dataset.ph]; if(u) e.src=u; });
+}
+function phView(ref, k){
+  const h=phHolder(ref), p=h&&(h.photos||[]).find(x=>x.k===k); if(!p) return;
+  modal(`<b>📷 수업 사진</b>${p.ex?` <span class="muted">${esc(exName(p.ex))}</span>`:''}
+    <img class="phbig" data-ph="${k}" alt="" ${_phUrl[k]?`src="${_phUrl[k]}"`:''}>
+    <div class="grid2"><button class="btn subtle" onclick="phDel('${ref}','${k}')">이 사진 지우기</button>
+    <button class="btn ghost" onclick="closeModal()">닫기</button></div>`);
+  phHydrate();
+}
+function phDel(ref, k){
+  ask('이 사진을 지울까요?\n회원 페이지에서도 사라집니다', '지우기', ()=>{
+    const h=phHolder(ref); if(!h) return;
+    [h, ...phMates(ref,h)].forEach(o=>{ if(o.photos){ o.photos=o.photos.filter(p=>p.k!==k); if(!o.photos.length) delete o.photos; } });
+    save(); render(); phGc([k]); toast('지웠습니다'); });
+}
+/* 첫 화면 띠 — 멤버십이 끊겨 지워질 날이 잡혔을 때, (관리자) 저장 공간이 차 갈 때 */
+function phBanner(){
+  if(!phStat) return '';
+  let h='';
+  if(phStat.deleteAt&&phStat.count){ const d=new Date(phStat.deleteAt);
+    h+=`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📷 수업 사진 ${phStat.count}장</b><div class="muted" style="margin-top:2px">멤버십이 확인되지 않아 새 사진은 올릴 수 없어요. 올려 둔 사진은 <b>${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일</b>에 지워집니다 — 그 전에 다시 가입하면 그대로 이어집니다.</div></div>`; }
+  if(phStat.warn){ const g=v=>(v/1073741824).toFixed(1);
+    h+=`<div class="card" style="border-color:var(--warn); padding:9px 13px"><b>📷 사진 저장 공간 ${g(phStat.used)} / ${g(phStat.cap)}GB</b><div class="muted" style="margin-top:2px">${phStat.full?'가득 차서 새 사진 올리기가 멈췄습니다.':'곧 가득 찹니다 — 가득 차면 새 사진 올리기만 멈춥니다.'} 기록과 올려 둔 사진은 그대로예요. (관리자에게만 보이는 알림)</div></div>`; }
+  return h;
 }
 
 /* ───────────────────── 화면: 수업 ───────────────────── */
@@ -1676,21 +1839,21 @@ function pairDropOne(id){
   const d=drafts().find(x=>x.id===id); if(!d) return;
   const m=db.members.find(x=>x.id===d.memberId), mt=pairMate(d), o=mt&&db.members.find(x=>x.id===mt.memberId);
   ask(`${m.name} 회원은 오늘 빠졌나요?\n${m.name} 회원 칸에 적은 내용은 지워지고${o?`, ${o.name} 회원 혼자 수업으로 바뀝니다`:''}`, '빠짐으로 바꾸기', ()=>{
-    dropDraft(d); if(mt){ delete mt.pairKey; delete mt.pairOrder; curDraftId=mt.id; bindDraft(); }
-    save(); render(); toast(o? `${o.name} 회원 혼자 수업으로 바꿨습니다` : '지웠습니다'); });
+    const ph=phKeys(d); dropDraft(d); if(mt){ delete mt.pairKey; delete mt.pairOrder; curDraftId=mt.id; bindDraft(); }
+    save(); phGc(ph); render(); toast(o? `${o.name} 회원 혼자 수업으로 바꿨습니다` : '지웠습니다'); });
 }
 function discardDraft(id){
   const d=drafts().find(x=>x.id===id)||draft; if(!d) return;
   const m=db.members.find(x=>x.id===d.memberId);
   ask(`${m?m.name+' 회원의 ':''}작성 중인 수업을 지울까요?\n적어 둔 내용이 사라집니다`, '지우기', ()=>{
-    const mid=d.memberId; dropDraft(d); save();
+    const mid=d.memberId, ph=phKeys(d); dropDraft(d); save(); phGc(ph);
     if(view.name==='session') go({name:'member', id:mid}); else render();
     toast('지웠습니다'); });
 }
 function cancelEdit(){
   if(!draft||!draft.editLogId) return;
   ask('고친 내용을 버리고 원래 기록 그대로 둘까요?', '수정 취소', ()=>{
-    const mid=draft.memberId; dropDraft(draft); save(); go({name:'logs', id:mid}); toast('원래 기록 그대로 뒀습니다'); });
+    const mid=draft.memberId, ph=phKeys(draft); dropDraft(draft); save(); phGc(ph); go({name:'logs', id:mid}); toast('원래 기록 그대로 뒀습니다'); });
 }
 function setInputRow(en,i,s,si){
   const mode=en.mode;
@@ -1753,6 +1916,7 @@ function entryParts(en,i,forceOpen){
         <div class="grid2" style="margin-top:9px">
           <button class="btn subtle" onclick="swapExercise(${i})">⇄ 운동 바꾸기</button>
           <button class="btn subtle" onclick="skipToday(${i})">${draft.editLogId?'이 기록에서 빼기':'오늘은 안 함'}</button></div>
+        ${phExRow('d:'+draft.id, en.exId)}
         ${isAdd&&!draft.editLogId?`<button class="btn subtle" style="margin-top:6px" onclick="removeFromDay(${i})">－ 이 회차에서 빼기 (다음 바퀴부터 제외)</button>`:''}`;
     }
     const isAddH=((m.dayAdds||{})[draft.dayIdx]||[]).includes(en.exId);
@@ -1777,7 +1941,8 @@ function vPairSession(){
       const en=ens[k], o=1-k, cls=k?'pp b':'pp';
       if(!en) return `<div class="${cls}"><div class="pp-h"><b>${esc(M[k].name)}</b><span class="muted">오늘 이 운동 안 함</span></div>
         <button class="btn subtle" onclick="useDraft('${P[k].id}'); pairAddEx('${exId}')">＋ ${esc(M[k].name)} 회원도 이 운동 넣기</button></div>`;
-      const parts=withDraft(P[k], ()=>entryParts(en, idx[k], true));
+      _phSkipEx= k===0 && !!ens[1];        /* 사진 단추는 아래쪽 사람 칸 밑에 한 번만 */
+      let parts; try{ parts=withDraft(P[k], ()=>entryParts(en, idx[k], true)); } finally{ _phSkipEx=false; }
       return `<div class="${cls}"><div class="pp-h"><b>${esc(M[k].name)}</b>${ens[o]?`<button class="ichip on-imp" onclick="useDraft('${P[k].id}'); pairCopy('${exId}')">⇆ ${esc(M[o].name)}와 같게</button>`:''}</div>${hook(P[k], parts.body)}</div>`;
     }).join('');
     return `<div class="card" ${open?'style="border-color:var(--blue)"':''}>
@@ -1800,6 +1965,7 @@ function vPairSession(){
     ${P.map((d,k)=>`<input class="cond" type="text" placeholder="🩺 ${esc(M[k].name)} 오늘 컨디션" value="${esc(d.cond)}" onchange="useDraft('${d.id}'); draft.cond=this.value; dsave()">`).join('')}
     ${cards||'<div class="empty">운동이 없습니다 — 아래 「운동 추가」로 넣어 주세요</div>'}
     ${skipHtml}
+    ${phCard('d:'+P[0].id)}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       ${P.map((d,k)=>`<textarea rows="2" style="margin-top:6px" placeholder="${esc(M[k].name)} — 상담 내용, 다음에 챙길 것 등" oninput="useDraft('${d.id}'); draft.note=this.value; dsave()">${esc(d.note||'')}</textarea>`).join('')}</div>
     <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
@@ -1841,6 +2007,7 @@ function vSession(){
     <input class="cond" type="text" placeholder="🩺 오늘 컨디션 (예: 허리 불편감 · 수면 부족)" value="${esc(draft.cond)}" onchange="draft.cond=this.value; dsave()">
     ${cards}
     ${skipHtml}
+    ${phCard('d:'+draft.id)}
     <div class="card"><b>🗒 수업 메모</b> <span class="muted" style="font-size:12.5px">(선생님만 보기 · 카톡에 안 나가요)</span>
       <textarea id="note-in" rows="3" style="margin-top:6px" placeholder="운동과 상관없는 오늘 수업 메모 — 상담 내용, 다음에 챙길 것 등" oninput="draft.note=this.value; dsave()">${esc(draft.note||'')}</textarea></div>
     <div class="card"><b>💬 회원 한마디</b> <span class="muted" style="font-size:12.5px">(선택 · 회원이 한 말 그대로 — 카톡엔 안 나가요)</span>
@@ -1949,6 +2116,7 @@ function commitDraft(d, entries, pairMemberId, second){
   if((d.homework||'').trim()) log.homework=d.homework.trim();
   if((d.note||'').trim()) log.note=d.note.trim();
   if((d.said||'').trim()) log.said=d.said.trim();
+  if((d.photos||[]).length) log.photos=d.photos.map(p=>({...p}));
   if(d.refLogId){ log.refLogId=d.refLogId; log.refDate=d.refDate; }
   if(pairMemberId) log.pair=pairMemberId;            /* 2대1로 한 수업 — 같이 한 회원 */
   if(second) log.duo2=true;                          /* 2대1의 둘째 사람 기록 — 수업 횟수 통계에는 한 번만 센다 */
@@ -1984,7 +2152,14 @@ function finishSession(){
     if(log){ log.entries=entries; log.cond=draft.cond.trim(); if(draft.editDate) log.date=draft.editDate; const hw=(draft.homework||'').trim(); if(hw) log.homework=hw; else delete log.homework;
       const nt=(draft.note||'').trim(); if(nt) log.note=nt; else delete log.note;
       const sd=(draft.said||'').trim(); if(sd) log.said=sd; else delete log.said; }
-    const mid=draft.memberId; dropDraft(draft); save();
+    /* 사진 — 고친 대로 기록에 옮기고, 2대1 짝 기록에도 더한 것·뺀 것을 똑같이 */
+    const phOld=phKeys(log), phNew=phKeys(draft);
+    if(log){ if(phNew.length) log.photos=draft.photos.map(p=>({...p})); else delete log.photos;
+      const sib=pairLogOf(log);
+      if(sib){ const gone=phOld.filter(k=>!phNew.includes(k)), add=(draft.photos||[]).filter(p=>!phOld.includes(p.k));
+        sib.photos=[...(sib.photos||[]).filter(p=>!gone.includes(p.k)), ...add.filter(p=>!phKeys(sib).includes(p.k)).map(p=>({...p}))].slice(0,PH_MAX);
+        if(!sib.photos.length) delete sib.photos; } }
+    const mid=draft.memberId; dropDraft(draft); save(); phGc([...phOld, ...phNew]);
     go({name:'logs', id:mid}); toast('수정됐습니다'); return;
   }
   const log=commitDraft(draft, entries);
@@ -2612,7 +2787,7 @@ function vLogs(){
     const p=db.programs.find(p=>p.id===l.progId);
     return `<div class="card tap" onclick="startEditLog('${l.id}')">
       <div class="row"><div><b class="num">${l.imported?(l.date||'').replace(/-/g,'.'):fmtD(l.date)}</b> <span class="muted">${l.imported?'📥 종이 일지':l.dayIdx?`${l.dayIdx}회차 · ${l.lap}바퀴${p?' · '+esc(p.name):''}`:'수업'}${l.refDate?' · 📌 기준 '+fmtD(l.refDate):''}</span>
-        <div class="muted">${(l.entries||[]).length}개 운동${l.cond?' · 🩺'+esc(l.cond):''}</div>
+        <div class="muted">${(l.entries||[]).length}개 운동${(l.photos||[]).length?' · 📷 '+l.photos.length+'장':''}${l.cond?' · 🩺'+esc(l.cond):''}</div>
         ${l.note?`<div style="font-size:12.5px; margin-top:3px; white-space:pre-line">🗒 ${esc(l.note.length>80?l.note.slice(0,80)+'…':l.note)}</div>`:''}${l.said?`<div style="font-size:12.5px; margin-top:3px">💬 “${esc(l.said.length>80?l.said.slice(0,80)+'…':l.said)}”</div>`:''}</div>
         <span style="flex-shrink:0; text-align:right"><span class="muted">수정 ›</span><br><button class="ichip" style="margin-top:6px" onclick="event.stopPropagation(); go({name:'summary', logId:'${l.id}'})">💬 요약·카톡</button></span></div></div>`; }
   return `<div class="top"><button class="back" onclick="go({name:'member', id:'${m.id}'})">←</button><h1>${esc(m.name)} 수업 기록</h1><span class="muted num">${logs.length}회</span></div>
@@ -2624,6 +2799,7 @@ function startEditLog(logId){
   if(ed){ openDraft(ed.id); toast('고치던 내용을 이어서 엽니다'); return; }
   addDraft({memberId:log.memberId, dayIdx:log.dayIdx, lap:log.lap, progId:log.progId, cond:log.cond||'',
     editLogId:logId, editDate:log.date, homework:log.homework||'', note:log.note||'', said:log.said||'',
+    ...((log.photos||[]).length? {photos:log.photos.map(p=>({...p}))} : {}),
     entries:(log.entries||[]).map(e=>{ const mode=exMode(e.exId);
       return {exId:e.exId, mode, sets: mode==='chk'? []:(e.sets&&e.sets.length? e.sets.map(s=>({...s})):[newSet(mode)]),
         chk:!!e.chk, issues:[...(e.issues||[])], memo:e.memo||'', open:false}; })});
@@ -2641,7 +2817,7 @@ function deleteLog(){
     const sib=log.pair&&db.logs.find(l=>l.memberId===log.pair&&l.pair===log.memberId&&l.date===log.date&&l.dayIdx===log.dayIdx);
     if(sib){ if(!log.duo2) delete sib.duo2; }
     else if(m&&!log.duo2) m.sessionsDone=Math.max(0,(m.sessionsDone||0)-1);
-    const mid=log.memberId; dropDraft(draft); save();
+    const mid=log.memberId, ph=[...phKeys(log), ...phKeys(draft)]; dropDraft(draft); save(); phGc(ph);
     go({name:'logs', id:mid}); toast('삭제됐습니다'); });
 }
 
@@ -2692,6 +2868,7 @@ function vSummary(){
         <div class="stat"><div class="muted">총 볼륨</div><div class="v num">${vol.toLocaleString()}kg</div></div>
         <div class="stat"><div class="muted">진행</div><div class="v num">${pr?`${pr.done%pr.total||pr.total}/${pr.total}회`:'-'}</div></div>
       </div></div>
+    ${phCard('l:'+log.id)}
     <button class="btn kakao" onclick="shareSummary('${log.id}')">💬 카톡으로 보내기</button>
     <button class="btn ghost" onclick="openCard('${log.id}')">🖼 사진 카드로 보내기 — 화면 캡처처럼 한 장으로</button>
     <button class="btn ghost" onclick="go({name:'member', id:'${m.id}'})">기록 저장하고 닫기</button>`;
@@ -4319,7 +4496,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.10 — 📷 사진으로 운동까지 자동 입력 · 옛 일지 1회차부터 한 번에 · 수업으로 프로그램 만들기 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.18 — 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
