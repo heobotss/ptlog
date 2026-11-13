@@ -138,15 +138,19 @@
   .seal.no span{color:var(--dim); font-weight:400}
 
   /* 평면 — 수업 기록 */
-  .ses{padding:24px 0 8px; border-bottom:1px solid var(--line)}
-  .ses:first-of-type{border-top:1px solid var(--line)}
+  /* 수업 기록 — 날짜마다 한 덩어리(11-13 대표님: 글만 죽 나열되면 안 읽힌다, 날짜가 다르다는 게 보이게) */
+  .ses{background:rgba(130,165,235,.06); border:1px solid var(--line2); border-radius:16px; padding:0 18px 6px; margin-bottom:14px; box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .ses .hd{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:0 -18px; padding:15px 18px 13px; border-bottom:1px solid var(--line2); background:rgba(130,165,235,.07); border-radius:15px 15px 0 0}
   .ses .d{font-size:19px; font-weight:700; letter-spacing:-.02em}
-  .item{display:grid; grid-template-columns:7.5em 1fr; gap:12px; align-items:baseline; padding:8px 0; font-size:16px}
-  .item .nm{color:#C6D3EC; font-weight:500}
-  .item .rec{font-size:15px; line-height:1.6; font-variant-numeric:tabular-nums}
-  .mk{font-size:14px; white-space:nowrap; margin-left:.4em}
-  .mk.t{color:var(--ice); font-weight:700} .mk.u{color:var(--sub)}
-  .ses .hw{margin:16px 0}
+  .item{display:grid; grid-template-columns:7.2em 1fr; gap:12px; align-items:baseline; padding:12px 0; font-size:16px; border-bottom:1px solid var(--line)}
+  .item:last-child{border-bottom:0}
+  .item .nm{color:var(--ink); font-weight:600}
+  .item .rec{font-size:16px; line-height:1.6; color:#D6E1F6; font-variant-numeric:tabular-nums}
+  .mk{font-size:14px; white-space:nowrap; margin-left:.45em}
+  .mk.t{color:var(--ice); font-weight:700; background:rgba(77,141,255,.20); padding:1px 7px 2px; border-radius:6px} .mk.u{color:var(--hi)}
+  .ses .hw{margin:6px 0 14px}
+  #sec-gain,#sec-ses{scroll-margin-top:12px}
+  .more.sub{border-color:transparent; box-shadow:none; color:var(--sub); font-weight:500; margin-top:8px}
   .more{display:block; width:100%; padding:16px; margin-top:24px; border-radius:14px; border:1px solid rgba(200,220,255,.28); background:none; color:var(--silver); font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
   .more:active{transform:translateY(1px); background:rgba(130,165,235,.08)}
   .empty{text-align:center; color:var(--sub); padding:90px 26px; line-height:1.9}
@@ -156,6 +160,7 @@
   .foot .label{display:block; margin-top:16px; color:var(--dim); font-weight:500}
 
   section,.foot{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  .done section,.done .foot{animation:none}
   @keyframes rise{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
   @media (prefers-reduced-motion: reduce){ section,.foot{animation:none} .hero:after{animation:none; display:none} .ring .fgc,.trk .seg{transition:none} }
 </style>
@@ -166,6 +171,8 @@ const DAYS=['일','월','화','수','목','금','토'];
 const PARTS=['하체','가슴','등','어깨','팔','코어'];            /* 단련도에 쓰는 부위 — 웜업·유산소·재활·기타는 뺀다 */
 const STEPS=[1,3,5,10,15,20,30,40,50,65,80,100,120,150,180,210,240];   /* 이 수업 횟수에 닿을 때마다 한 단계. 그 뒤는 30회마다 */
 let D=null, C=null, showS=5, showG=3;
+/* 펼친 목록을 다시 접는다 — 접은 뒤 그 묶음의 맨 위로 데려다 준다 */
+function fold(k){ if(k==='gain') showG=3; else showS=5; render(); const el=document.getElementById('sec-'+k); if(el) el.scrollIntoView({block:'start'}); }
 const still=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function pd(d){ const p=String(d||'').split('-'); return p.length===3? new Date(+p[0],+p[1]-1,+p[2]) : null; }
@@ -241,7 +248,7 @@ function render(){
       <p class="with">${tch? tch+'과 ' : ''}${since? `함께한 ${since}` : '함께 시작한 기록'}</p>
       <div class="count"><b>${c.total}</b><span>번째 수업</span></div>
       <div class="stage">
-        <div class="ring"><svg viewBox="0 0 78 78"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2F6FF"/><stop offset="1" stop-color="#4D8DFF"/></linearGradient></defs><circle class="bgc" cx="39" cy="39" r="${R}"/><circle class="fgc" id="ringfg" stroke="url(#rg)" cx="39" cy="39" r="${R}" stroke-dasharray="${CIRC}" stroke-dashoffset="${still? CIRC*(1-st.p) : CIRC}"/></svg>
+        <div class="ring"><svg viewBox="0 0 78 78"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F2F6FF"/><stop offset="1" stop-color="#4D8DFF"/></linearGradient></defs><circle class="bgc" cx="39" cy="39" r="${R}"/><circle class="fgc" id="ringfg" stroke="url(#rg)" cx="39" cy="39" r="${R}" stroke-dasharray="${CIRC}" stroke-dashoffset="${still||render.done? CIRC*(1-st.p) : CIRC}"/></svg>
           <div class="in"><b>${st.lv}</b><span>단계</span></div></div>
         <div><div class="ttl">${titleOf(c.total)}</div>
           <div class="nxt">다음 단계까지 수업 ${st.left}번</div></div>
@@ -279,12 +286,12 @@ function render(){
       <div class="glass">${c.parts.map(p=>`<div class="part ${p.n?'':'off'}${top&&p.t===top.t?' best':''}"><span class="nm">${p.t}</span><span class="steps">${[1,2,3,4,5].map(i=>`<i class="${i<=p.step?'on':''}"></i>`).join('')}</span><span class="v">${p.n? (p.avg>0? '+'+p.avg+'<i>%</i>' : p.n+'<i>번</i>') : '아직'}</span></div>`).join('')}</div>
       <p class="note" style="margin-top:14px">선은 그 부위 운동을 한 수업이 1 · 5 · 15 · 30 · 60번이 될 때마다 하나씩 찹니다. 오른쪽 숫자는 처음 했을 때보다 최고 기록이 늘어난 정도이고, 아직 견줄 기록이 없으면 한 횟수를 적습니다.</p></section>` : '';
   /* 처음보다 늘었어요 */
-  const G=c.gains, gainCard= G.length? `<section><div class="sh"><span class="label">처음보다 늘었습니다</span><span class="label">${G.length}가지</span></div>
+  const G=c.gains, gainCard= G.length? `<section id="sec-gain"><div class="sh"><span class="label">처음보다 늘었습니다</span><span class="label">${G.length}가지</span></div>
       <div class="glass">${G.slice(0,showG).map(g=>{ const p=Math.min(92,Math.max(4,Math.round(g.f/g.b*100)));
         return `<div class="gain"><div class="row"><span class="nm">${esc(g.nm)}</span><span class="up">+${esc(g.add)}<i class="u">${esc(g.u)}</i></span></div>
-        <div class="trk"><i class="seg" style="left:${p}%"></i><i class="p1" style="left:${p}%"></i><i class="p2"></i></div>
+        <div class="trk"><i class="seg" style="left:${p}%${render.done? '; transform:scaleX(1); transition:none' : ''}"></i><i class="p1" style="left:${p}%"></i><i class="p2"></i></div>
         <div class="row note" style="margin-top:6px"><span>처음 ${esc(g.f)}${esc(g.u)}</span><span style="color:var(--ink); font-weight:600">최고 ${esc(g.b)}${esc(g.u)}</span></div></div>`; }).join('')}</div>
-      ${G.length>showG? `<button class="more" onclick="showG=999; render()">늘어난 운동 ${G.length}가지 모두 보기</button>` : ''}</section>` : '';
+      ${G.length>showG? `<button class="more" onclick="showG=999; render()">늘어난 운동 ${G.length}가지 모두 보기</button>` : G.length>3? `<button class="more" onclick="fold('gain')">접기 · 가장 많이 늘어난 3가지만 보기</button>` : ''}</section>` : '';
   /* 기념 */
   const M=medals(c), got=M.filter(x=>x.on), todo=M.filter(x=>!x.on).sort((a,b)=>b.ratio-a.ratio), nx=todo[0];
   const newest=got.filter(x=>x.d).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:0)[0];      /* 가장 최근에 받은 하나만 사파이어 면 */
@@ -295,15 +302,16 @@ function render(){
   /* 수업 기록 */
   const recent=S.slice().reverse(), hasMark=recent.some(s=>(s.it||[]).some(x=>x.pr||x.up));
   const list=recent.slice(0,showS).map(s=>`<div class="ses">
-      <div class="row"><span class="d">${esc(dTxt(s.d))}</span><span class="label">${s.n? esc(s.n)+'회차':''}</span></div>
-      <div style="margin-top:8px">${(s.it||[]).map(x=>`<div class="item"><span class="nm">${esc(x.nm)}</span><span class="rec">${esc(x.rec).split(', ').join('<br>')}${x.pr? '<span class="mk t">최고</span>' : x.up? '<span class="mk u">▲</span>' : ''}</span></div>`).join('')}</div>
+      <div class="hd"><span class="d">${esc(dTxt(s.d))}</span><span class="label">${s.n? esc(s.n)+'회차 · ':''}운동 ${(s.it||[]).length}가지</span></div>
+      <div>${(s.it||[]).map(x=>`<div class="item"><span class="nm">${esc(x.nm)}</span><span class="rec">${esc(x.rec).split(', ').join('<br>')}${x.pr? '<span class="mk t">최고</span>' : x.up? '<span class="mk u">▲</span>' : ''}</span></div>`).join('')}</div>
       ${s.hw? `<div class="hw"><span class="label">숙제</span>${esc(s.hw)}</div>` : ''}</div>`).join('');
   const now=new Date();
   show(`${hero}${report}${lastCard}${att}${partsCard}${gainCard}${medalCard}
-    <section><div class="sh"><span class="label">수업 기록</span><span class="label">${recent.length}번</span></div>
+    <section id="sec-ses"><div class="sh"><span class="label">수업 기록</span><span class="label">${recent.length}번</span></div>
       ${hasMark? '<p class="note" style="margin:-6px 0 16px"><span style="color:var(--ice); font-weight:700">최고</span> 그 운동의 최고 기록을 새로 쓴 날 &nbsp;·&nbsp; ▲ 바로 지난번보다 늘어난 운동</p>' : ''}
       ${list}
-      ${recent.length>showS? `<button class="more" onclick="showS+=10; render()">이전 수업 더 보기 · ${recent.length-showS}번</button>` : ''}</section>
+      ${recent.length>showS? `<button class="more" onclick="showS+=10; render()">이전 수업 더 보기 · ${recent.length-showS}번</button>` : ''}
+      ${showS>5? `<button class="more${recent.length>showS?' sub':''}" onclick="fold('ses')">접기 · 최근 5번만 보기</button>` : ''}</section>
     <footer class="foot"><p>${tch? `수업이 끝날 때마다<br>${tch}이 이어서 적어 드립니다.` : '수업이 끝날 때마다<br>이어서 적어 드립니다.'}</p>
       <span class="label">${now.getFullYear()}. ${now.getMonth()+1}. ${now.getDate()} 기준</span></footer>`);
   document.title=(d.name||'')+'님의 운동 기록';
@@ -313,6 +321,7 @@ function render(){
   const vn=document.getElementById('volnum');
   if(vn&&!still&&!render.done){ const t0=performance.now(), dur=1100; const tick=t=>{ const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3); vn.textContent=wNum(c.vol*e)[0]; if(k<1) requestAnimationFrame(tick); else vn.textContent=wv[0]; }; requestAnimationFrame(tick); }
   else if(vn) vn.textContent=wv[0];
+  if(!render.done) setTimeout(()=>document.getElementById('page').classList.add('done'), 900);
   render.done=true;
 }
 async function boot(){
