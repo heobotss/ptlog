@@ -3,6 +3,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PT 수업일지</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0C1424">
+<meta name="apple-mobile-web-app-title" content="수업일지">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -647,7 +651,7 @@ function doLogout(){
   ask('로그아웃할까요?\n기록은 서버에 저장돼 있어 다시 로그인하면 그대로입니다', '로그아웃', async ()=>{
     if(sync.dirty) await pushNow();
     await sb.auth.signOut();
-    user=null; db=null; draft=null; pdraft=null; booted=false; isAdmin=false; access=null; lastGood=null;
+    user=null; db=null; draft=null; pdraft=null; booted=false; isAdmin=false; _rv=null; _rvNames=null; access=null; lastGood=null;
     sync={dirty:false,timer:null,serverAt:null,offline:false};
     renderLogin(); });
 }
@@ -688,6 +692,7 @@ async function bootData(){
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
   checkAccess(); loadOcrQuota(); loadPhStat(); pageWatch(); hwSync();
+  rvLoad(true);   /* 답글 안 단 리뷰 — 우리 센터·관리자만 서버가 목록을 준다. 나머지는 아무것도 안 뜬다 */
   loadIg(); ideaPoll(); setTimeout(ideaAutoRun, 4000);   /* 블로그 초안 — 도착했는지 묻고, 주 2편 자동(켰을 때만). 둘 다 IDEA_WRITE 가 꺼져 있으면 아무것도 안 한다 */
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
@@ -912,7 +917,7 @@ function render(){
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
     report:vReport, consult:vConsult, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, mkprog:vMkProg, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
     programs:vPrograms, progDetail:vProgDetail, progDay:vProgDay, progNew:vProgNew, library:vLibrary,
-    memberNew:vMemberNew, settings:vSettings, ideas:vIdeas, idea:vIdea, ideaKw:vIdeaKw, ideaDraft:vIdeaDraft}[view.name]||vHome;
+    memberNew:vMemberNew, settings:vSettings, ideas:vIdeas, idea:vIdea, ideaKw:vIdeaKw, ideaDraft:vIdeaDraft, reviews:vReviews}[view.name]||vHome;
   el.classList.toggle('wide', view.name==='pcheck');
   if(view.name==='programs'||view.name==='progDetail'||view.name==='progDay'||view.name==='progNew'){ const b=document.getElementById('nav-prog'); if(b) b.className='on'; }
   el.innerHTML=fn();
@@ -1014,6 +1019,7 @@ function vHome(){
     <div class="row"><span style="color:var(--warn); font-size:13.5px">⚠ 백업 이후 수업 ${due}회 — 백업하세요</span><span class="muted">설정 ›</span></div></div>`:'';
   return `<div class="top"><h1>회원</h1><span class="muted">${today().replace(/-/g,'.')}</span></div>
     <div class="muted" id="sync-dot" style="margin:-12px 0 10px; font-size:11.5px"></div>
+    ${reviewHtml()}
     ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
       <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
       <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
@@ -5303,20 +5309,138 @@ async function ideaAutoRun(){
   }finally{ _autoBusy=false; }
 }
 
+/* ───────── 답글 안 단 리뷰 알림 (2026-11-25 대표님 지시) ─────────
+   허봇스 비서가 매일 아침 네이버 플레이스 미답글 리뷰를 담당 이름과 함께 서버(review-alerts)에 올린다.
+   앱은 내 몫만 받아 첫 화면 맨 위 띠로 보여 주고, 선생님이 직접 「알림 받기」를 누른 폰으로 알림이 간다.
+   우리 센터 선생님 다섯 명과 관리자에게만 — 그 밖의 계정은 서버가 {on:false} 를 줘서 띠·카드·허용 창이 전혀 없다.
+   네이버에 답글을 올리는 기능은 없다(센터 PC 스마트플레이스에서 사람이 단다) */
+const FN_REVIEW=SB_URL+'/functions/v1/review-alerts';
+let _rv=null, _rvAt=0, _rvNames=null, _swReg=null;
+async function rvCall(body){
+  try{ const {data:{session}}=await sb.auth.getSession(); if(!session) return {ok:false, error:'login'};
+    const res=await fetch(FN_REVIEW,{method:'POST', headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+session.access_token}, body:JSON.stringify(body)});
+    let out=null; try{ out=await res.json(); }catch(e){}
+    return out&&typeof out.ok==='boolean'? out : {ok:false, error:'server'};
+  }catch(e){ return {ok:false, error:'net'}; }
+}
+async function rvLoad(first){
+  if(!user) return;
+  const r=await rvCall({action:'mine'}); _rvAt=Date.now();
+  if(!r.ok){ return; }                                    /* 실패하면 지난 목록 그대로 — 띠가 깜박이지 않게 */
+  const was=JSON.stringify(_rv); _rv=r;
+  if(r.on) await rvSw();
+  if(first&&r.on&&/reviews/.test(location.hash||'')){ history.replaceState(null,'',location.pathname+location.search); go({name:'reviews'}); return; }
+  if(JSON.stringify(_rv)!==was&&['home','settings','reviews'].includes(view.name)) render();
+}
+/* 알림 일꾼(sw.js) — 우리 센터 계정에서만 등록한다. 화면 저장(캐시)은 하지 않는다 */
+async function rvSw(){
+  if(_swReg||!('serviceWorker' in navigator)||location.protocol!=='https:') return _swReg;
+  try{ _swReg=await navigator.serviceWorker.register('sw.js');
+    navigator.serviceWorker.addEventListener('message', e=>{ if(e.data&&e.data.go==='reviews'){ go({name:'reviews'}); rvLoad(); } });
+  }catch(e){ _swReg=null; }
+  return _swReg;
+}
+function rvIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1); }
+function rvStandalone(){ return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+/* 이 폰의 알림 상태: on 받는 중 · off 안 켬 · denied 막힘 · home 아이폰은 홈 화면 앱에서만 · none 이 브라우저는 안 됨 */
+function rvPushState(){
+  if(rvIOS()&&!rvStandalone()) return 'home';
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)) return 'none';
+  if(Notification.permission==='denied') return 'denied';
+  return Notification.permission==='granted'&&rvFlag()? 'on' : 'off';
+}
+/* 이 폰에서 알림을 켰는지 — 기기마다 다르니 동기화되는 db 가 아니라 이 기기에만 적어 둔다 */
+function rvFlag(v){ const k='ptlog.rvPush.'+(user?user.id:''); try{ if(v!==undefined){ v? localStorage.setItem(k,'1') : localStorage.removeItem(k); } return localStorage.getItem(k)==='1'; }catch(e){ return false; } }
+function rvB64(s){ const p='='.repeat((4-s.length%4)%4), b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(b, c=>c.charCodeAt(0)); }
+async function rvPushOn(){
+  if(!_rv||!_rv.on||!_rv.vapid){ toast('잠시 뒤 다시 눌러 주세요'); return; }
+  const st=rvPushState(); if(st==='home'||st==='none'){ render(); return; }
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ toast('알림이 허용되지 않았어요'); render(); return; }
+    const reg=await rvSw(); if(!reg) throw new Error('sw');
+    await navigator.serviceWorker.ready;
+    let s=await reg.pushManager.getSubscription();
+    if(!s) s=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:rvB64(_rv.vapid)});
+    const r=await rvCall({action:'sub', sub:s.toJSON(), ua:navigator.userAgent});
+    if(!r.ok) throw new Error('save');
+    rvFlag(true); toast('🔔 이 폰에서 리뷰 알림을 받습니다'); rvLoad();
+  }catch(e){ console.error(e); toast('알림을 켜지 못했어요. 잠시 뒤 다시 해 주세요'); }
+  render();
+}
+async function rvPushOff(){
+  try{ const reg=await rvSw(); const s=reg&&await reg.pushManager.getSubscription();
+    if(s){ await rvCall({action:'unsub', endpoint:s.endpoint}); await s.unsubscribe(); } }catch(e){}
+  rvFlag(false); toast('이 폰의 리뷰 알림을 껐어요'); rvLoad(); render();
+}
+async function rvTest(){ const r=await rvCall({action:'test'}); toast(r.ok? (r.sent? `시험 알림을 보냈어요 (기기 ${r.sent}대)` : '알림을 켠 기기가 없어요 — 먼저 「알림 받기」를 눌러 주세요') : '보내지 못했어요'); }
+function rvHome(){ if(_rv&&_rv.on&&Date.now()-_rvAt>10*60*1000) rvLoad(); }
+function reviewHtml(){
+  rvHome();
+  if(!_rv||!_rv.on||!(_rv.rows||[]).length) return '';
+  const rows=_rv.rows, old=Math.max(...rows.map(r=>r.days||0)), urg=rows.some(r=>r.urgent);
+  return `<div class="card tap" style="border-color:${urg||old>2?'var(--warn)':'var(--blue)'}" onclick="go({name:'reviews'})">
+    <div class="row"><b>⭐ 답글 안 단 리뷰 ${rows.length}건</b><span class="muted">›</span></div>
+    <div class="muted" style="font-size:12.5px">${old?`가장 오래된 리뷰 ${old}일째`:'오늘 올라온 리뷰'}${urg?' · <span style="color:var(--warn)">급함</span>':''} · 이틀 안에 센터 PC에서 답글</div></div>`;
+}
+function rvStars(n){ return n===null||n===undefined? '' : '★'.repeat(n)+'☆'.repeat(Math.max(0,5-n)); }
+function vReviews(){
+  if(!_rv){ rvLoad(); return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button><h1>⭐ 답글 안 단 리뷰</h1></div><div class="empty">불러오는 중…</div>`; }
+  if(!_rv.on) return vHome();
+  const rows=_rv.rows||[], st=rvPushState();
+  const card=r=>`<div class="card" style="${r.urgent?'border-color:var(--warn)':''}">
+    <div class="row"><span class="num" style="color:var(--warn)">${rvStars(r.stars)}</span><span class="muted num">${r.written?fullD(r.written):''}</span></div>
+    <div style="font-size:14px; margin:6px 0">${esc(r.excerpt||'(본문 없음)')}${(r.excerpt||'').length>=80?'…':''}</div>
+    <div class="muted" style="font-size:12.5px">${r.days===null?'':r.days===0?'오늘 올라옴':`<b style="color:${r.days>2?'var(--warn)':'var(--ink)'}">${r.days}일째</b> 답글 없음`}${r.urgent?' · <span style="color:var(--warn)">급함</span>':''}
+      ${_rv.admin&&!r.mine?` · 담당 <b>${esc(r.trainer)}</b>${r.unlinked?' (계정 안 이어짐)':''}`:''}</div></div>`;
+  const who=n=>n&&n!=='담당 미정'? n : '○○○';
+  const guide=`<div class="card" style="background:var(--card2)"><b>답글 다는 법</b>
+    <div style="font-size:13.5px; line-height:1.75; margin-top:6px">센터 PC에서 <b>스마트플레이스 → 리뷰</b>를 열고 답글을 달아 주세요.<br>
+    첫 줄은 <b>「${esc(who(_rv.name))} 트레이너입니다」</b>로 시작해 주세요.<br><span class="muted">답글이 달리면 다음 날 아침 목록에서 저절로 빠집니다.</span></div></div>`;
+  const push= st==='on'? `<div class="muted" style="font-size:13px">🔔 이 폰에서 알림을 받고 있어요 — 새 리뷰가 생긴 날 아침, 3일 넘게 답글이 없으면 한 번 더.</div>
+      <button class="btn subtle" style="margin-top:8px" onclick="rvPushOff()">이 폰 알림 끄기</button>`
+    : st==='home'? `<div style="font-size:13.5px; line-height:1.75">아이폰은 <b>홈 화면에 추가한 수업일지</b>에서만 알림을 받을 수 있어요.<br>
+      1. 사파리 아래 <b>공유 버튼(□↑)</b> → <b>「홈 화면에 추가」</b><br>2. 홈 화면에 생긴 <b>수업일지</b>를 열고 로그인<br>3. 설정 → 「리뷰 알림」에서 <b>🔔 알림 받기</b></div>`
+    : st==='denied'? `<div style="font-size:13.5px; line-height:1.75">이 폰에서 알림이 <b>막혀</b> 있어요. 휴대폰 설정 → 알림(또는 브라우저 사이트 설정)에서 수업일지(app.heobotss.com) 알림을 허용한 뒤 다시 눌러 주세요.</div>
+      <button class="btn" style="margin-top:8px" onclick="rvPushOn()">🔔 알림 받기</button>`
+    : st==='none'? `<div class="muted" style="font-size:13px">이 브라우저는 알림을 못 받아요. 안드로이드는 크롬, 아이폰은 홈 화면에 추가한 수업일지에서 열어 주세요.</div>`
+    : `<div class="muted" style="font-size:13px">새 리뷰가 생긴 날 아침에 한 번, 3일 넘게 답글이 없으면 한 번 더 알려 드려요.</div>
+      <button class="btn" style="margin-top:8px" onclick="rvPushOn()">🔔 이 폰에서 알림 받기</button>`;
+  return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button><h1>⭐ 답글 안 단 리뷰</h1>
+      <button class="back" onclick="rvLoad(); toast('새로고침')">↺</button></div>
+    ${rows.length? rows.map(card).join('') : '<div class="empty">답글 안 단 리뷰가 없어요 👍</div>'}
+    ${rows.length? guide : ''}
+    <div class="card"><b>📱 휴대폰 알림</b><div style="margin-top:6px">${push}</div>
+      ${_rv.admin&&st==='on'?`<button class="btn ghost" style="margin-top:8px" onclick="rvTest()">시험 알림 보내기 (관리자)</button>`:''}</div>
+    ${_rv.admin? rvLinkHtml() : ''}`;
+}
+/* (관리자) 우리 센터 계정 ↔ 담당 이름. 앱 「내 이름」이 다섯 이름 중 하나면 저절로 이어지고, 여기서 바꾸면 그게 먼저 */
+function rvLinkHtml(){
+  if(!_rvNames){ rvCall({action:'names'}).then(r=>{ if(r.ok){ _rvNames=r; if(view.name==='reviews') render(); } }); return ''; }
+  const opts=cur=>`<option value="">— 잇지 않음 —</option>`+_rvNames.names.map(n=>`<option ${n===cur?'selected':''}>${n}</option>`).join('');
+  return `<div class="card"><b>🔗 담당 이름 ↔ 앱 계정 (관리자만 보임)</b>
+    <div class="muted" style="font-size:12px; margin:4px 0 8px">비서가 붙인 담당 이름을 이 계정에 보여 줍니다. 앱 「내 이름」이 같으면 저절로 이어져요</div>
+    ${_rvNames.list.map(x=>`<div class="row" style="padding:6px 0; gap:8px"><span style="font-size:12.5px; word-break:break-all">${esc(x.email)}${x.app?` · ${esc(x.app)}`:''}</span>
+      <select style="width:auto" onchange="rvLink('${x.uid}', this.value)">${opts(x.name)}</select></div>`).join('')}</div>`;
+}
+async function rvLink(uid, name){ const r=await rvCall({action:'link', uid, name}); toast(r.ok?'이었습니다':'잇지 못했어요'); _rvNames=null; rvLoad(); render(); }
+
 function vSettings(){
   const cnt=db.logs.length;
   return `<div class="top"><h1>설정</h1><span></span></div>
     <a class="btn ghost" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px" href="manual.html" target="_blank" rel="noopener">📖 사용설명서 보기</a>
     ${ocrQuota?`<div class="muted" style="font-size:13px;margin:-4px 0 12px;text-align:center">기록은 평생 무료 · ${ocrLeftText()}</div>`:''}
+    ${_rv&&_rv.on?`<div class="card tap" onclick="go({name:'reviews'})"><div class="row"><b>⭐ 플레이스 리뷰 답글 · 휴대폰 알림</b><span class="muted">›</span></div>
+      <div class="muted" style="font-size:12.5px">${rvPushState()==='on'?'🔔 이 폰에서 알림 받는 중':'🔕 이 폰은 아직 알림을 안 받아요 — 눌러서 켜기'}</div></div>`:''}
     ${user?`<div class="card"><b>계정</b>
       <div class="muted" style="margin:4px 0 2px">${esc(user.email||'')}</div>
       <div class="muted" id="sync-dot" style="font-size:12px; margin-bottom:10px"></div>
       <label class="fld"><span class="muted">내 이름 — 센터 대시보드에 이 이름으로 표시됩니다</span>
         <input type="text" placeholder="예: 허재윤" value="${esc(db.trainerName||'')}"
           onchange="db.trainerName=this.value.trim(); save(); toast('이름이 저장됐습니다')"></label>
-      <label class="fld"><span class="muted">지역 한 단어 — 블로그 글감의 제목·검색어 앞에 붙습니다</span>
+      ${IDEA_WRITE||isAdmin? `<label class="fld"><span class="muted">지역 한 단어 — 블로그 글감의 제목·검색어 앞에 붙습니다</span>
         <input type="text" placeholder="예: 원주" maxlength="10" value="${esc(db.region||'')}"
-          onchange="ideaRegion(this.value)"></label>
+          onchange="ideaRegion(this.value)"></label>`:''}
       ${IDEA_WRITE? `<label style="display:flex; gap:8px; align-items:flex-start; margin:2px 0 12px"><input type="checkbox" style="width:auto; margin-top:3px" ${db.ideaAuto?'checked':''} onchange="ideaAutoSet(this.checked)">
         <span>블로그 초안 주 2편 자동으로 맡기기<br><span class="muted">글감이 생기면 앱이 알아서 맡기고, 다음 날 아침 초안이 도착합니다. 발행은 선생님이 직접 합니다</span></span></label>`:''}
       <label class="fld"><span class="muted">인스타그램 아이디 — 스토리에 @heobotss 를 멘션하면 이 아이디로 성적표가 찾아갑니다</span>
@@ -5344,7 +5468,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.20 — 📝 운동 메모 같이 보내기 · 📋 재등록 상담 한 장 · 숙제 「했어요」 · 🎉 기념 카드 · 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.21 — ⭐ 리뷰 답글 알림(우리 센터) · 📝 운동 메모 같이 보내기 · 📋 재등록 상담 한 장 · 숙제 「했어요」 · 🎉 기념 카드 · 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
