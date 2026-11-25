@@ -5392,7 +5392,7 @@ function vReviews(){
     <div class="row"><span class="num" style="color:var(--warn)">${rvStars(r.stars)}</span><span class="muted num">${r.written?fullD(r.written):''}</span></div>
     <div style="font-size:14px; margin:6px 0">${esc(r.excerpt||'(본문 없음)')}${(r.excerpt||'').length>=80?'…':''}</div>
     <div class="muted" style="font-size:12.5px">${r.days===null?'':r.days===0?'오늘 올라옴':`<b style="color:${r.days>2?'var(--warn)':'var(--ink)'}">${r.days}일째</b> 답글 없음`}${r.urgent?' · <span style="color:var(--warn)">급함</span>':''}
-      ${_rv.admin&&!r.mine?` · 담당 <b>${esc(r.trainer)}</b>${r.unlinked?' (계정 안 이어짐)':''}`:''}</div></div>`;
+      ${_rv.admin&&!r.mine?(r.trainer==='담당 미정'?' · <b>담당 미정</b>':` · 담당 <b>${esc(r.trainer)}</b>${r.unlinked?' (계정 안 이어짐)':''}`):''}</div></div>`;
   const who=n=>n&&n!=='담당 미정'? n : '○○○';
   const guide=`<div class="card" style="background:var(--card2)"><b>답글 다는 법</b>
     <div style="font-size:13.5px; line-height:1.75; margin-top:6px">센터 PC에서 <b>스마트플레이스 → 리뷰</b>를 열고 답글을 달아 주세요.<br>
