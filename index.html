@@ -143,6 +143,16 @@
   .tile small{display:block; font-weight:400; font-size:11.5px; color:var(--sub); margin-top:2px}
   .tile.hot{border-color:var(--blue)} .tile.hot small{color:var(--warn)}
   .tile:active{background:var(--card2)}
+  /* 블로그 글감 (11-13) */
+  .ik{font-size:11.5px; color:var(--blue); font-weight:700}
+  .it{font-weight:700; font-size:15px; margin:3px 0 5px; line-height:1.4}
+  .imat{display:flex; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; line-height:1.5}
+  .imat:last-child{border-bottom:0}
+  .imat i{font-style:normal; flex:0 0 20px}
+  .ifill{border:1px dashed var(--warn); background:var(--warn-soft); color:var(--warn); border-radius:10px; padding:9px 11px; font-size:12.5px; margin-top:8px; line-height:1.5}
+  .iseg{display:flex; gap:6px; margin-bottom:12px}
+  .iseg span{flex:1; text-align:center; padding:7px 0; border-radius:9px; background:var(--card); border:1px solid var(--line); font-size:12.5px; color:var(--sub); cursor:pointer}
+  .iseg span.on{background:var(--blue-soft); border-color:var(--blue); color:var(--blue); font-weight:700}
   .finrow{border-top:1px solid var(--line)} .finh{padding:13px 0; cursor:pointer; font-size:14.5px}
   .phgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px}
   .phgrid .ph{position:relative; aspect-ratio:1/1; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.07); cursor:pointer}
@@ -678,7 +688,7 @@ async function bootData(){
   try{ localStorage.setItem(lsKey(), JSON.stringify(db)); }catch(e){}
   view={name:'home'}; render();
   checkAccess(); loadOcrQuota(); loadPhStat(); pageWatch(); hwSync();
-  loadIg();
+  loadIg(); ideaPoll(); setTimeout(ideaAutoRun, 4000);   /* 블로그 초안 — 도착했는지 묻고, 주 2편 자동(켰을 때만). 둘 다 IDEA_WRITE 가 꺼져 있으면 아무것도 안 한다 */
   /* 관리자 여부 확인 (백그라운드) */
   isAdmin=false;
   loadScorecard();
@@ -902,7 +912,7 @@ function render(){
   const fn={home:vHome, member:vMember, session:vSession, summary:vSummary, search:vSearch,
     report:vReport, consult:vConsult, inbody:vInbody, peek:vPeek, logs:vLogs, schedule:vSchedule, admin:vAdmin, seed:vSeed, mkprog:vMkProg, pcheck:vPCheck, pimp:vPImp, pfinal:vPFinal,
     programs:vPrograms, progDetail:vProgDetail, progDay:vProgDay, progNew:vProgNew, library:vLibrary,
-    memberNew:vMemberNew, settings:vSettings}[view.name]||vHome;
+    memberNew:vMemberNew, settings:vSettings, ideas:vIdeas, idea:vIdea, ideaKw:vIdeaKw, ideaDraft:vIdeaDraft}[view.name]||vHome;
   el.classList.toggle('wide', view.name==='pcheck');
   if(view.name==='programs'||view.name==='progDetail'||view.name==='progDay'||view.name==='progNew'){ const b=document.getElementById('nav-prog'); if(b) b.className='on'; }
   el.innerHTML=fn();
@@ -1007,7 +1017,7 @@ function vHome(){
     ${isAdmin?`<div class="card tap" style="border-color:var(--good)" onclick="go({name:'admin'})">
       <div class="row"><b>🏢 센터 대시보드</b><span class="pill good">관리자</span></div>
       <div class="muted">트레이너 전체 현황 보기</div></div>`:''}
-    ${bdayHtml()}${briefHtml()}${monthHtml()}${scorecardHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
+    ${bdayHtml()}${briefHtml()}${monthHtml()}${ideaHtml()}${scorecardHtml()}${resume}${backupBanner}${todayHtml}${notifyHtml()}
     ${list || '<div class="empty">아직 회원이 없습니다.<br>아래 버튼으로 첫 회원을 등록하세요.</div>'}
     <button class="btn ghost" onclick="go({name:'memberNew'})">＋ 회원 등록</button>`;
 }
@@ -2036,7 +2046,7 @@ function vMember2(m, pr, x){
   return `<div class="top"><button class="back" onclick="go({name:'home'})">←</button>
     <h1>${esc(m.name)}<span class="muted" style="font-size:14px; cursor:pointer" onclick="openMemberEdit('${m.id}')"> ${sx?`(${sx})`:'(성별·생년월일 입력)'}</span></h1>
     <button class="ichip" onclick="openMemberEdit('${m.id}')">✏️ 수정</button></div>
-    <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${x.totalCnt}회</span>${m.blogOk?` <span class="pill" style="cursor:pointer" onclick="openMemberEdit('${m.id}')">✍️ 블로그 가능</span>`:''}${x.nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${x.nsCnt}회</span>`:''}</div>
+    <div style="margin:-8px 0 8px"><span class="pill good">재등록 ${m.rereg||0}회</span> <span class="pill">누적 수업 ${x.totalCnt}회</span>${m.blogOk?` <span class="pill" style="cursor:pointer" onclick="go({name:'ideas', mid:'${m.id}'})">✍️ 블로그 가능 ›</span>`:''}${x.nsCnt?` <span class="pill warn" style="cursor:pointer" onclick="openNoshow('${m.id}')">노쇼 ${x.nsCnt}회</span>`:''}</div>
     ${pairOf(m)?pairSwitchHtml(m):''}
     ${m.note?`<div class="muted" style="margin:0 0 12px">${esc(m.note)}</div>`:''}
     ${pr?`<div class="card">
@@ -2283,6 +2293,7 @@ function commitDraft(d, entries, pairMemberId, second){
   /* 그날 이 회원(2대1이면 둘 중 누구 이름으로든)의 예약이 있으면 자동으로 「완료」 표시 */
   const mt=pairOf(m), bk=db.bookings.find(b=>(b.memberId===m.id||(mt&&b.memberId===mt.id)) && b.date===log.date && !b.status);
   if(bk) bk.status='done';
+  if(!second) setTimeout(ideaAutoRun, 3000);   /* 블로그 초안 주 2편 자동 — 켰을 때만 */
   dropDraft(d);
   return log;
 }
@@ -3040,13 +3051,18 @@ function vSummary(){
     ${(ml=>ml?`<div class="card" style="border-color:var(--blue)"><b>🎉 ${esc(m.name.replace(' (예시)',''))}님의 ${ml.txt}입니다</b>
       <div class="muted" style="margin:2px 0 8px">기념 카드를 보내 보세요 — 오늘 기록 위에 「${ml.txt}」가 크게 들어갑니다</div>
       <button class="btn" style="margin:0" onclick="openCard('${log.id}', true)">🎉 기념 카드 보내기</button></div>`:'')(mileOf(log))}
+    ${(log.entries||[]).some(en=>(en.memo||'').trim())?`<label class="card" style="display:flex; gap:10px; align-items:center; cursor:pointer; padding:12px 14px">
+      <input type="checkbox" style="width:20px; height:20px; flex:none" ${db.shareMemo?'checked':''} onchange="db.shareMemo=this.checked; save()">
+      <span style="font-size:13.5px"><b>운동 메모도 같이 보내기</b><br><span class="muted" style="font-size:12px">글·사진 카드 둘 다 · 한 번 고르면 다음에도 그대로예요</span></span></label>`:''}
     <button class="btn kakao" onclick="shareSummary('${log.id}')">💬 카톡으로 보내기</button>
     <button class="btn ghost" onclick="openCard('${log.id}')">🖼 사진 카드로 보내기 — 화면 캡처처럼 한 장으로</button>
     <button class="btn ghost" onclick="go({name:'member', id:'${m.id}'})">기록 저장하고 닫기</button>`;
 }
 function shareText(log){
   const {m, rows, vol}=summaryData(log);
-  const lines=rows.filter(r=>plainStr(r.en,r.mode)).map(r=>`· ${r.name} ${plainStr(r.en,r.mode)}`+(r.delta!==null?` (${log.refDate?(log.refDate.slice(0,4)===today().slice(0,4)?fmtD(log.refDate):fullD(log.refDate))+' 대비':'지난번 대비'} ${r.delta>=0?'+':''}${r.delta}%)`:''));
+  const memoOn=!!db.shareMemo;
+  const lines=rows.filter(r=>plainStr(r.en,r.mode)||(memoOn&&(r.en.memo||'').trim())).map(r=>`· ${r.name} ${plainStr(r.en,r.mode)}`.trimEnd()+(r.delta!==null?` (${log.refDate?(log.refDate.slice(0,4)===today().slice(0,4)?fmtD(log.refDate):fullD(log.refDate))+' 대비':'지난번 대비'} ${r.delta>=0?'+':''}${r.delta}%)`:'')
+    +(memoOn&&(r.en.memo||'').trim()? `\n   ↳ ${r.en.memo.trim().replace(/\s*\n\s*/g,' / ')}` : ''));
   return `[${m.name.replace(' (예시)','')}님 오늘 운동 – ${fmtD(log.date)}${log.dayIdx?' · '+log.dayIdx+'회차':''}]\n${lines.join('\n')}\n총 볼륨 ${vol.toLocaleString()}kg${log.homework?`\n📝 오늘 숙제: ${log.homework}`:''}\n오늘도 고생하셨습니다 💪`;
 }
 /* ───────── 카톡 사진 카드 (11-12 회의 「카톡 피드백을 프로그램 화면 캡처로」) ─────────
@@ -3057,9 +3073,11 @@ function recMetric(en){ const mode=exMode(en.exId); return mode==='w'? (r=>r?r.v
 function cardRows(log){
   const m=db.members.find(x=>x.id===log.memberId), logs=pageLogs(m), idx=logs.indexOf(log), last={};
   logs.slice(0, idx<0? logs.length : idx).forEach(l=>(l.entries||[]).forEach(en=>{ const v=recMetric(en); if(v) last[en.exId]=v; }));
-  return (log.entries||[]).map(en=>{ const rec=pageRec(en, exMode(en.exId)); if(!rec) return null;
+  const memoOn=!!db.shareMemo;
+  return (log.entries||[]).map(en=>{ const rec=pageRec(en, exMode(en.exId)), memo=memoOn? (en.memo||'').trim().replace(/\s*\n\s*/g,' / ') : '';
+    if(!rec&&!memo) return null;
     const cur=recMetric(en), prev=last[en.exId]||0;
-    return {nm:exName(en.exId), rec, tag:(exOf(en.exId)||{}).tag||'기타', d: cur&&prev? (cur-prev)/prev*100 : null,
+    return {nm:exName(en.exId), rec:rec||'', memo, tag:(exOf(en.exId)||{}).tag||'기타', d: cur&&prev? (cur-prev)/prev*100 : null,
       up: cur&&prev&&cur>prev? Math.round((cur-prev)/prev*100) : 0}; }).filter(Boolean);
 }
 /* 「지난번보다 하체 12%, 코어 20% 더 좋아졌어요」 — 부위는 운동 분류(하체·가슴·등…) 그대로.
@@ -3117,7 +3135,8 @@ async function cardCanvas(log, mile){
       font(600,26); const uw=r.up? c.measureText('▲ '+r.up+'%').width+18 : 0;
       const one= nw+rw+uw+40 <= IN-CP*2; font(600,34);
       const lines= one? [r.rec] : wrapTok(r.rec, IN-CP*2-uw);
-      return {...r, one, lines, uw, h: one? 88 : 70+lines.length*48+18}; });
+      font(400,28); const ml= r.memo? wrap('↳ '+r.memo, IN-CP*2) : [];
+      return {...r, one, lines, uw, ml, h: (one? 88 : 70+lines.length*48+18) + (ml.length? ml.length*40+6 : 0)}; });
     if(L.length){
       const ch=L.reduce((a,r)=>a+r.h,0)+12;
       rr(P, y, IN, ch, 28, '#131E33', '#243352');
@@ -3128,6 +3147,8 @@ async function cardCanvas(log, mile){
         font(500,34); c.fillStyle='#EAF0FA'; c.fillText(r.nm, P+CP, ry+24, IN-CP*2);
         if(r.one) rec(r.rec, r.up, r.uw, ry+24);
         else r.lines.forEach((l,k)=>rec(l, k===r.lines.length-1? r.up : 0, r.uw, ry+72+k*48));
+        if(r.ml.length){ const my=ry+(r.one? 80 : 70+r.lines.length*48+12); font(400,28); c.fillStyle='#8FA0BC';
+          r.ml.forEach((l,k)=>c.fillText(l, P+CP, my+k*40, IN-CP*2)); }
         ry+=r.h; });
       y+=ch+20;
     }
@@ -3164,7 +3185,7 @@ async function openCard(logId, withMile){
     _card={blob, name:`${mile?'기념카드':'수업기록'}_${(log.date||'').replace(/-/g,'')}.png`, url:URL.createObjectURL(blob)};
   }catch(e){ console.error(e); toast('사진을 만들지 못했습니다'); return; }
   modal(`<b>🖼 사진 카드</b>
-    <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다. 특이사항 · 컨디션 · 메모는 들어가지 않아요</div>
+    <div class="muted" style="margin:4px 0 8px">이 사진이 그대로 갑니다. 특이사항 · 컨디션 · 수업 메모는 들어가지 않아요${db.shareMemo?' · 운동 메모는 들어가요':''}</div>
     <div style="max-height:50vh; overflow:auto; border-radius:12px; border:1px solid var(--line)"><img src="${_card.url}" style="width:100%; display:block" alt="수업 기록 사진 카드"></div>
     <button class="btn kakao" style="margin-top:10px" onclick="cardShare()">💬 사진으로 보내기</button>
     <button class="btn ghost" onclick="cardSave()">⬇ 사진 저장</button>
@@ -4869,6 +4890,419 @@ function renderPickList(q){
 function quickNewFromPick(){ const cb=_pickCb; quickNewEx(_pickQ, id=>{ cb&&cb(id); }); }
 
 /* ───────────────────── 화면: 설정 ───────────────────── */
+/* ───────────────────── 블로그 글감 (11-13, 4번 묶음 「이 수업을 글감으로」 앞부분) ─────────────────────
+   글감을 「찾는」 일은 여기서 기록을 견줘서 한다 — AI 없음, 서버 안 부름. 글을 「쓰는」 일만 나중에 서버(rework 의 lesson_submit)에 맡긴다.
+   대상은 「블로그에 써도 됨」(m.blogOk)을 켠 회원뿐. 좋아진 것만 글감으로 만든다(떨어진 기록·노쇼는 글감이 아니다).
+   숫자는 회원이 실제로 든 무게·버틴 시간·적힌 날짜만 쓴다(추정값 e1RM 은 쓰지 않는다). 옛 기록 빠르게 넣기(seed)·판독이 불확실한 숫자(unsureNum)는 견주지 않는다.
+   글감 여섯 가지(차례 = 문서 7번 절): gain 기록 여러 개 오름 · pain 통증이 사라짐 · first 처음 해낸 것 · body 몸 숫자 · bal 좌우가 맞춰짐 · long 오래 다님
+   재료 판정: 최근 두 달 수업에 메모나 표시가 붙은 운동 3개 이상 + 회원 한마디 1개 이상이면 「글이 됩니다」, 하나 모자라면 「한 칸만 더」, 둘 다 모자라면 목록에 안 올린다(재료가 얇으면 글이 지어낸다).
+   저장 칸: db.region(지역 한 단어) · db.ideaSkip{글감 열쇠: 넘긴 날} · db.ideaWords{글감 열쇠: 선생님 한마디}
+   밴드 운동은 글감에서 뺐다 — 보조 밴드는 가벼워지는 게, 저항 밴드는 무거워지는 게 좋아진 것이라 색만으로는 방향을 알 수 없다 */
+const IDEA_WIN=60;                       /* 「최근」 = 60일 */
+const IDEA_PAIN=['허리 통증','무릎 통증','어깨 통증'], IDEA_BAL=['왼쪽 약함','오른쪽 약함','좌우 쏠림'];
+const IDEA_KIND={gain:'기록이 여러 개 오름', pain:'통증이 사라짐', first:'처음 해낸 것', body:'몸 숫자 변화', bal:'좌우가 맞춰짐', long:'오래 다님', span:'다닌 기간'};
+const IDEA_ORD=['span','gain','pain','first','body','bal','long'];
+function iDay(s){ const p=String(s||'').split('-'); return p.length===3? Math.round(new Date(+p[0],+p[1]-1,+p[2]).getTime()/86400000) : NaN; }
+function iName(m){ return (m.name||'').replace(' (예시)',''); }
+function iWho(m){ let a=''; if(m.birth){ const n=new Date().getFullYear()-(+m.birth.slice(0,4)); if(n>=10&&n<100) a=Math.floor(n/10)*10+'대'; } return [a, m.sex||''].filter(Boolean).join(' '); }
+function iCnt(n){ return n===3?'셋이': n===4?'넷이': n===5?'다섯이': n+'개가'; }
+function iNum(v){ return String(Math.round(v*10)/10); }
+function ideaScan(m){
+  const logs=pageLogs(m); if(!logs.length) return [];
+  const T=iDay(today()), cut=T-IDEA_WIN, inWin=d=>iDay(d)>=cut, last=logs[logs.length-1];
+  if(!(iDay(last.date)>=T-30)) return [];          /* 최근 한 달 안에 수업이 없으면 글감을 내지 않는다 */
+  const byEx={};
+  logs.forEach(l=>(l.entries||[]).forEach(e=>{ if(e.skip||!exOf(e.exId)) return; (byEx[e.exId]=byEx[e.exId]||[]).push({d:l.date||'', e}); }));
+  /* 재료 — 최근 두 달 수업에서 */
+  const wl=logs.filter(l=>inWin(l.date)), we=wl.flatMap(l=>(l.entries||[]).filter(e=>!e.skip));
+  const mat={ rich:new Set(we.filter(e=>(e.memo||'').trim()||(e.issues||[]).length).map(e=>e.exId)).size,
+    memos:we.filter(e=>(e.memo||'').trim()).length,
+    imps:we.reduce((a,e)=>a+(e.issues||[]).filter(x=>issueCls(x)==='imp').length,0),
+    said:wl.filter(l=>(l.said||'').trim()).map(l=>({t:l.said.trim(), d:l.date||''})).reverse(),
+    photos:wl.reduce((a,l)=>a+(l.photos||[]).length,0),
+    phEx:(c=>Object.keys(c).map(k=>exName(k)+' '+c[k]))(wl.reduce((c,l)=>{ (l.photos||[]).forEach(p=>{ if(p.ex&&exOf(p.ex)) c[p.ex]=(c[p.ex]||0)+1; }); return c; },{})) };
+  mat.lack=[]; if(mat.rich<3) mat.lack.push('memo'); if(!mat.said.length) mat.lack.push('said');
+  const out=[], top=a=>a.reduce((x,y)=>y.v>x.v?y:x);
+  const add=(kind, anchor, ttl, sub, lines)=>out.push({key:m.id+'|'+kind+'|'+anchor, mid:m.id, kind, ttl, sub, lines, mat});
+  /* ① 기록 여러 개 오름 · ③ 처음 해낸 것 — 두 달 전까지의 최고와 최근 두 달의 최고를 견준다. 다닌 지 두 달이 안 됐으면 첫 기록과 견준다 */
+  const gains=[], firsts=[], allP=[];
+  for(const id in byEx){ const mode=exMode(id), nm=exName(id), arr=byEx[id].filter(x=>!x.e.unsureNum);
+    if(mode!=='w'&&mode!=='t'&&mode!=='lv') continue;
+    const pts=arr.map(x=>{
+      if(mode==='w'){ const b=bestW(x.e.sets); return b? {d:x.d, v:num(b.w), s:setStr(b)} : null; }
+      if(mode==='t'){ const t=bestT(x.e.sets); return t? {d:x.d, v:t, s:t+'초'} : null; }
+      const b=bestLv(x.e.sets); return b&&num(b.lv)>0? {d:x.d, v:num(b.lv), s:'레벨 '+num(b.lv)} : null; }).filter(Boolean);
+    if(pts.length<2) continue;
+    if(mode!=='lv') allP.push({id, nm, pts});
+    let old=pts.filter(p=>!inWin(p.d)), win=pts.filter(p=>inWin(p.d));
+    if(!old.length){ old=[win[0]]; win=win.slice(1); }
+    if(!win.length) continue;
+    const f=top(old), b=top(win); if(!(b.v>f.v)) continue;
+    if(mode==='lv'){ firsts.push({anchor:id+':lv'+b.v, ttl:`${nm} 레벨이 ${f.v}에서 ${b.v}로 올랐어요`, f, b, nm, ic:'📈'}); continue; }
+    gains.push({id, nm, tg:(exOf(id)||{}).tag||'', f, b, pct:(b.v-f.v)/f.v});
+    if(mode==='w'){ const mk=[20,40,60,80,100,120,140,160,180,200].filter(k=>f.v<k&&b.v>=k).pop();
+      if(mk) firsts.push({anchor:id+':'+mk, ttl:`${nm} ${mk}kg을 처음 넘겼어요`, f, b, nm, ic:'🏋️', w:mk}); }
+    else if(b.v>=pts[0].v*2 && f.v<pts[0].v*2) firsts.push({anchor:id+':x2', ttl:`${nm} 버티는 시간이 처음의 두 배가 됐어요`, f, b, nm, ic:'⏱'});
+  }
+  if(gains.length>=3){ gains.sort((a,b)=>b.pct-a.pct); const G=gains.slice(0,4);
+    const tc={}; G.forEach(g=>{ if(g.tg) tc[g.tg]=(tc[g.tg]||0)+1; }); const tg=Object.keys(tc).find(k=>tc[k]>=Math.ceil(G.length*2/3))||'운동';
+    const fresh=inWin(logs[0].date), span= fresh? '시작하고 '+(T-iDay(logs[0].date)<45?'한 달':'두 달')+' 사이' : '최근 두 달 사이';
+    add('gain', today().slice(0,7), `${span} ${tg} 기록 ${iCnt(gains.length)} 올랐어요`,
+      G.slice(0,3).map(g=>`${esc(g.nm)} <span class="num">${g.f.v}→${g.b.v}${exMode(g.id)==='w'?'kg':'초'}</span>`).join(' · '),
+      G.map(g=>({ic:exMode(g.id)==='w'?'🏋️':'⏱', h:`${esc(g.nm)} <b class="num">${g.f.s} → ${g.b.s}</b><div class="muted">${fmtD(g.f.d)} → ${fmtD(g.b.d)}</div>`}))); }
+  /* ② 통증이 사라짐 · ⑤ 좌우가 맞춰짐 — 같은 운동에 2번 넘게 찍혔다가 그 뒤 4~12번 동안 안 찍힘(오래전에 끝난 일은 새 소식이 아니다) */
+  const fade=items=>{ const res=[];
+    for(const id in byEx){ const arr=byEx[id]; items.forEach(iss=>{ const idx=arr.map((x,i)=>(x.e.issues||[]).includes(iss)?i:-1).filter(i=>i>=0);
+      if(idx.length<2) return; const li=idx[idx.length-1], after=arr.length-1-li;
+      if(after>=4&&after<=12&&inWin(arr[arr.length-1].d)) res.push({id, nm:exName(id), iss, n:idx.length, d:arr[li].d, after}); }); }
+    return res.sort((a,b)=>b.n-a.n||b.after-a.after)[0]; };
+  const fl=x=>[{ic:'🩹', h:`${esc(x.nm)} 「${esc(x.iss)}」 ${fmtD(x.d)}까지 <b class="num">${x.n}번</b> → 그 뒤 수업 <b class="num">${x.after}번</b> 동안 없음`}];
+  const pn=fade(IDEA_PAIN);
+  if(pn) add('pain', pn.id+':'+pn.iss+':'+pn.d, `${pn.nm} 때 ${pn.iss}이 수업 ${pn.after}번 동안 안 나왔어요`, `「${esc(pn.iss)}」 ${fmtD(pn.d)}까지 ${pn.n}번 → 그 뒤 수업 ${pn.after}번 동안 없음`, fl(pn));
+  if(firsts.length){ const F=firsts.sort((a,b)=>(b.w||0)-(a.w||0))[0];
+    add('first', F.anchor, F.ttl, `<span class="num">${F.f.s} → ${F.b.s}</span> · ${fmtD(F.b.d)}`, [{ic:F.ic, h:`${esc(F.nm)} <b class="num">${F.f.s} → ${F.b.s}</b><div class="muted">${fmtD(F.f.d)} → ${fmtD(F.b.d)}</div>`}]); }
+  /* ④ 몸 숫자 — 인바디 첫 측정과 최근 측정 */
+  { const ib=ibSorted(m).filter(x=>x.date);
+    if(ib.length>=2&&inWin(ib[ib.length-1].date)){ const a=ib[0], z=ib[ib.length-1];
+      const fat= num(a.fat_kg)>0&&num(z.fat_kg)>0? num(a.fat_kg)-num(z.fat_kg) : 0, smm= num(a.smm)>0&&num(z.smm)>0? num(z.smm)-num(a.smm) : 0;
+      if(fat>=2||smm>=1){ const p=[]; if(fat>=0.5) p.push(`체지방 ${iNum(fat)}kg 줄고`); if(smm>=0.5) p.push(`골격근 ${iNum(smm)}kg 늘었어요`);
+        let ttl=p.join(' '); if(!/요$/.test(ttl)) ttl=ttl.replace(/줄고$/,'줄었어요');
+        const ln=[]; if(fat>=0.5) ln.push({ic:'⚖️', h:`체지방 <b class="num">${iNum(num(a.fat_kg))}kg → ${iNum(num(z.fat_kg))}kg</b>`}); if(smm>=0.5) ln.push({ic:'💪', h:`골격근 <b class="num">${iNum(num(a.smm))}kg → ${iNum(num(z.smm))}kg</b>`});
+        ln.push({ic:'🗓', h:`<span class="num">${fullD(a.date)}</span> 첫 측정 → <span class="num">${fullD(z.date)}</span> 측정`});
+        add('body', z.date, ttl, `인바디 ${fullD(a.date)} → ${fullD(z.date)}`, ln); } } }
+  const bl=fade(IDEA_BAL);
+  if(bl) add('bal', bl.id+':'+bl.iss+':'+bl.d, `${bl.nm} 때 「${bl.iss}」이 수업 ${bl.after}번 동안 안 나왔어요`, `${fmtD(bl.d)}까지 ${bl.n}번 → 그 뒤 수업 ${bl.after}번 동안 없음`, fl(bl));
+  /* ⑦ 다닌 기간 — 첫 수업부터 3개월·100일·반년·1년(그 뒤 반년마다)이 된 날부터 2주 동안. 오른 운동이 2개 이상일 때만 */
+  { const d0=iDay(logs[0].date), days=T-d0, p0=logs[0].date.split('-');
+    const mo=k=>Math.round(new Date(+p0[0],+p0[1]-1+k,+p0[2]).getTime()/86400000)-d0;
+    const marks=[[mo(3),'3개월'],[100,'100일'],[mo(6),'반년'],[mo(12),'1년']];
+    for(let k=18;k<=600&&mo(k)<=days;k+=6) marks.push([mo(k), k%12? Math.floor(k/12)+'년 반' : (k/12)+'년']);
+    const mk=marks.filter(a=>days>=a[0]&&days<a[0]+14).pop();
+    if(mk){ const S=[];
+      /* 운동마다 「그 운동을 처음 한 날」의 기록과 최근 두 달의 최고를 견준다(둘 사이가 30일 넘게 벌어진 것만). 첫 달부터 해 온 운동을 앞에 세운다 */
+      allP.forEach(a=>{ const f=a.pts[0], win=a.pts.filter(p=>inWin(p.d)&&iDay(p.d)>=iDay(f.d)+30); if(!win.length) return;
+        const b=top(win); if(b.v>f.v) S.push({id:a.id, nm:a.nm, f, b, pct:(b.v-f.v)/f.v, st:iDay(f.d)<d0+30?0:1}); });
+      if(S.length>=2){ S.sort((a,b)=>a.st-b.st||b.pct-a.pct); const G=S.slice(0,4);
+        add('span', 'd'+mk[0], `다닌 지 ${mk[1]}, 처음보다 기록 ${iCnt(S.length)} 올랐어요`,
+          G.slice(0,3).map(g=>`${esc(g.nm)} <span class="num">${g.f.v}→${g.b.v}${exMode(g.id)==='w'?'kg':'초'}</span>`).join(' · '),
+          [{ic:'🗓', h:`첫 수업 <span class="num">${fullD(logs[0].date)}</span> · 지금까지 <b class="num">${logs.length}번</b>`}].concat(
+            G.map(g=>({ic:exMode(g.id)==='w'?'🏋️':'⏱', h:`${esc(g.nm)} <b class="num">${g.f.s} → ${g.b.s}</b><div class="muted">처음 한 날 ${fullD(g.f.d)} → ${fullD(g.b.d)}</div>`})))); } } }
+  /* ⑥ 오래 다님 — 30·50·100번째(그 뒤 50번마다)는 하루 전에 미리, 지난 수업이 그날이었으면 2주 동안 */
+  { const n=logs.length, nx=n+1, big=k=>[30,50,100].includes(k)||(k>100&&k%50===0);
+    const ln=[{ic:'🗓', h:`첫 수업 <span class="num">${fullD(logs[0].date)}</span> · 지금까지 <b class="num">${n}번</b>`}];
+    const g=gains.slice().sort((a,b)=>b.pct-a.pct)[0]; if(g) ln.push({ic:'🏋️', h:`${esc(g.nm)} <b class="num">${g.f.s} → ${g.b.s}</b>`});
+    if(big(nx)) add('long', 'n'+nx, `다음 수업이 ${nx}번째 수업이에요`, `첫 수업 ${fullD(logs[0].date)}`, ln);
+    else if(iDay(last.date)>=T-14){ const ml=mileOf(last);
+      if(ml&&(big(n)||/년$/.test(ml.txt))) add('long', big(n)?'n'+n:ml.txt, big(n)? `지난 수업이 ${n}번째 수업이었어요` : `${ml.txt}이 됐어요`, `첫 수업 ${fullD(logs[0].date)}`, ln); } }
+  return out;
+}
+/* 목록 — 회원마다 가장 좋은 글감 하나(한 회원으로 글감을 여러 개 쏟아 내지 않는다). 「글이 됩니다」가 위, 그 안에서는 여섯 가지 차례대로 */
+let _ideaL=[];
+function ideaList(mid){
+  const skip=db.ideaSkip||{}, L=[];
+  db.members.filter(m=>m.blogOk&&(!mid||m.id===mid)).forEach(m=>{
+    const a=ideaScan(m).filter(x=>!skip[x.key]&&x.mat.lack.length<=1&&!ideaJobOf(x.key)).sort((x,y)=>IDEA_ORD.indexOf(x.kind)-IDEA_ORD.indexOf(y.kind));
+    if(a.length) L.push(a[0]); });
+  return L.sort((x,y)=>x.mat.lack.length-y.mat.lack.length||IDEA_ORD.indexOf(x.kind)-IDEA_ORD.indexOf(y.kind));
+}
+function ideaLackTxt(x){ return x.mat.lack[0]==='said'? '💬 회원 한마디가 없어요. 다음 수업 때 한 줄만 적으면 글이 됩니다'
+  : `📝 메모나 표시가 붙은 운동이 ${x.mat.rich}개예요. 무엇을 잡아 줬는지 세 운동만 적으면 글이 됩니다`; }
+function ideaMatTxt(x){ const a=[]; if(x.mat.said.length) a.push('💬 회원 한마디 있음'); if(x.mat.photos) a.push(`📷 사진 ${x.mat.photos}장`); if(x.mat.memos) a.push(`📝 메모 ${x.mat.memos}개`); return a.join(' · '); }
+function ideaHtml(){
+  /* 서버(lesson)가 열리기 전엔 관리자에게만 보인다 — 11-14 「서버 열리기 전엔 선생님들에게 안 보인다」 */
+  if(!IDEA_WRITE && !isAdmin) return '';
+  if(ocrQuota&&ocrQuota.tier==='trial') return '';
+  const nw=(db.blogJobs||[]).filter(j=>j.status==='done'&&!j.hide&&!j.seen).length;
+  const arr= nw? `<div class="card tap" style="border-color:var(--good)" onclick="go({name:'ideas', tab:'done'})"><div class="row"><div><b>📬 블로그 초안 ${nw}편 도착</b>
+    <div class="muted">읽어 보고 고쳐서 직접 발행하세요</div></div><span class="muted" style="flex-shrink:0">보기 ›</span></div></div>` : '';
+  const L=ideaList(); if(!L.length) return arr;
+  const x=L[0], m=db.members.find(v=>v.id===x.mid);
+  return arr+`<div class="card tap" style="border-color:var(--blue)" onclick="go({name:'ideas'})"><div class="row"><div><b>✍️ 블로그 글감 ${L.length}개</b>
+    <div class="muted">${esc(iName(m))} 회원님 — ${esc(x.ttl)}</div></div><span class="muted" style="flex-shrink:0">보기 ›</span></div></div>`;
+}
+function vIdeas(){
+  const mid=view.mid||'', one=mid&&db.members.find(v=>v.id===mid), L=_ideaL=ideaList(mid), okCnt=db.members.filter(m=>m.blogOk).length;
+  const back= one? `go({name:'member', id:'${mid}'})` : `go({name:'home'})`;
+  const J=(db.blogJobs||[]).filter(j=>!j.hide), JW=J.filter(j=>j.status!=='done').reverse(), JD=J.filter(j=>j.status==='done').reverse(), tab=IDEA_WRITE? (view.tab||'') : '';
+  const tb=(k,l)=> IDEA_WRITE? `<span class="${tab===k?'on':''}" onclick="go({name:'ideas', tab:'${k}', mid:'${k?'':mid}'})">${l}</span>` : `<span class="${k?'':'on'}" ${k?`onclick="toast('글쓰기는 곧 열립니다')"`:''}>${l.replace(/ 0$/,'')}</span>`;
+  const head=`<div class="top"><button class="back" onclick="${back}">←</button><h1>블로그 글감</h1><span></span></div>
+    <div class="iseg">${tb('', '글감 '+L.length)}${tb('wait', '맡긴 글 '+JW.length)}${tb('done', '도착한 초안 '+JD.length)}</div>`;
+  const nm=j=>{ const m=db.members.find(v=>v.id===j.mid); return m? esc(iName(m)) : '(지운 회원)'; };
+  if(IDEA_WRITE) setTimeout(()=>ideaPoll(), 0);
+  if(tab==='wait') return head+(JW.map(j=>`<div class="card">
+      <div class="row"><span class="ik">${IDEA_KIND[j.kind]||'글감'}${j.auto?' · 자동':''}</span><span class="pill ${j.status==='wait'?'':'warn'}">${j.status==='wait'?'쓰는 중':j.status==='lack'?'기록이 모자라요':'못 만들었어요'}</span></div>
+      <div class="it">${esc(j.ttl)}</div><div class="muted">${nm(j)} · 검색어 「${esc(j.keyword)}」 · ${fmtD(j.at)} 맡김</div>
+      ${j.status==='wait'? '<div class="muted" style="margin-top:5px">다음 날 아침에 도착합니다</div>'
+        : `<div class="ifill">${esc(j.status==='lack'? '더 있으면 되는 것: '+(j.msg||'') : (j.msg||''))}</div>
+           <div class="muted" style="margin-top:6px">${j.status==='lack'?'기록을 더 적으면 글감 목록에서 다시 맡길 수 있습니다':'글감 목록에서 다시 맡길 수 있습니다'}</div>
+           <button class="btn subtle" style="margin-top:8px" onclick="ideaJobHide('${j.id}')">확인 — 목록에서 내리기</button>`}</div>`).join('')
+      || '<div class="empty">맡긴 글이 없어요.<br><span style="font-size:12.5px">글감을 열어 「초안 맡기기」를 누르면 여기에 쌓입니다</span></div>')
+    +(JW.some(j=>j.status==='wait')? `<button class="btn subtle" onclick="ideaPoll(true)">도착했는지 지금 확인</button>`:'');
+  if(tab==='done') return head+(JD.map(j=>{ const p=ideaParse(j.text);
+      return `<div class="card tap" onclick="go({name:'ideaDraft', id:'${j.id}'})">
+        <div class="row"><span class="ik">${IDEA_KIND[j.kind]||'글감'}${j.auto?' · 자동':''}</span>${j.seen?'':'<span class="pill good">새 글</span>'}</div>
+        <div class="it">${esc(p.title||j.ttl)}</div><div class="muted">${nm(j)} · 검색어 「${esc(j.keyword)}」 · ${fmtD(j.doneAt||j.at)} 도착</div></div>`; }).join('')
+      || '<div class="empty">도착한 초안이 없어요.<br><span style="font-size:12.5px">맡긴 글은 다음 날 아침에 여기로 옵니다</span></div>');
+  return head+`
+    ${!(db.region||'').trim()? `<div class="card"><b>📍 지역 한 단어</b>
+      <div class="muted" style="margin:2px 0 8px">글 제목과 검색어 앞에 붙습니다. 한 번만 적으면 돼요 (설정에서 바꿀 수 있습니다)</div>
+      <input type="text" placeholder="예: 원주" maxlength="10" onchange="ideaRegion(this.value)"></div>`:''}
+    ${L.map((x,i)=>{ const m=db.members.find(v=>v.id===x.mid), ok=!x.mat.lack.length;
+      return `<div class="card tap" onclick="go({name:'idea', i:${i}, mid:'${mid}'})">
+        <div class="row"><span class="ik">${IDEA_KIND[x.kind]}</span><span class="pill ${ok?'good':'warn'}">${ok?'글이 됩니다':'한 칸만 더'}</span></div>
+        <div class="it">${esc(x.ttl)}</div>
+        <div class="muted">${esc(iName(m))} · ${x.sub}</div>
+        ${ok? `<div class="muted" style="margin-top:5px">${ideaMatTxt(x)}</div>` : `<div class="ifill">${ideaLackTxt(x)}</div>`}</div>`; }).join('')
+      || `<div class="empty">${one? esc(iName(one))+' 회원님은 아직 글감이 없어요.' : '아직 글감이 없어요.'}<br><span style="font-size:12.5px">기록이 오르거나 통증 표시가 사라지면 여기에 떠요.<br>운동 메모와 「회원 한마디」를 적어 두면 글감이 더 잘 잡힙니다</span></div>`}
+    <div class="muted" style="text-align:center; margin:14px 0 6px; line-height:1.6">${okCnt? `「블로그에 써도 됨」을 켠 회원 ${okCnt}명의 기록에서 찾았어요` : '「블로그에 써도 됨」을 켠 회원이 없어요 — 회원 화면 ✏️ 수정에서 켭니다'}<br>회원 이름은 여기에만 보이고 글에는 쓰지 않습니다${IDEA_WRITE? `<br>주 2편 자동: ${db.ideaAuto? `켜짐 · 이번 주 ${ideaAutoLeft()}편 남음` : '꺼짐'} <span style="opacity:.7">(설정에서 바꿉니다)</span>`:''}</div>`;
+}
+function ideaRegion(v){ db.region=String(v||'').trim().split(/\s+/)[0]||''; save(); render(); if(db.region) toast('지역을 저장했습니다'); }
+function vIdea(){
+  const x=_ideaL[view.i]; if(!x) return vIdeas();
+  const m=db.members.find(v=>v.id===x.mid), logs=pageLogs(m), ok=!x.mat.lack.length, who=iWho(m), words=(db.ideaWords||{})[x.key]||'', goal=(m.nextGoal||'').trim();
+  const L=x.lines.slice();
+  x.mat.said.slice(0,2).forEach(s=>L.push({ic:'💬', h:`「${esc(s.t)}」 <span class="muted num">${fmtD(s.d)}</span>`}));
+  if(x.mat.memos||x.mat.imps) L.push({ic:'📝', h:[x.mat.memos?`운동 메모 ${x.mat.memos}개`:'', x.mat.imps?`좋아진 표시 ${x.mat.imps}번`:''].filter(Boolean).join(' · ')});
+  if(x.mat.photos) L.push({ic:'📷', h:`사진 ${x.mat.photos}장${x.mat.phEx.length?` <span class="muted">(${esc(x.mat.phEx.join(' · '))})</span>`:''}`});
+  if(goal) L.push({ic:'🎯', h:'다음 목표: '+esc(goal)});
+  return `<div class="top"><button class="back" onclick="go({name:'ideas', mid:'${view.mid||''}'})">←</button><h1>글감</h1><span class="pill ${ok?'good':'warn'}">${ok?'글이 됩니다':'한 칸만 더'}</span></div>
+    <div class="card"><span class="ik">${IDEA_KIND[x.kind]} · ${esc(iName(m))}${who?` (${who})`:''}</span>
+      <div class="it" style="font-size:16px">${esc(x.ttl)}</div>
+      <div class="muted">${fullD(logs[0].date)} 첫 수업 → ${fullD(logs[logs.length-1].date)} ${logs.length}번째 수업</div></div>
+    <div class="card"><div class="muted" style="margin-bottom:4px">글에 들어갈 재료 — 기록에 적힌 것만</div>
+      ${L.map(l=>`<div class="imat"><i>${l.ic}</i><span>${l.h}</span></div>`).join('')}
+      ${ok?'':`<div class="ifill">${ideaLackTxt(x)}</div>`}</div>
+    <div class="card"><div class="muted">선생님 한마디 <span style="opacity:.7">(선택 — 왜 이렇게 가르쳤는지)</span></div>
+      <textarea rows="2" style="margin-top:6px" placeholder="예: 무릎이 안쪽으로 모여서 엉덩이 운동부터 넣었어요" onchange="ideaWords(${view.i}, this.value)">${esc(words)}</textarea></div>
+    ${IDEA_WRITE? `<button class="btn ${ok?'':'subtle'}" style="font-size:14.5px; padding:13px" onclick="ideaStart(${view.i})">${ok?'초안 맡기기':'초안 맡기기 — 한 칸만 더 채우면 됩니다'}</button>
+    <div class="muted" style="text-align:center; margin:6px 0 4px">검색어 후보 셋 중 하나 고르기 → 다음 날 아침 초안 도착</div>`
+    : `<button class="btn subtle" style="font-size:14.5px; padding:13px" onclick="toast('글쓰기는 곧 열립니다')">초안 맡기기 — 곧 열립니다</button>
+    <div class="muted" style="text-align:center; margin:6px 0 4px">열리면: 검색어 후보 셋 중 하나 고르기 → 다음 날 아침 초안 도착</div>`}
+    <button class="btn subtle" style="margin-top:8px" onclick="ideaSkip(${view.i})">이 글감은 넘기기</button>`;
+}
+function ideaWords(i, v){ const x=_ideaL[i]; if(!x) return; db.ideaWords=db.ideaWords||{}; v=String(v||'').trim(); if(v) db.ideaWords[x.key]=v; else delete db.ideaWords[x.key]; save(); }
+function ideaSkip(i){ const x=_ideaL[i]; if(!x) return;
+  ask('이 글감을 넘길까요?\n넘긴 글감은 다시 나오지 않습니다. 이 회원의 다른 글감이 있으면 그것이 올라옵니다.', '넘기기', ()=>{
+    db.ideaSkip=db.ideaSkip||{}; db.ideaSkip[x.key]=today(); if(db.ideaWords) delete db.ideaWords[x.key]; save(); go({name:'ideas', mid:view.mid||''}); toast('글감을 넘겼습니다'); }); }
+
+/* ───────────────────── 블로그 글감 → 초안 (11-13 밤 미리 만들어 둠 — 서버가 열리면 IDEA_WRITE 만 true 로) ─────────────────────
+   서버: 수파베이스 함수 rework. keywords(검색어 후보 3개, 바로) → lesson_submit(초안 일감, 묶음 처리라 다음 날) → poll(결과).
+   IDEA_WRITE 가 false 인 동안은 서버를 한 번도 부르지 않는다. 서버를 부르는 곳은 ideaCall 하나뿐 — 꼴이 바뀌면 여기와 ideaPayload 만 고친다.
+   보내는 것(연결 문서 4-1): 회원 이름과 수업 전체 메모(log.note)는 보내지 않는다. 운동 메모·한마디·주의사항 안에 적힌 회원 이름도 「회원」으로 바꾼다. 추정값(e1RM·%)은 넣지 않는다.
+   저장 칸: db.blogJobs[{id, jobId, key, mid, kind, ttl, keyword, at, auto, status:'wait'|'done'|'lack'|'fail', text, msg, doneAt, seen, hide}] · db.ideaAuto(주 2편 자동, 기본 꺼짐) */
+let IDEA_WRITE=false;
+const FN_REWORK=SB_URL+'/functions/v1/rework', IDEA_MAX=7800, IDEA_AUTO_WEEK=2;
+async function ideaCall(body){
+  try{ const {data:{session}}=await sb.auth.getSession(); if(!session) return {ok:false, error:'login', message:'로그인이 필요합니다'};
+    const res=await fetch(FN_REWORK,{method:'POST', headers:{'content-type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+session.access_token}, body:JSON.stringify(body)});
+    let out=null; try{ out=await res.json(); }catch(e){}
+    return out&&typeof out.ok==='boolean'? out : {ok:false, error:'server', message:'서버가 답하지 않았습니다. 잠시 뒤 다시 해 주세요'};
+  }catch(e){ return {ok:false, error:'net', message:'연결이 안 됩니다. 인터넷을 확인해 주세요'}; }
+}
+function iPlain(h){ return String(h||'').replace(/<div/g,' <div').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/\s+/g,' ').trim(); }
+function iScrub(s, m){ let t=String(s||''); const n=iName(m).trim();
+  if(n.length>=2){ t=t.split(n).join('회원');
+    if(n.length>=3) t=t.replace(new RegExp(n.slice(1).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=\\s*(님|씨|회원))','g'),'회원'); }
+  return t.replace(/회원(\s*회원)+/g,'회원'); }
+/* 보낼 수업 3~5개 — 처음 1 · 가운데(메모·표시·한마디가 많은 날) 1~2 · 최근 1~2(한마디가 적힌 가장 최근 수업은 꼭) */
+function ideaPickLogs(m){
+  const all=pageLogs(m); if(all.length<=5) return all;
+  const sc=l=>(l.entries||[]).reduce((a,e)=>a+((e.memo||'').trim()?1:0)+(e.issues||[]).length,0)+((l.said||'').trim()?3:0)+((l.photos||[]).length?1:0);
+  const pick=new Set([all[0], all[all.length-1]]);
+  const sd=all.slice().reverse().find(l=>(l.said||'').trim()&&iDay(l.date)>=iDay(today())-IDEA_WIN); pick.add(sd||all[all.length-2]);
+  all.slice(1,-1).filter(l=>!pick.has(l)&&sc(l)>0).sort((a,b)=>sc(b)-sc(a)).slice(0,5-pick.size).forEach(l=>pick.add(l));
+  return all.filter(l=>pick.has(l));
+}
+function ideaPayload(x, keyword){
+  const m=db.members.find(v=>v.id===x.mid), all=pageLogs(m), last=all[all.length-1];
+  const phEx={}; all.forEach(l=>(l.photos||[]).forEach(p=>{ if(p.ex) phEx[p.ex]=1; }));   /* 이 회원 수업일지에 사진이 있는 운동(어느 수업이든) — 초안이 그 운동에 사진 자리를 만들고, 앱이 그 사진을 바로 넣는다 */
+  const body={action:'lesson_submit', keyword:String(keyword||'').trim(), kind:'변화',
+    member:{age:(iWho(m).match(/\d+대/)||[''])[0], sex:m.sex||'', note:iScrub((m.note||'').trim(),m), next_goal:iScrub((m.nextGoal||'').trim(),m), count:all.length, first_date:all[0].date||''},
+    logs:ideaPickLogs(m).map(l=>({date:l.date||'', cond:iScrub((l.cond||'').trim(),m), said:iScrub((l.said||'').trim(),m), homework:iScrub((l.homework||'').trim(),m),
+      entries:(l.entries||[]).filter(e=>!e.skip&&exOf(e.exId)).map(e=>{ const o={name:exName(e.exId), tag:(exOf(e.exId)||{}).tag||'', sets:e.unsureNum?'':(pageRec(e,exMode(e.exId))||'')};
+        if((e.issues||[]).length) o.issues=e.issues.slice(); if((e.memo||'').trim()) o.memo=iScrub(e.memo.trim(),m); if(phEx[e.exId]) o.photo=true; return o; })
+        .filter(o=>o.sets||o.memo||o.issues)})),
+    changes:[iPlain(x.ttl)].concat(x.lines.map(l=>iPlain(l.h))),
+    milestone: x.kind==='span'? x.ttl.split(',')[0] : x.kind==='long'? iPlain(x.ttl) : ((mileOf(last)||{}).txt||''),
+    trainer_words:iScrub(((db.ideaWords||{})[x.key]||'').trim(),m)};
+  /* 서버 상한(8,000자)을 넘지 않게 — 가운데 수업부터 빼고, 그래도 넘으면 메모·표시가 없는 운동을 빼고, 긴 메모를 줄인다 */
+  const size=()=>JSON.stringify(body).length;
+  while(size()>IDEA_MAX&&body.logs.length>3) body.logs.splice(1,1);
+  if(size()>IDEA_MAX) body.logs.forEach(l=>{ l.entries=l.entries.filter(e=>e.memo||e.issues||e.photo); });
+  if(size()>IDEA_MAX) body.logs.forEach(l=>l.entries.forEach(e=>{ if(e.memo&&e.memo.length>60) e.memo=e.memo.slice(0,60)+'…'; }));
+  while(size()>IDEA_MAX&&body.logs.some(l=>l.entries.length>3)) body.logs.forEach(l=>{ if(l.entries.length>3) l.entries.pop(); });
+  return body;
+}
+/* 검색어 후보를 받을 때 넘기는 글자 — 수업 기록을 풀어 쓴 것 */
+function ideaSource(b){
+  const a=[`회원: ${[b.member.age,b.member.sex].filter(Boolean).join(' ')||'-'} · 수업 ${b.member.count}번 · 첫 수업 ${b.member.first_date}`];
+  if(b.member.note) a.push('주의사항: '+b.member.note); if(b.member.next_goal) a.push('다음 목표: '+b.member.next_goal);
+  a.push('달라진 것:'); b.changes.forEach(c=>a.push('- '+c));
+  b.logs.forEach(l=>{ a.push(`[${l.date}]`+(l.cond?' 컨디션: '+l.cond:'')); if(l.said) a.push('회원 한마디: '+l.said);
+    l.entries.forEach(e=>a.push(`- ${e.name}${e.tag?'('+e.tag+')':''} ${e.sets}${e.issues?' / '+e.issues.join(', '):''}${e.memo?' / '+e.memo:''}`)); });
+  if(b.trainer_words) a.push('선생님 한마디: '+b.trainer_words);
+  return a.join('\n');
+}
+function ideaUsed(){ return (db.blogJobs||[]).map(j=>j.keyword).filter(Boolean).slice(-20); }
+function ideaJobOf(key){ return (db.blogJobs||[]).find(j=>j.key===key&&(j.status==='wait'||j.status==='done')); }
+async function ideaSend(x, kw, auto){
+  const r=await ideaCall(ideaPayload(x, kw));
+  if(r.ok&&!r.job_id) return {ok:false, error:'server', message:'서버가 일감 번호를 주지 않았습니다'};
+  if(r.ok){ (db.blogJobs=db.blogJobs||[]).push({id:uid(), jobId:r.job_id, key:x.key, mid:x.mid, kind:x.kind, ttl:iPlain(x.ttl), keyword:kw, at:today(), auto:!!auto, status:'wait'}); save(); }
+  return r;
+}
+/* 검색어 고르기 */
+let _kw=null, _kwBusy=false;
+async function ideaStart(i){
+  const x=_ideaL[i]; if(!x) return;
+  if(!IDEA_WRITE){ toast('글쓰기는 곧 열립니다'); return; }
+  if(x.mat.lack.length){ toast('한 칸만 더 채우면 맡길 수 있어요'); return; }
+  if(!(db.region||'').trim()){ toast('지역 한 단어를 먼저 적어 주세요'); go({name:'ideas', mid:view.mid||''}); return; }
+  _kw={key:x.key, state:'load', cands:[], pick:'', msg:''}; go({name:'ideaKw', i, mid:view.mid||''});
+  const r=await ideaCall({action:'keywords', source:ideaSource(ideaPayload(x,'')), used_keywords:ideaUsed()});
+  if(!_kw||_kw.key!==x.key) return;
+  const c=r.ok? (r.candidates||[]).filter(v=>v&&v.keyword).slice(0,3) : [];
+  if(c.length){ _kw.state='pick'; _kw.cands=c; _kw.pick=String(c[0].keyword).trim(); }
+  else{ _kw.state='err'; _kw.msg=r.message||'검색어 후보를 받지 못했습니다'; }
+  if(view.name==='ideaKw') render();
+}
+function vIdeaKw(){
+  const x=_ideaL[view.i]; if(!x||!_kw||_kw.key!==x.key) return vIdeas();
+  const m=db.members.find(v=>v.id===x.mid), rg=(db.region||'').trim();
+  const head=`<div class="top"><button class="back" onclick="_kw=null; go({name:'idea', i:${view.i}, mid:'${view.mid||''}'})">←</button><h1>검색어 고르기</h1><span></span></div>
+    <div class="card"><span class="ik">${IDEA_KIND[x.kind]} · ${esc(iName(m))}</span><div class="it">${esc(x.ttl)}</div></div>`;
+  if(_kw.state==='load') return head+`<div class="empty">검색어 후보를 찾는 중…<br><span style="font-size:12.5px">몇 초 걸립니다</span></div>`;
+  return head+`${_kw.state==='err'? `<div class="card"><div class="ifill" style="margin:0">${esc(_kw.msg)}</div><div class="muted" style="margin-top:8px">검색어를 직접 적어서 맡길 수 있습니다</div></div>`
+    : `<div class="muted" style="margin:0 2px 8px">이 글이 어떤 검색어로 찾아지면 좋을지 하나 고릅니다</div>
+      ${_kw.cands.map((c,k)=>{ const on=_kw.pick===String(c.keyword).trim();
+        return `<div class="card tap" style="${on?'border-color:var(--blue)':''}" onclick="_kw.pick=_kw.cands[${k}].keyword.trim(); render()">
+          <div class="row"><b>${esc(c.keyword)}</b><span class="pill ${on?'good':''}" style="${on?'':'visibility:hidden'}">고름</span></div>
+          ${c.reason?`<div class="muted" style="margin-top:3px">${esc(c.reason)}</div>`:''}</div>`; }).join('')}`}
+    <div class="card"><div class="muted">검색어 <span style="opacity:.7">(고쳐 써도 됩니다 — 지역 한 단어 + 한두 낱말)</span></div>
+      <input type="text" style="margin-top:6px" maxlength="30" placeholder="예: ${esc(rg||'원주')} 무릎 통증 PT" value="${esc(_kw.pick)}" oninput="_kw.pick=this.value"></div>
+    <button class="btn" ${_kwBusy?'disabled':''} onclick="ideaSubmit(${view.i})">${_kwBusy?'맡기는 중…':'이 검색어로 초안 맡기기'}</button>
+    <div class="muted" style="text-align:center; margin:8px 0 4px; line-height:1.6">초안은 다음 날 아침에 도착합니다<br>회원 이름은 보내지 않습니다 · 발행은 선생님이 직접 합니다</div>`;
+}
+async function ideaSubmit(i){
+  const x=_ideaL[i]; if(!x||!_kw||_kwBusy) return;
+  const kw=String(_kw.pick||'').trim().replace(/\s+/g,' ');
+  if(kw.length<2){ toast('검색어를 고르거나 적어 주세요'); return; }
+  _kwBusy=true; render();
+  const r=await ideaSend(x, kw, false); _kwBusy=false;
+  if(r.ok){ _kw=null; go({name:'ideas', tab:'wait'}); toast('맡겼습니다 — 초안은 다음 날 아침에 도착해요'); }
+  else{ if(view.name==='ideaKw') render(); toast(r.message||'맡기지 못했습니다. 잠시 뒤 다시 해 주세요'); }
+}
+/* 결과 받기 — 앱을 열 때와 글감 화면을 열 때, 10분에 한 번까지만 묻는다 */
+let _pollAt=0, _pollBusy=false;
+async function ideaPoll(force){
+  if(!IDEA_WRITE||_pollBusy) return;
+  const W=(db.blogJobs||[]).filter(j=>j.status==='wait'); if(!W.length) return;
+  if(!force&&Date.now()-_pollAt<600000) return;
+  _pollAt=Date.now(); _pollBusy=true; let ch=false;
+  try{ for(const j of W){ const r=await ideaCall({action:'poll', job_id:j.jobId});
+      if(!r.ok){ if(r.error==='net'||r.error==='login') break; continue; }
+      if(r.status==='done'){ const t=String(r.result_text||'').trim(), lk=t.match(/^부족\s*[:：]\s*([\s\S]+)/);
+        if(lk){ j.status='lack'; j.msg=lk[1].trim().slice(0,300); } else if(t){ j.status='done'; j.text=t; } else { j.status='fail'; j.msg='글이 비어 있습니다'; }
+        j.doneAt=today(); ch=true; }
+      else if(r.status==='failed'||r.status==='expired'||r.status==='skipped'){ j.status='fail'; j.msg=r.message||'글을 만들지 못했습니다'; j.doneAt=today(); ch=true; } }
+  }finally{ _pollBusy=false; }
+  if(ch){ save(); if(['home','ideas'].includes(view.name)) render(); }
+  else if(force) toast('아직 쓰는 중입니다');
+}
+/* 초안 글자를 나눈다 — 「제목:」「꼬리표:」「---」「[인용구] 후킹」 본문, 본문 속 「[사진] 운동 이름」 줄 */
+function ideaParse(t){
+  const L=String(t||'').replace(/\r/g,'').split('\n'), cut=L.findIndex(s=>/^\s*-{3,}\s*$/.test(s));
+  const hd= cut>=0? L.slice(0,cut) : L.filter(s=>/^\s*(제목|꼬리표)\s*[:：]/.test(s)), bd= cut>=0? L.slice(cut+1) : L.filter(s=>!/^\s*(제목|꼬리표)\s*[:：]/.test(s));
+  const get=k=>{ const s=hd.find(v=>new RegExp('^\\s*'+k+'\\s*[:：]').test(v)); return s? s.replace(/^[^:：]*[:：]\s*/,'').trim() : ''; };
+  while(bd.length&&!bd[0].trim()) bd.shift(); while(bd.length&&!bd[bd.length-1].trim()) bd.pop();
+  let hook=''; if(bd.length&&/^\s*\[인용구\]/.test(bd[0])){ hook=bd.shift().replace(/^\s*\[인용구\]\s*/,'').trim(); if(!hook&&bd.length) hook=bd.shift().trim(); while(bd.length&&!bd[0].trim()) bd.shift(); }
+  return {title:get('제목'), tags:get('꼬리표'), hook, lines:bd.map(s=>{ const p=s.match(/^\s*\[사진\]\s*(.*)$/); return p? {ph:p[1].trim()} : {s}; })};
+}
+function ideaBodyTxt(p){ return (p.hook? p.hook+'\n\n' : '')+p.lines.map(l=>l.ph!==undefined? `(사진: ${l.ph})` : l.s).join('\n'); }
+function vIdeaDraft(){
+  const j=(db.blogJobs||[]).find(v=>v.id===view.id); if(!j||j.status!=='done') return vIdeas();
+  const m=db.members.find(v=>v.id===j.mid), p=ideaParse(j.text), n=ideaBodyTxt(p).replace(/\s/g,'').length;
+  if(!j.seen){ j.seen=today(); save(); }
+  return `<div class="top"><button class="back" onclick="go({name:'ideas', tab:'done'})">←</button><h1>도착한 초안</h1><span></span></div>
+    <div class="card"><span class="ik">${IDEA_KIND[j.kind]||'글감'}${m?' · '+esc(iName(m)):''}</span>
+      <div class="muted" style="margin-top:2px">검색어 「${esc(j.keyword)}」 · ${fmtD(j.at)} 맡김 · 글자 ${n}자</div></div>
+    <div class="card"><div class="muted">제목</div><div class="it" style="font-size:16px; margin:4px 0 10px">${esc(p.title||'(제목 없음)')}</div>
+      <button class="btn subtle" onclick="ideaCopy('${j.id}','title')">제목 복사</button></div>
+    <div class="card"><div class="muted" style="margin-bottom:8px">본문</div>
+      ${p.hook?`<div style="border-left:3px solid var(--blue); padding:2px 0 2px 10px; margin-bottom:12px; font-weight:700; line-height:1.6">${esc(p.hook)}</div>`:''}
+      <div style="line-height:1.75; font-size:14.5px">${p.lines.map((l,si)=>l.ph!==undefined? ideaPhSlot(j, l.ph, si) : l.s.trim()? `<div>${esc(l.s)}</div>` : '<div style="height:10px"></div>').join('')}</div>
+      ${p.tags?`<div class="muted" style="margin-top:12px">${esc(p.tags)}</div>`:''}
+      <button class="btn" style="margin-top:12px" onclick="ideaCopy('${j.id}','body')">본문 복사</button>
+      ${ideaPhKeys(j).length? `<button class="btn subtle" onclick="ideaPhSave('${j.id}', true)">📷 사진 ${ideaPhKeys(j).length}장 한 번에 저장</button>`:''}</div>
+    <div class="muted" style="text-align:center; margin:4px 0 10px; line-height:1.6">본문을 붙여 넣고, 저장한 사진을 「(사진: 운동 이름)」 자리에 넣은 뒤<br>읽어 보며 고쳐서 직접 발행하세요 · 자동으로 발행되지 않습니다</div>
+    <button class="btn subtle" onclick="ideaJobHide('${j.id}')">다 썼어요 — 목록에서 내리기</button>`;
+}
+/* 초안의 사진 자리 — 그 회원 수업일지에 올려 둔 그 운동 사진을 바로 보여 준다(최근 것부터). 여러 장이면 「다른 사진」으로 바꾸고, 고른 사진은 j.ph{자리: 사진 열쇠}에 남긴다 */
+function ideaPhList(mid, exNm){
+  const m=db.members.find(v=>v.id===mid); if(!m) return [];
+  const nm=String(exNm||'').replace(/\s/g,''), seen={}, a=[];
+  pageLogs(m).slice().reverse().forEach(l=>(l.photos||[]).forEach(p=>{ if(!p.ex||!exOf(p.ex)||seen[p.k]) return;
+    if(exName(p.ex).replace(/\s/g,'')===nm){ seen[p.k]=1; a.push({k:p.k, d:l.date||''}); } }));
+  return a;
+}
+function ideaPhSlot(j, exNm, si){
+  const a=ideaPhList(j.mid, exNm), sel=(j.ph||{})[si], i=Math.max(0, a.findIndex(x=>x.k===sel)), p=a[i];
+  if(!p) return `<div class="ifill" style="margin:8px 0; text-align:center">📷 여기에 「${esc(exNm)}」 사진<br><span style="font-size:12px; opacity:.8">수업일지에 이 운동 사진이 없어요</span></div>`;
+  return `<div style="margin:10px 0"><img data-ph="${p.k}" alt="" ${_phUrl[p.k]?`src="${_phUrl[p.k]}"`:''} style="width:100%; display:block; border-radius:12px; background:var(--card2,#1a2540); min-height:120px">
+    <div class="row" style="margin-top:6px; gap:8px"><span class="muted" style="font-size:12.5px">📷 ${esc(exNm)} · ${fmtD(p.d)} 수업${a.length>1?` · ${i+1}/${a.length}`:''}</span>
+      <span style="display:flex; gap:6px; flex-shrink:0">${a.length>1?`<button class="btn subtle" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px" onclick="ideaPhNext('${j.id}',${si})">다른 사진</button>`:''}
+      <button class="btn subtle" style="width:auto; margin:0; padding:6px 10px; font-size:12.5px" onclick="ideaPhSave('${p.k}')">저장</button></span></div></div>`;
+}
+function ideaPhNext(id, si){ const j=(db.blogJobs||[]).find(v=>v.id===id); if(!j) return; const p=ideaParse(j.text), l=p.lines[si]; if(!l||l.ph===undefined) return;
+  const a=ideaPhList(j.mid, l.ph); if(a.length<2) return; const i=Math.max(0, a.findIndex(x=>x.k===(j.ph||{})[si]));
+  (j.ph=j.ph||{})[si]=a[(i+1)%a.length].k; save(); const y=window.scrollY; render(); window.scrollTo(0,y); }
+/* 초안에 쓰인 사진 열쇠(자리 순서대로, 겹치면 한 번) */
+function ideaPhKeys(j){ const p=ideaParse(j.text), ks=[]; p.lines.forEach((l,si)=>{ if(l.ph===undefined) return; const a=ideaPhList(j.mid, l.ph); if(!a.length) return;
+  const k=(a.find(x=>x.k===(j.ph||{})[si])||a[0]).k; if(!ks.includes(k)) ks.push(k); }); return ks; }
+/* 사진을 휴대폰에 저장(보내기 창이 되면 그걸로) — 사진 주소에서 파일을 받아야 해서, 못 받으면 길게 눌러 저장하라고 알린다 */
+async function ideaPhFiles(keys){
+  const need=keys.filter(k=>!_phUrl[k]);
+  if(need.length){ try{ const r=await phCall({action:'urls', keys:need}); if(r.status===200) Object.assign(_phUrl, r.out.urls||{}); }catch(e){} }
+  const fs=[]; for(let i=0;i<keys.length;i++){ const u=_phUrl[keys[i]]; if(!u) throw new Error('url'); const b=await (await fetch(u)).blob(); fs.push(new File([b], `수업사진_${i+1}.jpg`, {type:b.type||'image/jpeg'})); }
+  return fs;
+}
+async function ideaPhSave(k, all){
+  const j= all? (db.blogJobs||[]).find(v=>v.id===k) : null, keys= all? (j?ideaPhKeys(j):[]) : [k]; if(!keys.length) return;
+  toast('사진을 준비하는 중…');
+  let fs; try{ fs=await ideaPhFiles(keys); }catch(e){ toast('바로 저장이 안 됩니다 — 사진을 길게 눌러 저장해 주세요'); return; }
+  try{ if(navigator.canShare&&navigator.canShare({files:fs})){ await navigator.share({files:fs}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+  fs.forEach(f=>{ const u=URL.createObjectURL(f), a=document.createElement('a'); a.href=u; a.download=f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u), 5000); });
+  toast(`사진 ${fs.length}장을 저장했습니다`);
+}
+async function ideaCopy(id, what){
+  const j=(db.blogJobs||[]).find(v=>v.id===id); if(!j) return; const p=ideaParse(j.text);
+  const s= what==='title'? p.title : ideaBodyTxt(p)+(p.tags?'\n\n'+p.tags:'');
+  try{ await navigator.clipboard.writeText(s); toast(what==='title'?'제목을 복사했습니다':'본문을 복사했습니다 — 블로그에 붙여 넣으세요'); }
+  catch(e){ toast('복사가 안 됩니다 — 글을 길게 눌러 직접 복사해 주세요'); }
+}
+function ideaJobHide(id){ const j=(db.blogJobs||[]).find(v=>v.id===id); if(!j) return;
+  if(j.status==='done') ask('이 초안을 목록에서 내릴까요?\n내린 초안은 다시 볼 수 없습니다.', '내리기', ()=>{ j.hide=today(); delete j.text; save(); go({name:'ideas', tab:'done'}); });
+  else{ j.hide=today(); save(); render(); } }
+/* 주 2편 자동 — 기본 꺼짐. 켜 두면 앱을 열 때와 수업을 저장할 때, 이번 주(월요일부터) 자동 몫이 남아 있으면 「글이 됩니다」 글감 하나를 맡긴다(한 번에 하나) */
+function ideaWeek0(){ const d=new Date(); d.setDate(d.getDate()-(d.getDay()+6)%7); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function ideaAutoLeft(){ const w=ideaWeek0(); return Math.max(0, IDEA_AUTO_WEEK-(db.blogJobs||[]).filter(j=>j.auto&&j.at>=w).length); }
+function ideaAutoSet(on){ db.ideaAuto=!!on; save(); render(); toast(on?'주 2편 자동을 켰습니다':'주 2편 자동을 껐습니다'); if(on) ideaAutoRun(); }
+let _autoBusy=false, _autoOff=false;
+async function ideaAutoRun(){
+  if(!IDEA_WRITE||!db.ideaAuto||_autoBusy||_autoOff) return;
+  if(ocrQuota&&ocrQuota.tier==='trial') return;
+  if(!(db.region||'').trim()||!ideaAutoLeft()) return;
+  const x=ideaList().find(v=>!v.mat.lack.length); if(!x) return;
+  _autoBusy=true;
+  try{ const k=await ideaCall({action:'keywords', source:ideaSource(ideaPayload(x,'')), used_keywords:ideaUsed()});
+    const kw=k.ok&&(k.candidates||[])[0]? String(k.candidates[0].keyword||'').trim() : '';
+    if(!kw){ if(k.error!=='net') _autoOff=true; return; }
+    const r=await ideaSend(x, kw, true);
+    if(r.ok){ toast('글감 하나를 자동으로 맡겼습니다 — 내일 아침 초안이 도착해요'); if(['home','ideas'].includes(view.name)) render(); }
+    else if(r.error!=='net') _autoOff=true;   /* 서버가 거절하면(한도·자격) 이번에 앱을 켠 동안은 다시 묻지 않는다 */
+  }finally{ _autoBusy=false; }
+}
+
 function vSettings(){
   const cnt=db.logs.length;
   return `<div class="top"><h1>설정</h1><span></span></div>
@@ -4880,6 +5314,11 @@ function vSettings(){
       <label class="fld"><span class="muted">내 이름 — 센터 대시보드에 이 이름으로 표시됩니다</span>
         <input type="text" placeholder="예: 허재윤" value="${esc(db.trainerName||'')}"
           onchange="db.trainerName=this.value.trim(); save(); toast('이름이 저장됐습니다')"></label>
+      <label class="fld"><span class="muted">지역 한 단어 — 블로그 글감의 제목·검색어 앞에 붙습니다</span>
+        <input type="text" placeholder="예: 원주" maxlength="10" value="${esc(db.region||'')}"
+          onchange="ideaRegion(this.value)"></label>
+      ${IDEA_WRITE? `<label style="display:flex; gap:8px; align-items:flex-start; margin:2px 0 12px"><input type="checkbox" style="width:auto; margin-top:3px" ${db.ideaAuto?'checked':''} onchange="ideaAutoSet(this.checked)">
+        <span>블로그 초안 주 2편 자동으로 맡기기<br><span class="muted">글감이 생기면 앱이 알아서 맡기고, 다음 날 아침 초안이 도착합니다. 발행은 선생님이 직접 합니다</span></span></label>`:''}
       <label class="fld"><span class="muted">인스타그램 아이디 — 스토리에 @heobotss 를 멘션하면 이 아이디로 성적표가 찾아갑니다</span>
         <input type="text" placeholder="my_id (@ 없이)" autocapitalize="off" spellcheck="false" value="${esc(myIg)}"
           onchange="saveIg(this.value)"></label>
@@ -4905,7 +5344,7 @@ function vSettings(){
     <div class="card"><b>특이사항 색 규칙</b>
       <div class="muted" style="margin-top:4px"><span class="iss-bad">빨강 = 부정(통증·자세·약함)</span> ·
       <span class="iss-imp">파랑 = 좋아진 것</span> · <span class="iss-bal">초록 = 좌우 불균형</span></div></div>
-    <div class="card"><b>버전</b><div class="muted">수업일지 v2.19 — 📋 재등록 상담 한 장 · 숙제 「했어요」 · 🎉 기념 카드 · 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
+    <div class="card"><b>버전</b><div class="muted">수업일지 v2.20 — 📝 운동 메모 같이 보내기 · 📋 재등록 상담 한 장 · 숙제 「했어요」 · 🎉 기념 카드 · 📷 수업 사진 저장 · 회원 페이지 · 사진 카드 · 2대1 수업 · 기록 평생 무료 · AI 사진 판독은 체험 20장, 이후 멤버십</div></div>
     ${db.members.some(m=>m.demo)?`<button class="btn danger" onclick="clearDemo()">예시 회원(김민수) 삭제</button>`:''}`;
 }
 async function backup(){
